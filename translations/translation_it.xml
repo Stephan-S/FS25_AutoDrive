@@ -270,7 +270,7 @@
         <text name="gui_ad_routesManagerTextTitle"  	text="Inserisci nome del percorso:" />
         <text name="gui_ad_button_export"       	text="Salva" />
         <text name="gui_ad_button_import"       	text="Carica" />
-        <text name="gui_ad_routeExportWarn_text"    	text="Sei sicuro di voler sovrascrivere i percorsi esistent1?" />
+        <text name="gui_ad_routeExportWarn_text"    	text="Sei sicuro di voler sovrascrivere i percorsi esistenti?" />
         <text name="gui_ad_routeExportWarn_title"   	text="Sovrascrittura percorsi" />
         <text name="gui_ad_routeDeleteWarn_text"    	text="Sei sicuro di voler cancellare il percorso '%s'?" />
         <text name="gui_ad_routeDeleteWarn_title"   	text="Rimozione percorso" />
@@ -311,17 +311,17 @@
         <text name="ad_color_currentConnection"     	text="12 Linea percorso successivo" />
         <text name="ad_color_closestLine"       	text="13 Linea dal veicolo al nodo più vicino" />
         <text name="ad_color_editorHeightLine"      	text="14 Linea dal nodo di superficie a quello sopra il veicolo" />
-        <text name="ad_color_previewSingleConnection" 	        text="15 curve preview OK, single-way connection" />
-        <text name="ad_color_previewDualConnection" 	        text="16 curve preview OK, dual-way connection" />
-        <text name="ad_color_previewSubPrioSingleConnection"    text="17 curve preview OK, secondary single-way connection" />
-        <text name="ad_color_previewSubPrioDualConnection" 	    text="18 curve preview OK, secondary dual-way connection" />
+        <text name="ad_color_previewSingleConnection" 	        text="15 anteprima curva OK, connessione unidirezionale" />
+        <text name="ad_color_previewDualConnection" 	        text="16 anteprima curva OK, connessione bidirezionale" />
+        <text name="ad_color_previewSubPrioSingleConnection"    text="17 anteprima curva OK, connessione secondaria unidirezionale" />
+        <text name="ad_color_previewSubPrioDualConnection" 	    text="18 anteprima curva OK, connessione secondaria bidirezionale" />
         <text name="ad_color_previewOk" 			            text="19 Anteprima svolte Ok, nessuna collisione" />
         <text name="ad_color_previewNotOk" 			            text="20 Anteprima svolte non ok, ce collisione" />
-        <text name="ad_color_textInputBackground" 			    text="21 Background for inputs of text, targets etc." />
-        <text name="ad_color_hudTextDefault"					text="22 HUD text, normal items" />
-		<text name="ad_color_hudTextHover"					    text="23 HUD text, hovering on normal items" />
-		<text name="ad_color_hudTextSpecial"					text="24 HUD text, active items and folders" />
-		<text name="ad_color_hudTextHoverSpecial"				text="25 HUD text, hovering on active items and folders" />
+        <text name="ad_color_textInputBackground" 			    text="21 Sfondo per l'inserimento di testo, obiettivi ecc." />
+        <text name="ad_color_hudTextDefault"					text="22 Testo HUD, oggetti normali" />
+		<text name="ad_color_hudTextHover"					    text="23 Testo HUD, passando il mouse sugli oggetti normali" />
+		<text name="ad_color_hudTextSpecial"					text="24 Testo HUD, elementi attivi e cartelle" />
+		<text name="ad_color_hudTextHoverSpecial"				text="25 Testo HUD, passando il mouse su elementi e cartelle attivi" />
 
         <text name="button_delete_all"      text="Cancella Tutto" />
         <text name="button_reset_selected"  text="Ripristina selezionato" />
