@@ -77,7 +77,6 @@ function ADStateModule:reset()
     self.remainingDriveTime = 0
     self.calculateRemainingDriveTimeInterval = 0
     self.activeBeforeSave = false
-    self.AIVEActiveBeforeSave = false
     self.bunkerUnloadType = ADStateModule.BUNKER_UNLOAD_TRIGGER
     self.automaticUnloadTarget = false
     self.automaticPickupTarget = false
@@ -137,6 +136,11 @@ function ADStateModule:readFromXMLFile(xmlFile, key)
         self.loopCounter = loopCounter
     end
 
+    local loopsDone = xmlFile:getValue(key .. "#loopsDone")
+    if loopsDone ~= nil then
+        self.loopsDone = loopsDone
+    end
+
     local speedLimit = xmlFile:getValue(key .. "#speedLimit")
     if speedLimit ~= nil then
         self.speedLimit = math.min(speedLimit, AutoDrive.getVehicleMaxSpeed(self.vehicle))
@@ -157,14 +161,14 @@ function ADStateModule:readFromXMLFile(xmlFile, key)
         self.driverName = driverName
     end
 
-    local lastActive = xmlFile:getValue(key .. "#lastActive")
-    if lastActive ~= nil then
-        self.activeBeforeSave = lastActive
+    local active = xmlFile:getValue(key .. "#active")
+    if active ~= nil then
+        self.activeBeforeSave = active
     end
 
-    local AIVElastActive = xmlFile:getValue(key .. "#AIVElastActive")
-    if AIVElastActive ~= nil then
-        self.AIVEActiveBeforeSave = AIVElastActive
+    local startHelper = xmlFile:getValue(key .. "#startHelper")
+    if startHelper ~= nil then
+        self.startHelper = startHelper
     end
 
     local bunkerUnloadType = xmlFile:getValue(key .. "#bunkerUnloadType")
@@ -195,11 +199,12 @@ function ADStateModule:saveToXMLFile(xmlFile, key)
     xmlFile:setValue(key .. "#selectedFillTypes", table.concat(self.selectedFillTypes, ','))
     xmlFile:setValue(key .. "#loadByFillLevel", self.loadByFillLevel)
     xmlFile:setValue(key .. "#loopCounter", self.loopCounter)
+    xmlFile:setValue(key .. "#loopsDone", self.loopsDone)
     xmlFile:setValue(key .. "#speedLimit", self.speedLimit)
     xmlFile:setValue(key .. "#fieldSpeedLimit", self.fieldSpeedLimit)
     xmlFile:setValue(key .. "#driverName", self.driverName)
-    xmlFile:setValue(key .. "#lastActive", self.active)
-    xmlFile:setValue(key .. "#AIVElastActive", false)
+    xmlFile:setValue(key .. "#active", self.active)
+    xmlFile:setValue(key .. "#startHelper", self.startHelper)
     xmlFile:setValue(key .. "#bunkerUnloadType", self.bunkerUnloadType)
     -- xmlFile:setValue(key .. "#automaticUnloadTarget", self.automaticUnloadTarget)
     -- xmlFile:setValue(key .. "#automaticPickupTarget", self.automaticPickupTarget)

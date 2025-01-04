@@ -259,6 +259,8 @@
 		<text name="gui_ad_pathfinder_custom"						text="AutoDrive Custom" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Routemanager on Server" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Enable route manager on dedicated servers" />
+		<text name="gui_ad_autostartHelpers"						text="Autostart helpers" />
+		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatically restart active helpers after loading a savegame" />
 		<text name="gui_ad_detectSwath"								text="Swath detection" />
 		<text name="gui_ad_detectSwath_tooltip"						text="Decides if swaths are detected as fruit on field" />
 		<text name="gui_ad_colorAssignmentMode"						text="Custom colors" />

@@ -259,6 +259,8 @@
 		<text name="gui_ad_pathfinder_custom"						text="AutoDrive Custom" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Маршрутизатор на сервері" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Включити диспетчер маршрутів на виділених серверах" />
+		<text name="gui_ad_autostartHelpers"						text="Autostart helpers" />
+		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatically restart active helpers after loading a savegame" />
 		<text name="gui_ad_detectSwath"								text="Виявлення валків" />
 		<text name="gui_ad_detectSwath_tooltip"						text="Визначає чи валки визначаються як культури на полі." />
 		<text name="gui_ad_colorAssignmentMode"						text="Власні кольори" />

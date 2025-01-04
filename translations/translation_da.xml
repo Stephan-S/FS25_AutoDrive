@@ -259,6 +259,8 @@
 		<text name="gui_ad_pathfinder_custom"						text="AutoDrive Brugerdefineret" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Rute opretning på Server" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Aktiver rute redigering på dedicated serverer" />
+		<text name="gui_ad_autostartHelpers"						text="Autostart helpers" />
+		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatically restart active helpers after loading a savegame" />
 		<text name="gui_ad_detectSwath"								text="Halm søgning" />
 		<text name="gui_ad_detectSwath_tooltip"						text="Bestemmer om halm skår registreres som afgrøde på marken" />
 		<text name="gui_ad_colorAssignmentMode"						text="Brugerdefineret farver" />

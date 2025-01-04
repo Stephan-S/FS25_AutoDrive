@@ -1143,6 +1143,18 @@ AutoDrive.settings.enableRoutesManagerOnDediServer = {
     isUserSpecific = false
 }
 
+AutoDrive.settings.autostartHelpers = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 1,
+    current = 1,
+    text = "gui_ad_autostartHelpers",
+    tooltip = "gui_ad_autostartHelpers_tooltip",
+    translate = true,
+    isVehicleSpecific = false,
+    isUserSpecific = false
+}
+
 AutoDrive.settings.detectSwath = {
     values = {false, true},
     texts = {"gui_ad_no", "gui_ad_yes"},

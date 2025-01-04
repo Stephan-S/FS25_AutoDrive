@@ -826,30 +826,26 @@ function AutoDrive.getAllVehicles()
     return (g_currentMission and g_currentMission.vehicleSystem and g_currentMission.vehicleSystem.vehicles) or {}
 end
 
-function AutoDrive.getControlledVehicle()
-
---[[     if g_currentMission and g_currentMission.vehicleSystem and g_currentMission.vehicleSystem.enterables then
-        if g_currentMission.vehicleSystem.lastEnteredVehicleIndex then
-            return g_currentMission.vehicleSystem.enterables[g_currentMission.vehicleSystem.lastEnteredVehicleIndex]
-        end
+function AutoDrive:autostartHelpers()
+    if g_server == nil or g_client == nil or g_dedicatedServer ~= nil then
+        -- only in SP mode
+        return
     end
- ]]
 
---[[
-   if g_currentMission and g_currentMission.vehicleSystem and AutoDrive.getAllVehicles() then
-        for index, vehicle in pairs(AutoDrive.getAllVehicles()) do
-            -- if vehicle.getIsControlled and vehicle:getIsControlled() then
-            --     return vehicle
-            -- end
-            if vehicle.getIsControlled and vehicle:getIsControlled() then
-                return vehicle
+    if not AutoDrive.getSetting("autostartHelpers") then
+        return
+    end
+
+    for _, vehicle in pairs(AutoDrive.getAllVehicles()) do
+        if vehicle ~= nil and vehicle.ad ~= nil and vehicle.ad.stateModule ~= nil then
+            if vehicle.ad.stateModule.activeBeforeSave then
+                vehicle.ad.stateModule:getCurrentMode():start(AutoDrive.USER_PLAYER)
             end
-
         end
     end
+end
 
-    return nil
-]]
+function AutoDrive.getControlledVehicle()
     return g_localPlayer and g_localPlayer.getCurrentVehicle and g_localPlayer:getCurrentVehicle()
 end
 

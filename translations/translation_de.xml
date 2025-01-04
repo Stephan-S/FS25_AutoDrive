@@ -259,6 +259,8 @@
 		<text name="gui_ad_pathfinder_custom"						text="AutoDrive Spezial" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Routenmanager im Server" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Aktiviert die Nutzung des Routenmanager auf einem dedizierten Server" />
+		<text name="gui_ad_autostartHelpers"						text="Autostart helpers" />
+		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatically restart active helpers after loading a savegame" />
 		<text name="gui_ad_detectSwath"								text="Schwaderkennung" />
 		<text name="gui_ad_detectSwath_tooltip"						text="Legt fest, ob das Fahrzeug Grasschwaden als Frucht erkennt" />
 		<text name="gui_ad_colorAssignmentMode"						text="Personalisierte Farben" />
