@@ -259,8 +259,8 @@
 		<text name="gui_ad_pathfinder_custom"						text="AutoDrive Personalizzato" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Gestore di percorsi sul server" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Abilita il gestore del percorso sui server dedicati" />
-		<text name="gui_ad_autostartHelpers"						text="Autostart helpers" />
-		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatically restart active helpers after loading a savegame" />
+		<text name="gui_ad_autostartHelpers"						text="Avvio automatico aiutanti" />
+		<text name="gui_ad_autostartHelpers_tooltip"				text="Automaticamente riavvia gli aiutanti dopo aver caricato il salvaaggio" />
 		<text name="gui_ad_detectSwath"								text="Rilevamento dell'andana" />
 		<text name="gui_ad_detectSwath_tooltip"						text="Decide se le andane vengono rilevate come frutta sul campo" />
 		<text name="gui_ad_colorAssignmentMode"						text="Colori personalizzati" />
