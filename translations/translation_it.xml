@@ -13,10 +13,10 @@
 		<text name="input_ADRecord_Dual"							text="AD: Registra percorso a doppio senso" />
 		<text name="input_ADRecord_SubPrio"							text="AD: Registra percorso secondario" />
 		<text name="input_ADRecord_SubPrioDual"						text="AD: Registra il percorso del percorso secondario a doppio senso" />
-		<text name="input_ADRecord_TwoWay"							text="AD: Record 2 routes simultanous 1 direction normal" />
-		<text name="input_ADRecord_Dual_TwoWay"						text="AD: Record 2 routes simultanous 2 way route" />
-		<text name="input_ADRecord_SubPrio_TwoWay"					text="AD: Record 2 routes simultanous 1 direction secondary route" />
-		<text name="input_ADRecord_SubPrioDual_TwoWay"				text="AD: Record 2 routes simultanous 2 way secondary route" />
+		<text name="input_ADRecord_TwoWay"							text="AD: Registra 2 percorsi simultanei in 1 direzione normale" />
+		<text name="input_ADRecord_Dual_TwoWay"						text="AD: Registra 2 percorsi simultanei con percorso bidirezionale" />
+		<text name="input_ADRecord_SubPrio_TwoWay"					text="AD: Registra 2 percorsi simultanei in 1 direzione secondaria" />
+		<text name="input_ADRecord_SubPrioDual_TwoWay"				text="AD: Registra 2 percorsi simultanei, percorso secondario a 2 vie" />
 		<text name="input_ADSelectTarget"							text="AD: Destinazione successiva" />
 		<text name="input_ADSelectPreviousTarget"					text="AD: Destinazione precedente" />
 		<text name="input_AD_Speed_up"								text="AD: Aumenta velocità" />
