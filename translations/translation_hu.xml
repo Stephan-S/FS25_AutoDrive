@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <l10n>
-	<translationContributors>Gozmozdony, Kallós László, Matteo Delfavero</translationContributors>
+	<translationContributors>Gozmozdony, Kallós László, Matteo Delfavero, WeAreV3N0M</translationContributors>
 	<texts>
 		<text name="UNKNOWN"										text="Ismeretlen" />
 		<text name="input_ADToggleHud"								text="AD: HUD be/ki" />
@@ -93,6 +93,7 @@
 		<text name="gui_ad_blinkValue"								text="Irányjelző bekapcsolása automatikus" />
 		<text name="gui_ad_blinkValue_tooltip"						text="Kormányállás az irányjelző fények automatikus engedélyezéséhez. (0 = az irányjelző fény automatikusan kikapcsol)" />
 		<text name="gui_ad_pipe_offset"								text="Cső eltolás" />
+		<text name="gui_ad_pipe_offset_tooltip"							text="Kirakodó jármű eltolása oldalirányba a cső végéhez képest" />
 		<text name="gui_ad_followDistance"							text="Távolság a kombájntól" />
 		<text name="gui_ad_followDistance_tooltip"					text="Távolság ha a kombájnt hátul követi" />
 		<text name="gui_ad_lookahead_turning"						text="Kanyarodási távolság" />
@@ -117,10 +118,10 @@
 		<text name="ad_bga_init"									text="Elindítás" />
 		<text name="ad_bga_waiting"									text="Várakozás pótkocsira" />
 		<text name="ad_bga_active"									text="Aktív" />
-		<text name="gui_ad_autoConnect_start"						text="Automatikus kapcsolás (indítás)" />
-		<text name="gui_ad_autoConnect_start_tooltip"				text="A megfelelő csomópontok automatikus csatlakoztatása a felvétel indításakor" />
-		<text name="gui_ad_autoConnect_end"							text="Automatikus kapcsolás (Vége)" />
-		<text name="gui_ad_autoConnect_end_tooltip"					text="Automatikusan csatlakoztassa a megfelelő csomópontot a felvétel végén" />
+		<text name="gui_ad_autoConnect_start"						text="Automatikus kapcsolás (kezdéskor)" />
+		<text name="gui_ad_autoConnect_start_tooltip"				text="A legközelebbi csomópont automatikus csatlakoztatása a felvétel indításakor" />
+		<text name="gui_ad_autoConnect_end"							text="Automatikus kapcsolás (végén)" />
+		<text name="gui_ad_autoConnect_end_tooltip"					text="Automatikusan csatlakoztassa a legközelebbi csomópontot a felvétel végén" />
 		<text name="gui_ad_parkInField"								text="Parkolás a földön" />
 		<text name="gui_ad_parkInField_tooltip"						text="A kombájn kirakása után a sofőr megvárja a következő rakodást a mezőn, ha nem a mező betakarítatlan részén áll vagy tele van." />
 		<text name="gui_ad_unloadFillLevel"							text="Töltési szint" />
@@ -129,13 +130,13 @@
 		<text name="gui_ad_findDriver_tooltip"						text="Keresse meg a legközelebbi sofőrt (figyelmen kívül hagyja a távolságot)" />
 		<text name="gui_ad_gui_scale"								text="Az AutoDrive HUD grafikus felhasználói felületének méretezése" />
 		<text name="gui_ad_gui_scale_tooltip"						text="Az Alapértelmezett beállítás kiválasztásakor a játék beállításai irányadók" />
-		<text name="gui_ad_notifications"							text="Értesítés" />
+		<text name="gui_ad_notifications"							text="Értesítés megjelenítési ideje" />
 		<text name="gui_ad_notifications_text_1"					text="Tiltva" />
-		<text name="gui_ad_notifications_text_2"					text="Rövid" />
-		<text name="gui_ad_notifications_text_3"					text="Alapértelmezett" />
-		<text name="gui_ad_notifications_text_4"					text="Hosszú" />
-		<text name="gui_ad_notifications_text_5"					text="Leghosszabb" />
-		<text name="gui_ad_notifications_text_6"					text="Végtelen" />
+		<text name="gui_ad_notifications_text_2"					text="2,5s" />
+		<text name="gui_ad_notifications_text_3"					text="5s (alapért.)" />
+		<text name="gui_ad_notifications_text_4"					text="10s" />
+		<text name="gui_ad_notifications_text_5"					text="25s" />
+		<text name="gui_ad_notifications_text_6"					text="Bezárásig" />
 		<text name="gui_ad_notifications_tooltip"					text="Az értesítések megjelenítési ideje: nincs megjelenítés / ca. 2,5s / 5s / 10s / 25s / Megjelenítés a felhasználó bezárásáig" />
 		<text name="gui_ad_exitField"								text="Föld elhagyása" />
 		<text name="gui_ad_exitField_tooltip"						text="Föld elhagyása a kirakodás után - kezdőpont, röviddel a kezdőpont után, a legközelebbi pont" />
@@ -253,22 +254,22 @@
 		<text name="gui_ad_remainingDriveTimeInterval_tooltip"		text="Külső modok esetén: Intervallum a hátralévő vezetési idő kiszámításához. A teljesítménnyel kapcsolatos problémák esetén növelje vagy inaktiválja." />
 		<text name="gui_ad_adpd_showError"							text="AutoDrive: The Network is inconsistent and could not be imported, error code" />
 		<text name="gui_ad_adpd_showConfirmation"					text="AutoDrive: Would you like to import the AD Network from the Placeable?" />
-		<text name="gui_ad_pathfinder"								text="Pathfinder algorithm" />
-		<text name="gui_ad_pathfinder_tooltip"						text="Choose which pathfinder algorithm is used (when not on network)" />
+		<text name="gui_ad_pathfinder"								text="Útkereső algoritmus" />
+		<text name="gui_ad_pathfinder_tooltip"						text="Használni kívánt útkereső algoritmus kiválasztása (ha nincs hálózaton)" />
 		<text name="gui_ad_pathfinder_astar"						text="A-Star + Dubbins" />
 		<text name="gui_ad_pathfinder_custom"						text="AutoDrive Custom" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Routemanager on Server" />
 		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Enable route manager on dedicated servers" />
-		<text name="gui_ad_autostartHelpers"						text="Autostart helpers" />
-		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatically restart active helpers after loading a savegame" />
-		<text name="gui_ad_detectSwath"								text="Swath detection" />
-		<text name="gui_ad_detectSwath_tooltip"						text="Decides if swaths are detected as fruit on field" />
-		<text name="gui_ad_colorAssignmentMode"						text="Custom colors" />
-		<text name="gui_ad_colorAssignmentMode_tooltip"				text="Enables selection of custom colors for AutoDrive" />
-		<text name="gui_ad_FoldImplements"							text="Fold implements" />
-		<text name="gui_ad_FoldImplements_tooltip"					text="AutoDrive will wait for implements to fold up before starting" />
-		<text name="gui_ad_RecordWhileNotInVehicle"					text="Record without driver" />
-		<text name="gui_ad_RecordWhileNotInVehicle_tooltip"			text="AutoDrive will keep recording if driver leaves the vehicle" />
+		<text name="gui_ad_autostartHelpers"						text="Segítők automatikus indítása" />
+		<text name="gui_ad_autostartHelpers_tooltip"				text="Automatikusan újraindítja az aktív segítőket a játékállás betöltése után" />
+		<text name="gui_ad_detectSwath"								text="Rend észlelés" />
+		<text name="gui_ad_detectSwath_tooltip"						text="Eldönti, hogy a rendek terményként legyenek-e észlelve a földeken" />
+		<text name="gui_ad_colorAssignmentMode"						text="Egyedi színek" />
+		<text name="gui_ad_colorAssignmentMode_tooltip"				text="Engedélyezi egyedi színek kiválasztását AutoDrive-hoz" />
+		<text name="gui_ad_FoldImplements"							text="Munkagép összehajtása" />
+		<text name="gui_ad_FoldImplements_tooltip"					text="Az AutoDrive megvárja a munkagép összehajtását indulás előtt" />
+		<text name="gui_ad_RecordWhileNotInVehicle"					text="Rögzítés vezető nélkül" />
+		<text name="gui_ad_RecordWhileNotInVehicle_tooltip"			text="Az AutoDrive folytatja a rögzítést, ha a vezető elhagyja a járművet" />
 		<text name="gui_ad_settingsPage_title"						text="Beállítás - AutoDrive" />
 		<text name="gui_ad_userSettingsPage_title"					text="Felhasználói beállítások - AutoDrive" />
 		<text name="gui_ad_vehicleSettingsPage_title"				text="Jármű beállítás - AutoDrive" />
