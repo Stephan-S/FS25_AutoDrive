@@ -119,8 +119,8 @@
 		<text name="gui_ad_FS19"									text="FS 19" />
 		<text name="gui_ad_BSMRange"								text="Gestione area Bunker Silo" />
 		<text name="gui_ad_BSMRange_tooltip"						text="In questa area, i veicoli verso il silo del bunker di destinazione, ottengono uno ad uno il percorso" />
-		<text name="gui_ad_UMRange"									text="Bunker Silo / Unload Manager Range" />
-		<text name="gui_ad_UMRange_tooltip"							text="In this range vehicles to destination bunker silo / same unload destination one by one get driveway" />
+		<text name="gui_ad_UMRange"									text="Bunker Silo / Intervallo gestione scarico" />
+		<text name="gui_ad_UMRange_tooltip"							text="In questa gamma i veicoli per la destinazione bunker silo / stessa destinazione di scarico uno alla volta ottengono il vialetto" />
 		<text name="ad_bga_init"									text="Inizializzazione" />
 		<text name="ad_bga_waiting"									text="In attesa del rimorchio/Silos" />
 		<text name="ad_bga_active"									text="Attivo" />
