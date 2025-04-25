@@ -1016,6 +1016,7 @@ AutoDrive.settings.ALUnload = {
     translate = true,
     isVehicleSpecific = true
 }
+
 AutoDrive.settings.ALUnloadWaitTime = {
     values = {0, 1000, 3000, 5000, 10000, 15000, 20000, 25000, 30000, 60000, 120000, 300000, 600000},
     texts = {"0", "1s", "3s", "5s", "10s", "15s", "20s", "25s", "30s", "1min", "2min", "5min", "10min"},
@@ -1025,6 +1026,28 @@ AutoDrive.settings.ALUnloadWaitTime = {
     tooltip = "gui_ad_ALUnloadWaitTime_tooltip",
     translate = false,
     isVehicleSpecific = true
+}
+
+AutoDrive.settings.stuckTimeout = {
+    values = {0, 5000, 10000, 15000, 20000, 25000, 30000, 60000, 120000, 300000, 600000},
+    texts = {"0", "5s", "10s", "15s", "20s", "25s", "30s", "1min", "2min", "5min", "10min"},
+    default = 1,
+    current = 1,
+    text = "gui_ad_stuckTimeout",
+    tooltip = "gui_ad_stuckTimeout_tooltip",
+    translate = false,
+    isVehicleSpecific = true,
+}
+
+AutoDrive.settings.stuckDeactivate = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 1,
+    current = 1,
+    text = "gui_ad_stuckDeactivate",
+    tooltip = "gui_ad_stuckDeactivate_tooltip",
+    translate = true,
+    isVehicleSpecific = true,
 }
 
 AutoDrive.settings.playSounds = {

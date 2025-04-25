@@ -125,6 +125,7 @@ function AutoDrive.initSpecialization()
     schema:setXMLSpecializationType("AutoDrive")
 
     schema:register(XMLValueType.FLOAT, "vehicle.AutoDrive#followDistance", "Follow distance for harveste unloading", 1)
+	schema:register(XMLValueType.INT,   "vehicle.AutoDrive#stuckTimeout",      "Stuck-Timeout", 0)
     schema:setXMLSpecializationType()
 
     local schemaSavegame = Vehicle.xmlSchemaSavegame
@@ -216,6 +217,8 @@ function AutoDrive:onLoad(savegame)
     self.ad.isCpEmpty = false
     self.ad.isCpFull = false
     self.ad.isAIJobFinished = false
+	
+    self.ad.stuckWarningSent = false
 
     AutoDrive.resetMouseSelections(self)
 end
@@ -483,6 +486,34 @@ function AutoDrive:onUpdate(dt)
     --For 'legacy' purposes, this value should be kept since other mods already test for this:
     self.ad.mapMarkerSelected = self.ad.stateModule:getFirstMarkerId()
     self.ad.mapMarkerSelected_Unload = self.ad.stateModule:getSecondMarkerId()
+	
+	if self.isServer
+       and self.ad
+       and self.ad.stateModule:isActive()
+       and AutoDrive.getSetting("stuckTimeout", self) > 0 
+    then
+        self.ad.lastMovementTime = self.ad.lastMovementTime or g_time
+        local speed = math.abs(self:getLastSpeed()) * 1000 / 3600
+
+        local timeout = AutoDrive.getSetting("stuckTimeout", self)
+        if speed > 0.1 then
+            self.ad.lastMovementTime = g_time
+            self.ad.stuckWarningSent = false
+        elseif g_time - self.ad.lastMovementTime > timeout and not self.ad.stuckWarningSent then
+			local message = "[AutoDrive] "
+			if AutoDrive.getSetting("stuckDeactivate", self) then
+				self:stopAutoDrive()
+				message = message .. "deactivated. "
+			end
+			AutoDriveMessageEvent.sendMessageOrNotification(
+				self,
+				ADMessagesManager.messageTypes.WARNING,
+				message .. tostring(self:getName()) .. " was Stuck for " .. tostring(timeout/1000) .. "s",
+				5000
+			)
+			self.ad.stuckWarningSent = true
+        end
+    end
 end
 
 function AutoDrive:saveToXMLFile(xmlFile, key, usedModNames)

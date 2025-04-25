@@ -314,6 +314,10 @@
 		<text name="gui_ad_debugChannelAll"							text="Alles" />
 		<text name="gui_ad_notificationHistoryTitle"					text="Benachrichtigungen" />
 		<text name="gui_ad_colorSettingsTitle"							text="Farbzuweisungen" />
+		<text name="gui_ad_stuckTimeout" 								text="Stuck-Timeout"/>
+		<text name="gui_ad_stuckTimeout_tooltip" 					text="Nach dieser Zeit ohne Vorwärtsbewegung Warnung ausgeben (0 = nie)"/>
+		<text name="gui_ad_stuckDeactivate" 								text="Stuck AutoDrive-Deaktivierung"/>
+		<text name="gui_ad_stuckDeactivate_tooltip" 					text="Wenn Stuck-Timeout an und abgelaufen ist, AutoDrive für Fahrzeug deaktivieren."/>
 		<!-- Please keep the numbers in the translation texts - they are used to sort / group the entries in the list -->
 		<text name="ad_color_singleConnection"							text="01 Linie Hauptstrecke eine Richtung" />
 		<text name="ad_color_dualConnection"							text="02 Linie Hauptstrecke zwei Richtungen" />

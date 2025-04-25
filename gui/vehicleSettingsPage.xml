@@ -28,6 +28,21 @@
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_followDistance"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
+				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="stuckTimeout" id="stuckTimeout">
+					<Text profile="fs25_multiTextOptionTooltip"
+					      name="ignore"
+					      text="$l10n_gui_ad_stuckTimeout_tooltip"/>
+				</MultiTextOption>
+				<Text profile="fs25_settingsMultiTextOptionTitle"
+				      text="$l10n_gui_ad_stuckTimeout"/>
+			</Bitmap>
+			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
+				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="stuckDeactivate" id="stuckDeactivate">
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_stuckDeactivate_tooltip"/>
+				</BinaryOption>
+				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_stuckDeactivate"/>
+			</Bitmap>
+			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="unloadFillLevel" id="unloadFillLevel">
 					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_unloadFillLevel_tooltip"/>
 				</MultiTextOption>
