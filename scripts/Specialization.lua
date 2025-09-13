@@ -816,10 +816,12 @@ function AutoDrive:onDrawEditorMode()
     local isEditorShowEnabled = AutoDrive.isEditorShowEnabled()
     local isInExtendedEditorMode = AutoDrive.isInExtendedEditorMode()
     local isInConstructionModeEditor = AutoDrive.isInConstructionModeEditor()
+    local mouseActiveForAutoDrive = (AutoDrive.isMouseActiveForHud() or AutoDrive.isMouseActiveForEditor() or isInConstructionModeEditor) and g_inputBinding:getShowMouseCursor()
 
     if g_gui:getIsGuiVisible() and not isInConstructionModeEditor then
-        isEditorShowEnabled = false
-        isInExtendedEditorMode = false
+        -- following commented to show lines and dots always
+        -- isEditorShowEnabled = false
+        -- isInExtendedEditorMode = false
     end
 
     if isInConstructionModeEditor then
@@ -861,13 +863,15 @@ function AutoDrive:onDrawEditorMode()
     end
 
     --Draw close destinations
-    for _, marker in pairs(ADGraphManager:getMapMarkers()) do
-        local wp = ADGraphManager:getWayPointById(marker.id)
-        if wp then
-            if MathUtil.vector2Length(wp.x - x, wp.z - z) < maxDistance then
-                local scale = AutoDrive.getSetting("scaleMarkerText") or 1
-                Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013) * scale, 0)
-                DrawingManager:addMarkerTask(wp.x, wp.y + 0.45, wp.z)
+    if isEditorShowEnabled or isInExtendedEditorMode then
+        for _, marker in pairs(ADGraphManager:getMapMarkers()) do
+            local wp = ADGraphManager:getWayPointById(marker.id)
+            if wp then
+                if MathUtil.vector2Length(wp.x - x, wp.z - z) < maxDistance then
+                    local scale = AutoDrive.getSetting("scaleMarkerText") or 1
+                    Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013) * scale, 0)
+                    DrawingManager:addMarkerTask(wp.x, wp.y + 0.45, wp.z)
+                end
             end
         end
     end
@@ -901,7 +905,7 @@ function AutoDrive:onDrawEditorMode()
         if isInExtendedEditorMode then
             arrowPosition = DrawingManager.arrows.position.middle
             if AutoDrive.enableSphere == true then
-                if AutoDrive.mouseIsAtPos(point, 0.01) or point.isSelected then
+                if (AutoDrive.mouseIsAtPos(point, 0.01) or point.isSelected) and mouseActiveForAutoDrive then
                     DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_hoveredNode))
                 else
                     if point.id == self.ad.selectedNodeId then
@@ -924,7 +928,7 @@ function AutoDrive:onDrawEditorMode()
                     local gy = y - AutoDrive.drawHeight - AutoDrive.getSetting("lineHeight")
                     DrawingManager:addLineTask(x, y, z, x, gy, z, 1, unpack(AutoDrive.currentColors.ad_color_editorHeightLine))
 
-                    if AutoDrive.mouseIsAtPos(point, 0.01) or AutoDrive.mouseIsAtPos({x = x, y = gy, z = z}, 0.01) then
+                    if (AutoDrive.mouseIsAtPos(point, 0.01) or AutoDrive.mouseIsAtPos({x = x, y = gy, z = z}, 0.01)) and mouseActiveForAutoDrive then
                         DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_hoveredNode))
                     else
                         if point.id == self.ad.selectedNodeId then
@@ -940,7 +944,7 @@ function AutoDrive:onDrawEditorMode()
                 end
 
                 -- draw previous and next points in different colors - note: sequence is important
-                if point.out ~= nil and not isActive then
+                if point.out ~= nil and not isActive and mouseActiveForAutoDrive then
                     for _, neighbor in pairs(point.out) do
                         local nWp = ADGraphManager:getWayPointById(neighbor)
                         if nWp ~= nil then
@@ -959,7 +963,7 @@ function AutoDrive:onDrawEditorMode()
         end
 
 -- draw connection lines
-        if point.out ~= nil and (isInExtendedEditorMode or isInConstructionModeEditor or isEditorShowEnabled) then
+        if point.out ~= nil and (isInExtendedEditorMode or isEditorShowEnabled) then
 
             for _, neighbor in pairs(point.out) do
                 -- if a section is active, skip these connections, they are drawn below
@@ -1011,7 +1015,8 @@ function AutoDrive:onDrawEditorMode()
         end
 
         --just a quick way to highlight single (forgotten) points with no connections
-        if (#point.out == 0) and (#point.incoming == 0) and not table.contains(outPointsSeen, point.id) and point.colors == nil then
+        if ((#point.out == 0) and (#point.incoming == 0) and not table.contains(outPointsSeen, point.id) and point.colors == nil)
+        and (isInExtendedEditorMode or isEditorShowEnabled) then
             y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z) + 0.5
             DrawingManager:addCrossTask(x, y, z)
         end
