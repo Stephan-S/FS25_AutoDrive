@@ -818,9 +818,8 @@ function AutoDrive:onDrawEditorMode()
     local isInConstructionModeEditor = AutoDrive.isInConstructionModeEditor()
 
     if g_gui:getIsGuiVisible() and not isInConstructionModeEditor then
-        -- following commented to show lines and dots always
-        -- isEditorShowEnabled = false
-        -- isInExtendedEditorMode = false
+        isEditorShowEnabled = false
+        isInExtendedEditorMode = false
     end
 
     if isInConstructionModeEditor then
@@ -893,7 +892,6 @@ function AutoDrive:onDrawEditorMode()
     end
 
     local outPointsSeen = {}
-    local mouseActiveForAutoDrive = (AutoDrive.isMouseActiveForHud() or AutoDrive.isMouseActiveForEditor() or isInConstructionModeEditor) and g_inputBinding:getShowMouseCursor()
     for _, point in pairs(self:getWayPointsInRange(0, maxDistance)) do
         local x = point.x
         local y = point.y
@@ -903,7 +901,7 @@ function AutoDrive:onDrawEditorMode()
         if isInExtendedEditorMode then
             arrowPosition = DrawingManager.arrows.position.middle
             if AutoDrive.enableSphere == true then
-                if (AutoDrive.mouseIsAtPos(point, 0.01) or point.isSelected) and mouseActiveForAutoDrive then
+                if AutoDrive.mouseIsAtPos(point, 0.01) or point.isSelected then
                     DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_hoveredNode))
                 else
                     if point.id == self.ad.selectedNodeId then
@@ -926,7 +924,7 @@ function AutoDrive:onDrawEditorMode()
                     local gy = y - AutoDrive.drawHeight - AutoDrive.getSetting("lineHeight")
                     DrawingManager:addLineTask(x, y, z, x, gy, z, 1, unpack(AutoDrive.currentColors.ad_color_editorHeightLine))
 
-                    if (AutoDrive.mouseIsAtPos(point, 0.01) or AutoDrive.mouseIsAtPos({x = x, y = gy, z = z}, 0.01)) and mouseActiveForAutoDrive then
+                    if AutoDrive.mouseIsAtPos(point, 0.01) or AutoDrive.mouseIsAtPos({x = x, y = gy, z = z}, 0.01) then
                         DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_hoveredNode))
                     else
                         if point.id == self.ad.selectedNodeId then
@@ -946,11 +944,11 @@ function AutoDrive:onDrawEditorMode()
                     for _, neighbor in pairs(point.out) do
                         local nWp = ADGraphManager:getWayPointById(neighbor)
                         if nWp ~= nil then
-                            if AutoDrive.mouseIsAtPos(nWp, 0.01) and mouseActiveForAutoDrive then
+                            if AutoDrive.mouseIsAtPos(nWp, 0.01) then
                                 -- draw previous point in GOLDHOFER_PINK1
                                 DrawingManager:addSphereTask(point.x, point.y, point.z, 3.4, unpack(AutoDrive.currentColors.ad_color_previousNode))
                             end
-                            if AutoDrive.mouseIsAtPos(point, 0.01) and mouseActiveForAutoDrive then
+                            if AutoDrive.mouseIsAtPos(point, 0.01) then
                                 -- draw next point
                                 DrawingManager:addSphereTask(nWp.x, nWp.y, nWp.z, 3.2, unpack(AutoDrive.currentColors.ad_color_nextNode))
                             end
