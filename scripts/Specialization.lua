@@ -815,16 +815,10 @@ function AutoDrive:onDrawEditorMode()
 
     local isEditorShowEnabled = AutoDrive.isEditorShowEnabled()
     local isInExtendedEditorMode = AutoDrive.isInExtendedEditorMode()
-    local isInConstructionModeEditor = AutoDrive.isInConstructionModeEditor()
-    local mouseActiveForAutoDrive = (AutoDrive.isMouseActiveForHud() or AutoDrive.isMouseActiveForEditor() or isInConstructionModeEditor) and g_inputBinding:getShowMouseCursor()
+    local isInConstructionMode = AutoDrive.isInConstructionMode()
+    local mouseActiveForAutoDrive = (AutoDrive.isMouseActiveForHud() or AutoDrive.isMouseActiveForEditor()) and g_inputBinding:getShowMouseCursor()
 
-    if g_gui:getIsGuiVisible() and not isInConstructionModeEditor then
-        -- following commented to show lines and dots always
-        -- isEditorShowEnabled = false
-        -- isInExtendedEditorMode = false
-    end
-
-    if isInConstructionModeEditor then
+    if isInConstructionMode then
         x = g_constructionScreen.camera.cameraX
         z = g_constructionScreen.camera.cameraZ
     end
@@ -878,7 +872,7 @@ function AutoDrive:onDrawEditorMode()
 
     if ADGraphManager:getWayPointById(1) ~= nil
         and isInExtendedEditorMode
-        and not isInConstructionModeEditor
+        and not isInConstructionMode
         then
         --Draw line to selected neighbor point
         local neighbour = self.ad.stateModule:getSelectedNeighbourPoint()
@@ -1482,8 +1476,8 @@ function AutoDrive.passToExternalMod_AI(vehicle)
     end
 
     if (not vehicle.ad.isStoppingWithError and distanceToStart < 30) then
+        local success, errorMessage
         if vehicle.getLastJob then
-            local success, errorMessage
             if (vehicle.getIsOnField and vehicle:getIsOnField()) then
                 AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive.passToExternalMod pass to other mod...")
                 local fieldJob = vehicle:getLastJob()
