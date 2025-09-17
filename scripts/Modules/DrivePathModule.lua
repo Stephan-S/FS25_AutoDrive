@@ -221,7 +221,7 @@ function ADDrivePathModule:isCloseToWaypoint()
                 return true
             end
             -- Check if the angle between vehicle and current wp and current wp to next wp is over 90° - then we should already make the switch
-            if i == 1 then
+            if i == 1 and wp_current and wp_ahead then
                 local angle = AutoDrive.angleBetween({x = wp_ahead.x - wp_current.x, z = wp_ahead.z - wp_current.z}, {x = wp_current.x - x, z = wp_current.z - z})
                 angle = math.abs(angle)
 
