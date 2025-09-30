@@ -79,8 +79,6 @@ function AutoDrive.defineMinDistanceByVehicleType(vehicle, reverse)
     local min_distance = vehicle.size.length / 2
     if vehicle.getAISteeringNode ~= nil then
         local _, _, diffZ = localToLocal(vehicle:getAISteeringNode(), vehicle.components[1].node, 0, 0, 0)
-        
-        -- diffZ > 0 -> steering node ahead of vehicle center
         if reverse ~= true then
             min_distance = min_distance - diffZ
         else
@@ -88,9 +86,48 @@ function AutoDrive.defineMinDistanceByVehicleType(vehicle, reverse)
         end
         -- print(string.format("Min distance for %s is %.2f with diffZ %.2f", vehicle:getName(), min_distance, diffZ))
     end
-
-    
     return math.max(min_distance, 0.1)
+end
+
+function AutoDrive.getMinLookaheadByVehicleType(vehicle)
+    local min_lookAhead = vehicle.size.length / 2
+    if vehicle.spec_crabSteering and vehicle.spec_crabSteering.hasSteeringModes and vehicle.spec_articulatedAxis and vehicle.spec_articulatedAxis.componentJoint then
+        min_lookAhead = 3
+        local currentMode = vehicle.spec_crabSteering.steeringModes[vehicle.spec_crabSteering.state]
+        if currentMode and currentMode.articulatedAxis and currentMode.articulatedAxis.locked then
+            if vehicle.spec_crabSteering.distFromCompJointToCenterOfBackWheels then
+                min_lookAhead = min_lookAhead + vehicle.spec_crabSteering.distFromCompJointToCenterOfBackWheels
+            end
+        end
+    elseif vehicle.spec_articulatedAxis and vehicle.spec_articulatedAxis.componentJoint then
+        min_lookAhead = 3
+    elseif vehicle.getAISteeringNode ~= nil then
+        local _, _, diffZ = localToLocal(vehicle:getAISteeringNode(), vehicle.components[1].node, 0, 0, 0)
+        if diffZ < 0 then
+            -- front steering
+            local maxAxleDiff = 0
+            local spec = vehicle.spec_wheels
+            if spec and spec.wheels then
+                for i, wheel in ipairs(spec.wheels) do
+                    if wheel.repr then
+                        local _, _, diffZ = localToLocal(wheel.repr, vehicle:getAISteeringNode(), 0, 0, 0)
+                        if diffZ > maxAxleDiff then
+                            maxAxleDiff = diffZ
+                        end
+                    end
+                end
+            end
+            if maxAxleDiff > 0 then
+                min_lookAhead = maxAxleDiff * 2
+            else
+                min_lookAhead = vehicle.size.length
+            end
+        else
+            -- back steering
+            min_lookAhead = 4
+        end
+    end
+    return math.max(min_lookAhead, 2)
 end
 
 function AutoDrive.defineMinDistanceByVehicleTypeOld(vehicle)

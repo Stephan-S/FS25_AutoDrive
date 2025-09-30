@@ -9,12 +9,12 @@
 		</GuiElement>
 
 		<ScrollingLayout profile="fs25_settingsLayout" id="boxLayout">
-			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
+			<!-- <Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="lookAheadTurning" id="lookAheadTurning">
 					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_lookahead_turning_tooltip"/>
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_lookahead_turning"/>
-			</Bitmap>
+			</Bitmap> -->
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="mapMarkerDetour" id="mapMarkerDetour">
 					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_mapMarkerDetour_tooltip"/>
