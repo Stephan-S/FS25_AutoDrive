@@ -44,7 +44,7 @@ function ADSensor:addSensorsToVehicle(vehicle)
     vehicle.ad.sensors = {}
     local sensorParameters = {}
     sensorParameters.dynamicLength = true
-    sensorParameters.minDynamicLength = 0.2
+    sensorParameters.minDynamicLength = 1
     sensorParameters.position = ADSensor.POS_FRONT
     sensorParameters.width = vehicle.size.width * 0.75
     local frontSensorDynamicShort = ADCollSensorSplit:new(vehicle, sensorParameters)
