@@ -86,15 +86,9 @@ function ADHarvestManager:fireUnloader(unloader, harvester)
         local follower = unloader.ad.modes[AutoDrive.MODE_UNLOAD]:getFollowingUnloader()
         if follower ~= nil then
             follower.ad.taskModule:abortAllTasks()
-            if AutoDrive.getSetting("parkInField", follower) then
-                follower.ad.taskModule:addTask(ClearCropTask:new(follower, harvester))
-            end
             follower.ad.taskModule:addTask(StopAndDisableADTask:new(follower, ADTaskModule.DONT_PROPAGATE, true))
         end
         unloader.ad.taskModule:abortAllTasks()
-        if AutoDrive.getSetting("parkInField", unloader) then
-            unloader.ad.taskModule:addTask(ClearCropTask:new(unloader, harvester))
-        end
         unloader.ad.taskModule:addTask(StopAndDisableADTask:new(unloader, ADTaskModule.DONT_PROPAGATE, true))
     end
     self:unregisterAsUnloader(unloader)

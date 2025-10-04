@@ -135,6 +135,7 @@ function ADTaskModule:RefuelIfNeeded()
             ADHarvestManager:unregisterAsUnloader(self.vehicle)
             self.followingUnloader = nil
             self.combine = nil
+            self.vehicle.ad.onRouteToRefuel = true
             self.activeTask = RefuelTask:new(self.vehicle, ADGraphManager:getMapMarkerById(refuelDestinationMarkerID).id)
         else
             self.vehicle.ad.isStoppingWithError = true

@@ -30,7 +30,7 @@ function ADCollisionDetectionModule:detectObstacle()
             local sensorLocation = self.vehicle.ad.sensors.frontSensorDynamicShort:getLocationByPosition()
 			local vehX, vehY, vehZ = getWorldTranslation(self.vehicle.components[1].node)
             local worldOffsetX, worldOffsetY, worldOffsetZ =  AutoDrive.localDirectionToWorld(self.vehicle, sensorLocation.x, 0, sensorLocation.z)
-            for _, trigger in pairs(ADTriggerManager.getUnloadTriggers()) do
+            for _, trigger in pairs(ADTriggerManager.getBunkerSilos()) do
                 if trigger and trigger.bunkerSiloArea ~= nil then
                     local x1, z1 = trigger.bunkerSiloArea.sx, trigger.bunkerSiloArea.sz
                     local x2, z2 = trigger.bunkerSiloArea.wx, trigger.bunkerSiloArea.wz

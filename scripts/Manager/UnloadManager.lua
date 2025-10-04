@@ -21,7 +21,7 @@ function ADUnloadManager:update(dt)
 
     -- first check for bunker silos
     self.bunkerSilos = {}
-    for _, bunkerSilo in pairs(ADTriggerManager.getUnloadTriggers()) do
+    for _, bunkerSilo in pairs(ADTriggerManager.getBunkerSilos()) do
         if bunkerSilo and bunkerSilo.bunkerSiloArea then
             bunkerSilo.adVehicles = {}
             table.insert(self.bunkerSilos, bunkerSilo)

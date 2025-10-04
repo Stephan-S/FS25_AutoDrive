@@ -14,6 +14,7 @@ end
 function RefuelTask:setUp()
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "RefuelTask:setUp ")
     self.refuelTrigger = nil
+    self.wasRefuelling = false
     self.matchingFillTypes = {}
     if ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
         self.state = RefuelTask.STATE_PATHPLANNING
@@ -62,6 +63,10 @@ function RefuelTask:update(dt)
                 self.vehicle.ad.specialDrivingModule:stopVehicle()
                 self.vehicle.ad.specialDrivingModule:update(dt)
             else
+                if self.wasRefuelling then
+                    -- allow loading at the refuel destination
+                    self:finished()
+                end
                 self.vehicle.ad.drivePathModule:update(dt)
             end
 
@@ -83,11 +88,13 @@ end
 function RefuelTask:abort()
     self.vehicle.ad.onRouteToRefuel = false
     self.refuelTrigger = nil
+    self.wasRefuelling = false
 end
 
 function RefuelTask:finished()
     self.vehicle.ad.onRouteToRefuel = #AutoDrive.getRequiredRefuels(self.vehicle, self.vehicle.ad.onRouteToRefuel) > 0
     self.refuelTrigger = nil
+    self.wasRefuelling = false
     self.vehicle:stopAutoDrive()
     self.vehicle.ad.stateModule:getCurrentMode():start()
     self.vehicle.ad.taskModule:setCurrentTaskFinished(ADTaskModule.DONT_PROPAGATE)
@@ -172,6 +179,7 @@ function RefuelTask:startRefueling()
                             self.refuelTrigger.stoppedTimer:timer(false, 500)
 
 							if self.refuelTrigger.isLoading then
+                                self.wasRefuelling = true
                             	item.wasLoaded = true
                             	return
 							end

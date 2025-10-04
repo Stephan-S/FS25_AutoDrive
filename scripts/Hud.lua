@@ -813,7 +813,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                 if wayPointsDirection > 3 then
                     wayPointsDirection = 1
                 end
-                ADGraphManager:setConnectionBetweenWayPointsInSection(vehicle, wayPointsDirection)
+                ADGraphManager:setConnectionBetweenWayPointsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId, wayPointsDirection)
                 vehicle.ad.selectedNodeId = nil -- unselect the current node after action done
             end
 
@@ -831,7 +831,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                     else
                         flags = AutoDrive.FLAG_SUBPRIO
                     end
-                    ADGraphManager:setWayPointsFlagsInSection(vehicle, flags)
+                    ADGraphManager:setWayPointsFlagsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId, flags)
                     vehicle.ad.selectedNodeId = nil -- unselect the current node after action done
                 end
             end
@@ -842,7 +842,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                 and AutoDrive.leftALTmodifierKeyPressed
                 and not AutoDrive.rightSHIFTmodifierKeyPressed
                 then
-                ADGraphManager:deleteWayPointsInSection(vehicle)
+                ADGraphManager:deleteWayPointsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
                 vehicle.ad.selectedNodeId = nil -- unselect the current node to prevent further deletions nearby by mouse clicks
             end
         end

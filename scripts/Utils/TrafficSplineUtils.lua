@@ -1,7 +1,7 @@
-addConsoleCommand("adParseSplines", "Parse traffic splines into waypoints", "adParseSplines", AutoDrive)
-addConsoleCommand("adRemoveSplines", "Remove parsed traffic spline nodes", "removeTrafficSplineNodes", AutoDrive)
-addConsoleCommand("adCreateJunctions", "Create junctions", "createJunctionCommand", AutoDrive)
-addConsoleCommand("adRemoveJunctions", "Remove junctions", "removeJunctionCommand", AutoDrive)
+-- addConsoleCommand("adParseSplines", "Parse traffic splines into waypoints", "adParseSplines", AutoDrive)
+-- addConsoleCommand("adRemoveSplines", "Remove parsed traffic spline nodes", "removeTrafficSplineNodes", AutoDrive)
+-- addConsoleCommand("adCreateJunctions", "Create junctions", "createJunctionCommand", AutoDrive)
+-- addConsoleCommand("adRemoveJunctions", "Remove junctions", "removeJunctionCommand", AutoDrive)
 
 function AutoDrive:removeTrafficSplineNodes()
 	ADGraphManager:removeNodesWithFlag(AutoDrive.FLAG_TRAFFIC_SYSTEM)

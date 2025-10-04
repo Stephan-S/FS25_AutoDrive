@@ -20,6 +20,7 @@ function AutoDrive:checkDestinations(showAll)
         end
     end
 end
+
 function AutoDrive.debugVehicleMsg(vehicle, msg)
     if vehicle ~= nil and vehicle.ad ~= nil and vehicle.ad.debug ~= nil then
         vehicle.ad.debug:Enqueue(msg)
@@ -41,6 +42,27 @@ function AutoDrive.devPrintDebugQueue(vehicle)
 end
 
 
+function AutoDrive.devOnDraw(vehicle)
+    if not AutoDrive.enable_devOnDraw then
+        return
+    end
+    for _, bunkerSilo in pairs(ADTriggerManager.getBunkerSilos()) do
+        if bunkerSilo.bunkerSiloArea then
+            local y = bunkerSilo.bunkerSiloArea.sy + 3
+            local sx, sz = bunkerSilo.bunkerSiloArea.sx, bunkerSilo.bunkerSiloArea.sz
+            local wx, wz = bunkerSilo.bunkerSiloArea.wx, bunkerSilo.bunkerSiloArea.wz
+            local hx, hz = bunkerSilo.bunkerSiloArea.hx, bunkerSilo.bunkerSiloArea.hz
+            local vx = bunkerSilo.bunkerSiloArea.hx + (wx - sx)
+            local vz = bunkerSilo.bunkerSiloArea.hz + (wz - sz)
+
+            DebugUtil.drawDebugLine(sx, y, sz, wx, y, wz, 1, 0, 0) -- front
+            DebugUtil.drawDebugLine(sx, y, sz, hx, y, hz, 0, 1, 0) -- right
+            DebugUtil.drawDebugLine(wx, y, wz, vx, y, vz, 1, 1, 0) -- left
+            DebugUtil.drawDebugLine(hx, y, hz, vx, y, vz, 0, 1, 1) -- back
+        end
+    end
+end
+
 function AutoDrive.devAction(vehicle)
     if vehicle ~= nil and vehicle.getName ~= nil then
         Logging.info("[AD] AutoDrive.devAction vehicle %s", tostring(vehicle:getName()))
@@ -58,6 +80,7 @@ function AutoDrive.devAction(vehicle)
         end
     end
     AutoDrive.devPrintDebugQueue(vehicle)
+    AutoDrive.enable_devOnDraw = not AutoDrive.enable_devOnDraw
 end
 
 function AutoDrive.devAutoDriveInit()

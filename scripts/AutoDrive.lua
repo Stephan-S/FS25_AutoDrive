@@ -94,6 +94,10 @@ AutoDrive.CHASEPOS_FRONT = 4
 
 AutoDrive.UAL_FILLTYPE_ALL = 1 -- value for set all materials in UniversalAutoload!
 
+AutoDrive.MAX_REFUEL_TRIGGER_DISTANCE = 15
+AutoDrive.REFUEL_LEVEL = 0.15
+AutoDrive.BUNKERSILO_CONNECTED_DISTANCE = 10
+
 AutoDrive.colors = {
 	ad_color_singleConnection = { 0, 1, 0, 1 },
 	ad_color_dualConnection = { 0, 0, 1, 1 },
@@ -240,6 +244,8 @@ function AutoDrive:loadMap(name)
 	LoadTrigger.delete = Utils.overwrittenFunction(LoadTrigger.delete, ADTriggerManager.loadTriggerDelete)
 
 	Placeable.onBuy = Utils.appendedFunction(Placeable.onBuy, ADTriggerManager.onPlaceableBuy)
+
+	Placeable.onSell = Utils.appendedFunction(Placeable.onSell, ADTriggerManager.onPlaceableSell)
 
 	IngameMapElement.mouseEvent = Utils.overwrittenFunction(IngameMapElement.mouseEvent, AutoDrive.ingameMapElementMouseEvent)
 

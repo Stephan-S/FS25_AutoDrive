@@ -2231,14 +2231,15 @@ function PathFinderModule:checkSlopeAngle(x1, z1, x2, z2)
                 )
             )
         end
-        PathFinderModule.debugMsg(self.vehicle, "PFM:checkSlopeAngle belowGroundLevel xz %d,%d terrain123 %.1f %.1f %.1f getWaterYAtWorldPosition %s waterY %s "
+        PathFinderModule.debugMsg(self.vehicle, "PFM:checkSlopeAngle belowGroundLevel xz %d,%d terrain123 %.1f %.1f %.1f waterY1 %s  waterY2 %s waterY3 %s"
         , math.floor(x1)
         , math.floor(z1)
         , terrain1
         , terrain2
         , terrain3
-        , tostring(g_currentMission.environmentAreaSystem:getWaterYAtWorldPosition(worldPosMiddle.x, terrain3, worldPosMiddle.z))
-        , tostring(waterY)
+        , tostring(waterY1)
+        , tostring(waterY2)
+        , tostring(waterY3)
         )
     end
 

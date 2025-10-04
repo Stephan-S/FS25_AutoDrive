@@ -97,7 +97,7 @@
 		<text name="gui_ad_blinkValue"									text="Lenkwinkel Blinker-Automatik" />
 		<text name="gui_ad_blinkValue_tooltip"							text="Lenkwinkel, ab dem beim Abbiegen automatisch geblinkt wird. (0 = Blinker deaktiviert)" />
 		<text name="gui_ad_pipe_offset"								text="Abstand Rohr" />
-		<text name="gui_ad_pipe_offset_tooltip"						text="Additional offset applied to the detected pipe position" />
+		<text name="gui_ad_pipe_offset_tooltip"						text="Zusätzlicher Abstand, der auf die ermittelte Rohrposition angewendet wird" />
 		<text name="gui_ad_followDistance"								text="Abstand Häcksler" />
 		<text name="gui_ad_followDistance_tooltip"						text="Abstand vom Häcksler, wenn von hinten abgefahren/gefolgt wird." />
 		<text name="gui_ad_lookahead_turning"							text="Distanz Vorausschauen (Lenkung)" />
@@ -215,7 +215,7 @@
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Zeigt die Ziele auf der Karte an." />
 		<text name="gui_ad_mainMenuMap"								text="Übersichtskarte" />
 		<text name="gui_ad_ingameMap"									text="Minikarte" />
-		<text name="gui_ad_both"										text="Both" />
+		<text name="gui_ad_both"										text="Beide" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Ziele anwählbar" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Ziele als Ziel/Abladepunkt übernehmen, wenn auf Karte geklickt." />
 		<text name="gui_ad_cornerSpeed"								text="Kurvengeschwindigkeit" />

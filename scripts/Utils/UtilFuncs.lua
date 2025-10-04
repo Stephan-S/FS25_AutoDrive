@@ -473,7 +473,7 @@ function AutoDrive.dumpTable(inputTable, name, maxDepth, currentDepth)
 	end
 end
 
-addConsoleCommand("adSetDebugChannel", "Set new debug channel", "setDebugChannel", AutoDrive)
+-- addConsoleCommand("adSetDebugChannel", "Set new debug channel", "setDebugChannel", AutoDrive)
 
 function AutoDrive:setDebugChannel(newDebugChannel)
 	if newDebugChannel ~= nil then
@@ -495,7 +495,7 @@ function AutoDrive:setDebugChannel(newDebugChannel)
 	AutoDrive.showNetworkEvents()
 end
 
-addConsoleCommand("adDumpTable", "Dump Table to log", "dumpTableToLog", AutoDrive)
+-- addConsoleCommand("adDumpTable", "Dump Table to log", "dumpTableToLog", AutoDrive)
 
 function AutoDrive:dumpTableToLog(input, ...)
 	local f = getfenv(0).loadstring('return ' .. input)
@@ -1090,7 +1090,12 @@ function AutoDrive:onFillTypeSelection(fillType)
                             AutoDrive.debugPrint(fillableObject.object, AutoDrive.DC_VEHICLEINFO, "AutoDrive:onFillTypeSelection getFillUnitAllowsFillType")
                             if fillableObject.object.getFillUnitFreeCapacity and fillableObject.object:getFillUnitFreeCapacity(fillableObject.fillUnitIndex) > 0 then
                                 AutoDrive.debugPrint(fillableObject.object, AutoDrive.DC_VEHICLEINFO, "AutoDrive:onFillTypeSelection setIsLoading self.selectedFillType %s -> fillType %s", tostring(self.selectedFillType), tostring(fillType))
-                                self:setIsLoading(true, fillableObject.object, fillableObject.fillUnitIndex, fillType)
+                                local rootVehicle = fillableObject.object.rootVehicle
+                                local onRouteToRefuel = rootVehicle and rootVehicle.ad and rootVehicle.ad.onRouteToRefuel
+                                if not onRouteToRefuel then
+                                    -- do not load any fuel type in case of refuel active!
+                                    self:setIsLoading(true, fillableObject.object, fillableObject.fillUnitIndex, fillType)
+                                end
                                 break
                             end
                         end
