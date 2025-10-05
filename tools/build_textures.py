@@ -46,8 +46,8 @@ def main():
     images: list[ImageInfo] = []
     names: set[str] = set()
 
-    for image in glob.glob(os.path.join(icon_src, "*.png")):
-        img = wand.image.Image(filename=image)
+    for image in glob.glob(os.path.join(icon_src, "*")):
+        img = wand.image.Image(filename=image, background=wand.color.Color('transparent'))
         name, _ = os.path.splitext(os.path.basename(image))
         if name in names:
             raise ValueError(f"Duplicate image name: {name}")
