@@ -1,0 +1,70 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="fill" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#ffffff;stop-opacity:1;" offset="0" />
+    </linearGradient>
+
+    <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#000000;stop-opacity:1;" offset="0" />
+    </linearGradient>
+
+    <linearGradient id="fsGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#89b010;stop-opacity:1;" offset="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Button background -->
+  <rect x="2" y="2" width="124" height="124" fill="#181818" fill-opacity="0.25" />
+
+  <!-- Tractor -->
+  <g id="tractor exaust">
+    <path style="fill:url(#fill);stroke:url(#outline);stroke-width:1"
+      d="m 9,54 0,-17 3,-2 l 0,-11 6,0 0,11 3,2 0,17 z" />
+  </g>
+  <g id="tractor hood">
+    <path style="fill:url(#fill);stroke:url(#outline);stroke-width:1"
+      d="m 5,52 25,3 c 0,0 5,1 6,4 0,3 0,4 0,3 l -10,0 0,1 10,0 0,5 -8,0 0,1 8,0 0,12 -31,0 z" />
+  </g>
+
+  <g id="tractor wheel">
+    <defs>
+      <circle id="wheelCenter" cx="25" cy="90" r="6" />
+      <mask id="wheelCenterMask">
+        <rect x="0" y="0" width="128" height="128" fill="white" />
+        <use xlink:href="#wheelCenter" fill="black" stroke="white" stroke-width="2" />
+      </mask>
+    </defs>
+    <circle cx="25" cy="90" r="15" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"
+      mask="url(#wheelCenterMask)" />
+    <use xlink:href="#wheelCenter" fill="url(#outline)" mask="url(#wheelCenterMask)" />
+  </g>
+
+  <!-- Parking symbol -->
+  <g id="parking symbol">
+    <defs>
+      <text id="letterP" x="85" y="78" font-size="45px" font-family="Arial, Helvetica, sans-serif">P</text>
+      <mask id="letterPMask">
+        <rect x="0" y="0" width="128" height="128" fill="white" />
+        <use xlink:href="#letterP" fill="black" stroke="white" stroke-width="1" />
+      </mask>
+    </defs>
+    <rect width="48" height="48" x="76" y="38" rx="6" ry="6" fill="url(#fill)" stroke="url(#outline)"
+      stroke-width="1" />
+    <use xlink:href="#letterP" fill="url(#fsGreen)" stroke="url(#fsGreen)" stroke-width="2" />
+  </g>
+
+  <!-- Arrow -->
+  <g id="arrow">
+    <path fill="url(#fill)" stroke="url(#outline)" stroke-width="1" d="
+        m 48,58 15,0 -6,-6 
+        a 2,2 0 0 1 4,-4
+        l 10,10
+        a 4,4 0 0 1 0,6
+        l -10,10
+        a 2,2 0 0 1 -4,-4
+        l 6,-6 -15,0
+        a 3,3 0 0 1 -0,-6
+        z" />
+  </g>
+</svg>
