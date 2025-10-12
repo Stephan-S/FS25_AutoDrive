@@ -1,0 +1,34 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="fill" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#c6c6c6;stop-opacity:1;" offset="0" />
+    </linearGradient>
+
+    <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#000000;stop-opacity:1;" offset="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Button background -->
+  <rect x="2" y="2" width="124" height="124" fill="#181818" fill-opacity="0.25" />
+
+  <g transform="rotate(45 64 64)">
+    <!-- Body-->
+    <rect x="51" y="48" width="24" height="70" rx="8" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"/>
+    <!-- Wheels -->
+    <rect x="45" y="75" width="6" height="16" rx="1" fill="url(#outline)"/>
+    <rect x="75" y="75" width="6" height="16" rx="1" fill="url(#outline)"/>
+    <!-- Hitch -->
+    <rect x="60" y="36" width="6" height="12" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"/>
+    <!-- Spray arms -->
+    <g transform="rotate(45 54 90)">
+      <rect x="-15" y="110" width="90" height="12" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"/>
+    </g>
+    <g>
+      <rect x="57" y="120" width="12" height="12" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"/>
+    </g>
+    <g transform="rotate(-45 71 90)">
+      <rect x="51" y="110" width="90" height="12" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"/>
+    </g>
+  </g>
+</svg>

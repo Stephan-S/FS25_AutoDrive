@@ -24,90 +24,92 @@
         <slice id="exitField_1" uvs="792px 396px 128px 128px"/>
         <slice id="exitField_2" uvs="924px 396px 128px 128px"/>
         <slice id="exitField_3" uvs="1056px 396px 128px 128px"/>
-        <slice id="input_bunkerUnloadType_1" uvs="1188px 396px 128px 128px"/>
-        <slice id="input_bunkerUnloadType_2" uvs="1320px 396px 128px 128px"/>
-        <slice id="input_continue_1" uvs="1452px 396px 128px 128px"/>
-        <slice id="input_createMapMarker_1" uvs="1584px 396px 128px 128px"/>
-        <slice id="input_debug_1" uvs="1716px 396px 128px 128px"/>
-        <slice id="input_debug_2" uvs="1848px 396px 128px 128px"/>
-        <slice id="input_decHudHeight" uvs="0px 528px 128px 128px"/>
-        <slice id="input_decHudWidth" uvs="132px 528px 128px 128px"/>
-        <slice id="input_editMapMarker_1" uvs="264px 528px 128px 128px"/>
-        <slice id="input_incHudHeight" uvs="396px 528px 128px 128px"/>
-        <slice id="input_incHudWidth" uvs="528px 528px 128px 128px"/>
-        <slice id="input_openGUI_1" uvs="660px 528px 128px 128px"/>
-        <slice id="input_parkVehicle_1" uvs="792px 528px 128px 128px"/>
-        <slice id="input_parkVehicle_2" uvs="924px 528px 128px 128px"/>
-        <slice id="input_record_1" uvs="1056px 528px 128px 128px"/>
-        <slice id="input_record_2" uvs="1188px 528px 128px 128px"/>
-        <slice id="input_record_3" uvs="1320px 528px 128px 128px"/>
-        <slice id="input_record_4" uvs="1452px 528px 128px 128px"/>
-        <slice id="input_record_5" uvs="1584px 528px 128px 128px"/>
-        <slice id="input_record_6" uvs="1716px 528px 128px 128px"/>
-        <slice id="input_record_7" uvs="1848px 528px 128px 128px"/>
-        <slice id="input_record_8" uvs="0px 660px 128px 128px"/>
-        <slice id="input_record_9" uvs="132px 660px 128px 128px"/>
-        <slice id="input_removeMapMarker_1" uvs="264px 660px 128px 128px"/>
-        <slice id="input_removeWaypoint_1" uvs="396px 660px 128px 128px"/>
-        <slice id="input_routesManager_1" uvs="528px 660px 128px 128px"/>
-        <slice id="input_saveHud" uvs="660px 660px 128px 128px"/>
-        <slice id="input_silomode_1" uvs="792px 660px 128px 128px"/>
-        <slice id="input_silomode_2" uvs="924px 660px 128px 128px"/>
-        <slice id="input_silomode_3" uvs="1056px 660px 128px 128px"/>
-        <slice id="input_silomode_4" uvs="1188px 660px 128px 128px"/>
-        <slice id="input_silomode_5" uvs="1320px 660px 128px 128px"/>
-        <slice id="input_silomode_6" uvs="1452px 660px 128px 128px"/>
-        <slice id="input_startHelper_1" uvs="1584px 660px 128px 128px"/>
-        <slice id="input_startHelper_10" uvs="1716px 660px 128px 128px"/>
-        <slice id="input_startHelper_2" uvs="1848px 660px 128px 128px"/>
-        <slice id="input_startHelper_3" uvs="0px 792px 128px 128px"/>
-        <slice id="input_startHelper_4" uvs="132px 792px 128px 128px"/>
-        <slice id="input_startHelper_5" uvs="264px 792px 128px 128px"/>
-        <slice id="input_startHelper_6" uvs="396px 792px 128px 128px"/>
-        <slice id="input_startHelper_9" uvs="528px 792px 128px 128px"/>
-        <slice id="input_start_stop_1" uvs="660px 792px 128px 128px"/>
-        <slice id="input_start_stop_2" uvs="792px 792px 128px 128px"/>
-        <slice id="input_toggleAutomaticUnloadTarget_1" uvs="924px 792px 128px 128px"/>
-        <slice id="input_toggleAutomaticUnloadTarget_2" uvs="1056px 792px 128px 128px"/>
-        <slice id="input_toggleAutomaticUnloadTarget_3" uvs="1188px 792px 128px 128px"/>
-        <slice id="input_toggleAutomaticUnloadTarget_4" uvs="1320px 792px 128px 128px"/>
-        <slice id="input_toggleAutomaticUnloadTarget_5" uvs="1452px 792px 128px 128px"/>
-        <slice id="input_toggleLoadByFillLevel_1" uvs="1584px 792px 128px 128px"/>
-        <slice id="input_toggleLoadByFillLevel_2" uvs="1716px 792px 128px 128px"/>
-        <slice id="input_toggleLoadByFillLevel_3" uvs="1848px 792px 128px 128px"/>
-        <slice id="loop_counter_active" uvs="0px 924px 128px 128px"/>
-        <slice id="loop_counter_inactive" uvs="132px 924px 128px 128px"/>
-        <slice id="loop_counter_inf" uvs="264px 924px 128px 128px"/>
-        <slice id="marker" uvs="396px 924px 128px 128px"/>
-        <slice id="minusSign" uvs="528px 924px 128px 128px"/>
-        <slice id="plusSign" uvs="660px 924px 128px 128px"/>
-        <slice id="restrictToField_1" uvs="792px 924px 128px 128px"/>
-        <slice id="restrictToField_2" uvs="924px 924px 128px 128px"/>
-        <slice id="rotateTargets_1" uvs="1056px 924px 128px 128px"/>
-        <slice id="rotateTargets_2" uvs="1188px 924px 128px 128px"/>
-        <slice id="rotateTargets_3" uvs="1320px 924px 128px 128px"/>
-        <slice id="rotateTargets_4" uvs="1452px 924px 128px 128px"/>
-        <slice id="settings_debug" uvs="1584px 924px 128px 128px"/>
-        <slice id="speedmeter" uvs="1716px 924px 128px 128px"/>
-        <slice id="speedmeter_field" uvs="1848px 924px 128px 128px"/>
-        <slice id="tipper_load" uvs="0px 1056px 128px 128px"/>
-        <slice id="tipper_overlay" uvs="132px 1056px 128px 128px"/>
-        <slice id="zoom" uvs="264px 1056px 128px 128px"/>
+        <slice id="FoldImplements_1" uvs="1188px 396px 128px 128px"/>
+        <slice id="FoldImplements_2" uvs="1320px 396px 128px 128px"/>
+        <slice id="input_bunkerUnloadType_1" uvs="1452px 396px 128px 128px"/>
+        <slice id="input_bunkerUnloadType_2" uvs="1584px 396px 128px 128px"/>
+        <slice id="input_continue_1" uvs="1716px 396px 128px 128px"/>
+        <slice id="input_createMapMarker_1" uvs="1848px 396px 128px 128px"/>
+        <slice id="input_debug_1" uvs="0px 528px 128px 128px"/>
+        <slice id="input_debug_2" uvs="132px 528px 128px 128px"/>
+        <slice id="input_decHudHeight" uvs="264px 528px 128px 128px"/>
+        <slice id="input_decHudWidth" uvs="396px 528px 128px 128px"/>
+        <slice id="input_editMapMarker_1" uvs="528px 528px 128px 128px"/>
+        <slice id="input_incHudHeight" uvs="660px 528px 128px 128px"/>
+        <slice id="input_incHudWidth" uvs="792px 528px 128px 128px"/>
+        <slice id="input_openGUI_1" uvs="924px 528px 128px 128px"/>
+        <slice id="input_parkVehicle_1" uvs="1056px 528px 128px 128px"/>
+        <slice id="input_parkVehicle_2" uvs="1188px 528px 128px 128px"/>
+        <slice id="input_record_1" uvs="1320px 528px 128px 128px"/>
+        <slice id="input_record_2" uvs="1452px 528px 128px 128px"/>
+        <slice id="input_record_3" uvs="1584px 528px 128px 128px"/>
+        <slice id="input_record_4" uvs="1716px 528px 128px 128px"/>
+        <slice id="input_record_5" uvs="1848px 528px 128px 128px"/>
+        <slice id="input_record_6" uvs="0px 660px 128px 128px"/>
+        <slice id="input_record_7" uvs="132px 660px 128px 128px"/>
+        <slice id="input_record_8" uvs="264px 660px 128px 128px"/>
+        <slice id="input_record_9" uvs="396px 660px 128px 128px"/>
+        <slice id="input_removeMapMarker_1" uvs="528px 660px 128px 128px"/>
+        <slice id="input_removeWaypoint_1" uvs="660px 660px 128px 128px"/>
+        <slice id="input_routesManager_1" uvs="792px 660px 128px 128px"/>
+        <slice id="input_saveHud" uvs="924px 660px 128px 128px"/>
+        <slice id="input_silomode_1" uvs="1056px 660px 128px 128px"/>
+        <slice id="input_silomode_2" uvs="1188px 660px 128px 128px"/>
+        <slice id="input_silomode_3" uvs="1320px 660px 128px 128px"/>
+        <slice id="input_silomode_4" uvs="1452px 660px 128px 128px"/>
+        <slice id="input_silomode_5" uvs="1584px 660px 128px 128px"/>
+        <slice id="input_silomode_6" uvs="1716px 660px 128px 128px"/>
+        <slice id="input_startHelper_1" uvs="1848px 660px 128px 128px"/>
+        <slice id="input_startHelper_10" uvs="0px 792px 128px 128px"/>
+        <slice id="input_startHelper_2" uvs="132px 792px 128px 128px"/>
+        <slice id="input_startHelper_3" uvs="264px 792px 128px 128px"/>
+        <slice id="input_startHelper_4" uvs="396px 792px 128px 128px"/>
+        <slice id="input_startHelper_5" uvs="528px 792px 128px 128px"/>
+        <slice id="input_startHelper_6" uvs="660px 792px 128px 128px"/>
+        <slice id="input_startHelper_9" uvs="792px 792px 128px 128px"/>
+        <slice id="input_start_stop_1" uvs="924px 792px 128px 128px"/>
+        <slice id="input_start_stop_2" uvs="1056px 792px 128px 128px"/>
+        <slice id="input_toggleAutomaticUnloadTarget_1" uvs="1188px 792px 128px 128px"/>
+        <slice id="input_toggleAutomaticUnloadTarget_2" uvs="1320px 792px 128px 128px"/>
+        <slice id="input_toggleAutomaticUnloadTarget_3" uvs="1452px 792px 128px 128px"/>
+        <slice id="input_toggleAutomaticUnloadTarget_4" uvs="1584px 792px 128px 128px"/>
+        <slice id="input_toggleAutomaticUnloadTarget_5" uvs="1716px 792px 128px 128px"/>
+        <slice id="input_toggleLoadByFillLevel_1" uvs="1848px 792px 128px 128px"/>
+        <slice id="input_toggleLoadByFillLevel_2" uvs="0px 924px 128px 128px"/>
+        <slice id="input_toggleLoadByFillLevel_3" uvs="132px 924px 128px 128px"/>
+        <slice id="loop_counter_active" uvs="264px 924px 128px 128px"/>
+        <slice id="loop_counter_inactive" uvs="396px 924px 128px 128px"/>
+        <slice id="loop_counter_inf" uvs="528px 924px 128px 128px"/>
+        <slice id="marker" uvs="660px 924px 128px 128px"/>
+        <slice id="minusSign" uvs="792px 924px 128px 128px"/>
+        <slice id="plusSign" uvs="924px 924px 128px 128px"/>
+        <slice id="restrictToField_1" uvs="1056px 924px 128px 128px"/>
+        <slice id="restrictToField_2" uvs="1188px 924px 128px 128px"/>
+        <slice id="rotateTargets_1" uvs="1320px 924px 128px 128px"/>
+        <slice id="rotateTargets_2" uvs="1452px 924px 128px 128px"/>
+        <slice id="rotateTargets_3" uvs="1584px 924px 128px 128px"/>
+        <slice id="rotateTargets_4" uvs="1716px 924px 128px 128px"/>
+        <slice id="settings_debug" uvs="1848px 924px 128px 128px"/>
+        <slice id="speedmeter" uvs="0px 1056px 128px 128px"/>
+        <slice id="speedmeter_field" uvs="132px 1056px 128px 128px"/>
+        <slice id="tipper_load" uvs="264px 1056px 128px 128px"/>
+        <slice id="tipper_overlay" uvs="396px 1056px 128px 128px"/>
+        <slice id="zoom" uvs="528px 1056px 128px 128px"/>
         <slice id="toggleEditHud" uvs="1930px 0px 80px 80px"/>
         <slice id="arrowDown" uvs="1944px 84px 64px 64px"/>
         <slice id="arrowRight" uvs="1944px 152px 64px 64px"/>
         <slice id="arrowUp" uvs="1944px 220px 64px 64px"/>
         <slice id="input_rotateHudPresets" uvs="1944px 288px 64px 64px"/>
-        <slice id="messageBackground" uvs="396px 1056px 512px 64px"/>
+        <slice id="messageBackground" uvs="660px 1056px 512px 64px"/>
         <slice id="destination" uvs="2012px 84px 32px 32px"/>
         <slice id="dropTarget" uvs="2012px 120px 32px 32px"/>
-        <slice id="Header" uvs="912px 1056px 512px 32px"/>
-        <slice id="Header_message" uvs="1428px 1056px 512px 32px"/>
+        <slice id="Header" uvs="1176px 1056px 512px 32px"/>
+        <slice id="Header_message" uvs="1176px 1092px 512px 32px"/>
         <slice id="input_goTo_1" uvs="2012px 156px 32px 32px"/>
         <slice id="input_toggleHud" uvs="2012px 192px 32px 32px"/>
         <slice id="input_toggleHudExtension" uvs="2012px 228px 32px 32px"/>
-        <slice id="4xlongBorderBottomFilled" uvs="912px 1092px 500px 16px"/>
-        <slice id="4xlongBorderStretchFilled" uvs="1416px 1092px 500px 16px"/>
-        <slice id="4xlongBorderTopFilled" uvs="912px 1112px 500px 16px"/>
+        <slice id="4xlongBorderBottomFilled" uvs="660px 1128px 500px 16px"/>
+        <slice id="4xlongBorderStretchFilled" uvs="1164px 1128px 500px 16px"/>
+        <slice id="4xlongBorderTopFilled" uvs="660px 1148px 500px 16px"/>
     </slices>
 </texture>

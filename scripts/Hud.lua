@@ -51,6 +51,7 @@ AutoDriveHud.ELEMENTS = {
 	["rotateHudPresets"] = { w=1, h=1, editor={[1]="input_rotateHudPresets", tip="gui_ad_rotateHudPresets"}},
 	["saveHud"] = { w=1, h=1, editor={[1]="input_saveHud", tip="gui_ad_saveHud"}},
 	["parkAtJobFinished"] = { w=1, h=1, x=7, y=4, settings={[1]="enableParkAtJobFinished", tip="gui_ad_enableParkAtJobFinished"}},
+	["foldImplements"] = { w=1, h=1, x=8, y=4, settings={[1]="FoldImplements", tip="gui_ad_FoldImplements"}},
 
 	--[[
 	NEW:
@@ -58,7 +59,7 @@ AutoDriveHud.ELEMENTS = {
 	  Restrict unloader to field: AutoDrive.settings.followOnlyOnField
 	  --Park at job finished: AutoDrive.settings.enableParkAtJobFinished--
 	  Autoload - Unload Position: AutoDrive.settings.ALUnload
-	  Fold implements: AutoDrive.settings.FoldImplements
+	  --Fold implements: AutoDrive.settings.FoldImplements
 	--]]
 }
 
