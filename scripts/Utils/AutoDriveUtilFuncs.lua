@@ -127,6 +127,7 @@ function AutoDrive.getMinLookaheadByVehicleType(vehicle)
             min_lookAhead = 4
         end
     end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "AutoDrive.getMinLookaheadByVehicleType %.1f", math.max(min_lookAhead, 2))
     return math.max(min_lookAhead, 2)
 end
 
