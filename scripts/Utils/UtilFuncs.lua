@@ -910,13 +910,13 @@ function AutoDrive:ConnectionSendEvent(superFunc, event, deleteEvent, force)
 	AutoDrive.debug.lastSentEvent = eCopy
 end
 
-function NetworkNode:addPacketSize(packetType, packetSizeInBytes)
-	if (AutoDrive.debug.connectionSendEventBackup ~= nil or AutoDrive.debug.serverBroadcastEventBackup ~= nil) and packetType == NetworkNode.PACKET_EVENT then
-		AutoDrive.debug.lastSentEventSize = packetSizeInBytes
-	end
-	if self.showNetworkTraffic then
-		self.packetBytes[packetType] = self.packetBytes[packetType] + packetSizeInBytes
-	end
+function NetworkNode:addPacketSize(connection, packetType, packetSizeInBytes)
+    if (AutoDrive.debug.connectionSendEventBackup ~= nil or AutoDrive.debug.serverBroadcastEventBackup ~= nil) and packetType == NetworkNode.PACKET_EVENT then
+        AutoDrive.debug.lastSentEventSize = packetSizeInBytes
+    end
+    if self.showNetworkTraffic or self.showNetworkTrafficClients then
+        self.packetBytes[packetType][connection] = (self.packetBytes[packetType][connection] or 0) + packetSizeInBytes
+    end
 end
 
 function AutoDrive.tableClone(org)
