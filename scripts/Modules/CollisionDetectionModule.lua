@@ -233,7 +233,7 @@ function ADCollisionDetectionModule:checkReverseCollision()
     local mostBackImplement = AutoDrive.getMostBackImplementOf(self.vehicle)
 
     local trailer = nil
-    if trailerCount > 1 and self.vehicle.trailer ~= nil and self.vehicle.trailer ~= self.vehicle then
+    if trailers and trailerCount > 1 and self.vehicle.trailer ~= nil and self.vehicle.trailer ~= self.vehicle then
         -- vehicle.trailer is the controlable reverse attachable
         trailer = trailers[trailerCount]
     elseif mostBackImplement ~= nil then

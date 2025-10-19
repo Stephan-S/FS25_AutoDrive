@@ -473,20 +473,20 @@ function ADInputManager:input_callDriver(vehicle)
     end
 end
 
-function ADInputManager:input_parkVehicle(vehicle)
+function ADInputManager:input_parkVehicle(vehicle, farmId)
     local actualParkDestination = vehicle.ad.stateModule:getParkDestinationAtJobFinished()
     if actualParkDestination >= 1 then
         vehicle.ad.stateModule:setFirstMarker(actualParkDestination)
         AutoDrive:StopCP(vehicle)
         if vehicle.ad.stateModule:isActive() then
-            self:input_start_stop(vehicle) --disable if already active
+            self:input_start_stop(vehicle, farmId) --disable if already active
         end
         vehicle.ad.stateModule:setMode(AutoDrive.MODE_DRIVETO)
-        self:input_start_stop(vehicle)
+        self:input_start_stop(vehicle, farmId)
         vehicle.ad.onRouteToPark = true
     else
         vehicle.ad.onRouteToPark = false
-        AutoDriveMessageEvent.sendMessage(vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_parkVehicle_noPosSet;", 5000, vehicle.ad.stateModule:getName())
+        AutoDriveMessageEvent.sendMessageOrNotification(vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_parkVehicle_noPosSet;", 5000, vehicle.ad.stateModule:getName())
     end
 end
 
@@ -535,18 +535,18 @@ function ADInputManager:input_bunkerUnloadType(vehicle)
     vehicle.ad.stateModule:nextBunkerUnloadType()
 end
 
-function ADInputManager:input_refuelVehicle(vehicle)
+function ADInputManager:input_refuelVehicle(vehicle, farmId)
     AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "ADInputManager:input_refuelVehicle ")
     local refuelDestination = ADTriggerManager.getClosestRefuelDestination(vehicle, true)
     if refuelDestination ~= nil and refuelDestination >= 1 then
         -- vehicle.ad.stateModule:setFirstMarker(refuelDestination)
         AutoDrive:StopCP(vehicle)
         if vehicle.ad.stateModule:isActive() then
-            self:input_start_stop(vehicle) --disable if already active
+            self:input_start_stop(vehicle, farmId) --disable if already active
         end
         vehicle.ad.stateModule:setMode(AutoDrive.MODE_DRIVETO)
         vehicle.ad.onRouteToRefuel = true
-        self:input_start_stop(vehicle)
+        self:input_start_stop(vehicle, farmId)
     else
         local refuelFillTypes = AutoDrive.getRequiredRefuels(vehicle, true)
         local refuelFillTypeTitle = ""
@@ -557,17 +557,17 @@ function ADInputManager:input_refuelVehicle(vehicle)
     end
 end
 
-function ADInputManager:input_repairVehicle(vehicle)
+function ADInputManager:input_repairVehicle(vehicle, farmId)
     AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "ADInputManager:input_repairVehicle ")
     local repairDestinationMarkerNodeID = AutoDrive:getClosestRepairTrigger(vehicle)
     if repairDestinationMarkerNodeID ~= nil then
         AutoDrive:StopCP(vehicle)
         if vehicle.ad.stateModule:isActive() then
-            self:input_start_stop(vehicle) --disable if already active
+            self:input_start_stop(vehicle, farmId) --disable if already active
         end
         vehicle.ad.onRouteToRepair = true
         vehicle.ad.stateModule:setMode(AutoDrive.MODE_DRIVETO)
-        self:input_start_stop(vehicle)
+        self:input_start_stop(vehicle, farmId)
     else
         AutoDriveMessageEvent.sendMessageOrNotification(vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_No_Repair_Station;", 5000, vehicle.ad.stateModule:getName())
     end
