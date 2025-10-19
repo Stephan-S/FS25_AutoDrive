@@ -151,6 +151,7 @@ function AutoDrive.initSpecialization()
     schemaSavegame:register(XMLValueType.BOOL, "vehicles.vehicle(?).AutoDrive#startHelper", "startHelper")
     schemaSavegame:register(XMLValueType.INT, "vehicles.vehicle(?).AutoDrive#parkDestination", "parkDestination")
     schemaSavegame:register(XMLValueType.INT, "vehicles.vehicle(?).AutoDrive#bunkerUnloadType", "bunkerUnloadType")
+    schemaSavegame:register(XMLValueType.INT, "vehicles.vehicle(?).AutoDrive#actualFarmId", "actualFarmId")
     if AutoDrive.automaticUnloadTarget then
         schemaSavegame:register(XMLValueType.BOOL, "vehicles.vehicle(?).AutoDrive#automaticUnloadTarget", "automaticUnloadTarget")
     end
@@ -759,7 +760,7 @@ function AutoDrive:onEnterVehicle(isControlling)
         if self.ad and self.ad.stateModule then
             self.ad.stateModule:setPlayerFarmId(spec.controllerFarmId)
         end
-        if not self.ad.stateModule:isActive() and not AutoDrive:getIsCPActive(self) then
+        if not self.ad.stateModule:isActive() and not AutoDrive:getIsCPActive(self) and not self:getIsAIActive() then
             self.ad.stateModule:setActualFarmId(self.ad.stateModule:getPlayerFarmId()) -- onEnterVehicle
         end
     end
@@ -779,7 +780,7 @@ function AutoDrive:onLeaveVehicle(wasEntered)
     local spec = self.spec_enterable
     if spec then
         if self.ad and self.ad.stateModule then
-            self.ad.stateModule:setPlayerFarmId(0)
+            self.ad.stateModule:setPlayerFarmId(FarmManager.SPECTATOR_FARM_ID)
         end
         if not self.ad.stateModule:isActive() and not AutoDrive:getIsCPActive(self) and not self:getIsAIActive() then
             self.ad.stateModule:setActualFarmId(self.ad.stateModule:getPlayerFarmId()) -- onLeaveVehicle
@@ -1297,7 +1298,7 @@ function AutoDrive:onStartAutoDrive()
             local actualParkDestination = self.ad.stateModule:getParkDestinationAtJobFinished()
             if actualParkDestination >= 1 then
             else
-                AutoDriveMessageEvent.sendMessage(self, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_parkVehicle_noPosSet;", 5000, self.ad.stateModule:getName())
+                AutoDriveMessageEvent.sendMessageOrNotification(self, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_parkVehicle_noPosSet;", 5000, self.ad.stateModule:getName())
             end
         end
     end

@@ -40,7 +40,7 @@ function ADSpecialDrivingModule:update(dt)
     if self.shouldStopOrHoldVehicle then
         self:stopAndHoldVehicle(dt)
     end
-    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) and self.vehicle.getIsEntered ~= nil and self.vehicle:getIsEntered() then
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) and AutoDrive:getIsEntered(self.vehicle) then
         local dbg = {}
         dbg.isStoppingVehicle = self:isStoppingVehicle()
         dbg.unloadingIntoBunkerSilo = self.unloadingIntoBunkerSilo

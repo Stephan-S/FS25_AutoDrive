@@ -87,8 +87,8 @@ function ADStateModule:reset()
     self.automaticPickupTarget = false
     self.harversterPairingOk = false
     self.currentHelperIndex = 0
-    self.playerFarmId = 0
-    self.actualFarmId = 0
+    self.playerFarmId = FarmManager.SPECTATOR_FARM_ID
+    self.actualFarmId = FarmManager.SPECTATOR_FARM_ID
 end
 
 function ADStateModule:readFromXMLFile(xmlFile, key)
@@ -181,6 +181,11 @@ function ADStateModule:readFromXMLFile(xmlFile, key)
         self.bunkerUnloadType = bunkerUnloadType
     end
 
+    local actualFarmId = xmlFile:getValue(key .. "#actualFarmId")
+    if actualFarmId ~= nil then
+        self.actualFarmId = actualFarmId
+    end
+
     -- local automaticUnloadTarget = xmlFile:getValue(key .. "#automaticUnloadTarget")
     -- if automaticUnloadTarget ~= nil then
         -- self.automaticUnloadTarget = automaticUnloadTarget
@@ -211,6 +216,7 @@ function ADStateModule:saveToXMLFile(xmlFile, key)
     xmlFile:setValue(key .. "#active", self.active)
     xmlFile:setValue(key .. "#startHelper", self.startHelper)
     xmlFile:setValue(key .. "#bunkerUnloadType", self.bunkerUnloadType)
+    xmlFile:setValue(key .. "#actualFarmId", self.actualFarmId)
     -- xmlFile:setValue(key .. "#automaticUnloadTarget", self.automaticUnloadTarget)
     -- xmlFile:setValue(key .. "#automaticPickupTarget", self.automaticPickupTarget)
 end
@@ -336,7 +342,7 @@ function ADStateModule:update(dt)
         end
     end
 
-    if g_client ~= nil and self.vehicle.getIsEntered ~= nil and self.vehicle:getIsEntered() and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) then
+    if g_client ~= nil and AutoDrive:getIsEntered(self.vehicle) and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) then
 		-- debug output only displayed on client with entered vehicle
         local debug = {}
         debug.active = self.active
