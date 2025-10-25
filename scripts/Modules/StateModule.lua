@@ -1039,7 +1039,7 @@ function ADStateModule:selectPreferredFillTypeFromFillLevels(fillLevels)
         local fillType = self.selectedFillTypes[idx]
         if fillLevels[fillType] ~= nil and fillLevels[fillType] ~= 0 and (fillLevels[fillType] == requiredFillLevel or pickNextNonEmpty) then
             -- found suitable filltype
-            self.fillType = fillType
+            self:setFillType(fillType)
             break
         end
 
@@ -1062,7 +1062,7 @@ function ADStateModule:nextSelectedFillType()
                 else
                     if self.selectedFillTypes[1] ~= nil and g_fillTypeManager:getFillTypeByIndex(self.selectedFillTypes[1]) ~= nil then
                         -- select the first selectedFillType
-                        self.fillType = self.selectedFillTypes[1]
+                        self:setFillType(self.selectedFillTypes[1])
                         AutoDrive:setALFillType(self.vehicle, self.selectedFillTypes[1])
                     end
                 end
@@ -1080,11 +1080,11 @@ function ADStateModule:nextFillType()
             if self.fillType == fillType then
                 if supportedFillTypes[index + 1] ~= nil and g_fillTypeManager:getFillTypeByIndex(supportedFillTypes[index + 1]) ~= nil then
                     -- found valid next supported fillType
-                    self.fillType = supportedFillTypes[index + 1]
+                    self:setFillType(supportedFillTypes[index + 1])
                 else
                     if supportedFillTypes[1] ~= nil and g_fillTypeManager:getFillTypeByIndex(supportedFillTypes[1]) ~= nil then
                         -- select the first supported fillType
-                        self.fillType = supportedFillTypes[1]
+                        self:setFillType(supportedFillTypes[1])
                     end
                 end
                 break
@@ -1101,11 +1101,11 @@ function ADStateModule:previousFillType()
             if self.fillType == fillType then
                 if index > 1 and supportedFillTypes[index - 1] ~= nil and g_fillTypeManager:getFillTypeByIndex(supportedFillTypes[index - 1]) ~= nil then
                     -- found valid previous supported fillType
-                    self.fillType = supportedFillTypes[index - 1]
+                    self:setFillType(supportedFillTypes[index - 1])
                 else
                     if supportedFillTypes[#supportedFillTypes] ~= nil and g_fillTypeManager:getFillTypeByIndex(supportedFillTypes[#supportedFillTypes]) ~= nil then
                         -- select the last supported fillType
-                        self.fillType = supportedFillTypes[#supportedFillTypes]
+                        self:setFillType(supportedFillTypes[#supportedFillTypes])
                     end
                 end
                 break
@@ -1345,12 +1345,10 @@ function ADStateModule:getPlayerFarmId(farmId)
     return self.playerFarmId
 end
 
-function ADStateModule:setPlayerFarmId(farmId, sendEvent)
+function ADStateModule:setPlayerFarmId(farmId)
     if farmId and self.playerFarmId ~= farmId then
         self.playerFarmId = farmId
-        if sendEvent == nil or sendEvent == true then
-            self:raiseDirtyFlag()
-        end
+        self:raiseDirtyFlag()
     end
 end
 
@@ -1358,11 +1356,9 @@ function ADStateModule:getActualFarmId(farmId)
     return self.actualFarmId
 end
 
-function ADStateModule:setActualFarmId(farmId, sendEvent)
+function ADStateModule:setActualFarmId(farmId)
     if farmId and self.actualFarmId ~= farmId then
         self.actualFarmId = farmId
-        if sendEvent == nil or sendEvent == true then
-            self:raiseDirtyFlag()
-        end
+        self:raiseDirtyFlag()
     end
 end
