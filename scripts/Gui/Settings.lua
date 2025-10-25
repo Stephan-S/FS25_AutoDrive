@@ -120,24 +120,23 @@ end
 
 function ADSettings:onClickSetDefault()
     self:debugMsg("ADSettings:onClickSetDefault")
-    if self:pagesHaveChanges() then
-        local controlledVehicle = AutoDrive.getControlledVehicle()
-        for settingName, setting in pairs(AutoDrive.settings) do
-            local newSetting = setting
-            if setting.isVehicleSpecific and controlledVehicle ~= nil and controlledVehicle.ad ~= nil and controlledVehicle.ad.settings[settingName] ~= nil then
-                newSetting = controlledVehicle.ad.settings[settingName]
-                if controlledVehicle.ad.settings[settingName].new ~= nil then
-                    controlledVehicle.ad.settings[settingName].current = controlledVehicle.ad.settings[settingName].new
-                end
-                if (not newSetting.isUserSpecific) and newSetting.new ~= nil and newSetting.new ~= setting.userDefault then
-                    -- We could even print this with our debug system, but since GIANTS itself prints every changed config, for the moment we will do the same
-                    -- Logging.info('Default setting \'%s\' changed from "%s" to "%s"', settingName, setting.values[setting.userDefault], setting.values[newSetting.new])
-                    setting.userDefault = newSetting.new
-                end
+    local controlledVehicle = AutoDrive.getControlledVehicle()
+    for settingName, setting in pairs(AutoDrive.settings) do
+        if setting.isVehicleSpecific and controlledVehicle ~= nil and controlledVehicle.ad ~= nil and controlledVehicle.ad.settings[settingName] ~= nil then
+            local newSetting = controlledVehicle.ad.settings[settingName]
+            if newSetting.new and newSetting.current ~= newSetting.new then
+                -- take over changed settting
+                newSetting.current = newSetting.new
+            end
+            -- We could even print this with our debug system, but since GIANTS itself prints every changed config, for the moment we will do the same
+            -- Logging.info('Default setting \'%s\' changed from "%s" to "%s"', settingName, setting.values[setting.userDefault], setting.values[newSetting.new])
+            if newSetting.current and newSetting.current ~= setting.userDefault then
+                -- take over as default settting
+                setting.userDefault = newSetting.current
             end
         end
-        AutoDriveUpdateSettingsEvent.sendEvent(controlledVehicle)
     end
+    AutoDriveUpdateSettingsEvent.sendEvent(controlledVehicle)
 end
 
 function ADSettings:onClickOK()
