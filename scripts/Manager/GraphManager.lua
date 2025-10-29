@@ -1103,6 +1103,12 @@ function ADGraphManager:checkResetVehicleDestinations(destination)
                     vehicle.ad.stateModule:setSecondMarker(1)
                 end
             end
+            if destination == vehicle.ad.stateModule:getCurrentDestinationId() then
+                local marker = ADGraphManager:getMapMarkerById(1)
+                if marker ~= nil then
+                    vehicle.ad.stateModule:setCurrentDestination(1)
+                end
+            end
         end
     end
 end

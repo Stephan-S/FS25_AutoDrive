@@ -69,7 +69,6 @@ function ADTrainModule:setPathTo(destinationID)
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:setPathTo destinationID %s", tostring(destinationID))
 
     local destination = ADGraphManager:getMapMarkerByWayPointId(destinationID)
-    
     if destination then
         self.vehicle.ad.stateModule:setCurrentDestination(destination)
         self.destinationID = destinationID
@@ -89,14 +88,18 @@ function ADTrainModule:update(dt)
         return
     end
 
+    local currentDestination = self.vehicle.ad.stateModule:getCurrentDestination()
+    local currentDestinationID = currentDestination and currentDestination.id
+    local wayPoint = ADGraphManager:getWayPointById(currentDestinationID)
+    if not wayPoint then
+        return
+    end
     local spec = self.vehicle.spec_locomotive
     local speedReal = spec.speed * 3.6
     local brakeDistance = speedReal * 2
 
-    local wayPoint = ADGraphManager:getWayPointById(self.destinationID)
     local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
     local distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
-
     local shouldBrake = false
 
     self.vehicle.ad.specialDrivingModule:releaseVehicle()
@@ -160,18 +163,22 @@ function ADTrainModule:stopAndHoldVehicle(dt)
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:stopAndHoldVehicle speedReal %s", tostring(speedReal))
 
     if self.destinationID then
-        local wayPoint = ADGraphManager:getWayPointById(self.destinationID)
-        if not self.lastTrailer then
-            self.lastTrailer, self.trainLength = self:getLastTrailer()
-        end
-        if self.lastTrailer then
-            local x, y, z = getWorldTranslation(self.lastTrailer.components[1].node)
-            distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:stopAndHoldVehicle distance %s", tostring(distance))
+        local currentDestination = self.vehicle.ad.stateModule:getCurrentDestination()
+        local currentDestinationID = currentDestination and currentDestination.id
+        local wayPoint = ADGraphManager:getWayPointById(currentDestinationID)
+        if wayPoint then
+            if not self.lastTrailer then
+                self.lastTrailer, self.trainLength = self:getLastTrailer()
+            end
+            if self.lastTrailer then
+                local x, y, z = getWorldTranslation(self.lastTrailer.components[1].node)
+                distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:stopAndHoldVehicle distance %s", tostring(distance))
+            end
         end
     end
 
-    if math.abs(speedReal) > 1 then
+    if math.abs(speedReal) > 0.001 then
         if self.vehicle.movingDirection > 0 then
             self.vehicle:updateVehiclePhysics(-ADTrainModule.BRAKE_FACTOR, 0, 0, dt)
         end
@@ -188,7 +195,6 @@ function ADTrainModule:stopAndHoldVehicle(dt)
                     self:updateVehiclePhysics(0, 0, 0, 16)
                     self:raiseActive()
                 end
-
                 self.vehicle:stopMotor()
             end
         end
