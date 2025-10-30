@@ -17,7 +17,6 @@ end
 
 function ADTrainModule:init()
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:init")
-    self.destinationID = nil
     self.lastDistance = math.huge
 end
 
@@ -69,12 +68,7 @@ function ADTrainModule:setPathTo(destinationID)
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:setPathTo destinationID %s", tostring(destinationID))
 
     local destination = ADGraphManager:getMapMarkerByWayPointId(destinationID)
-    if destination then
-        self.vehicle.ad.stateModule:setCurrentDestination(destination)
-        self.destinationID = destinationID
-    else
-        self.destinationID = nil
-    end
+    self.vehicle.ad.stateModule:setCurrentDestination(destination)
     self:setUp()
     self.vehicle:raiseActive()
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:setPathTo self.destinationID %s", tostring(self.destinationID))
@@ -83,9 +77,6 @@ end
 function ADTrainModule:update(dt)
     if (g_updateLoopIndex % (60) == 0) then
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:update")
-    end
-    if not self.destinationID then
-        return
     end
 
     local currentDestination = self.vehicle.ad.stateModule:getCurrentDestination()
@@ -162,19 +153,17 @@ function ADTrainModule:stopAndHoldVehicle(dt)
     local distance = 12345
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:stopAndHoldVehicle speedReal %s", tostring(speedReal))
 
-    if self.destinationID then
-        local currentDestination = self.vehicle.ad.stateModule:getCurrentDestination()
-        local currentDestinationID = currentDestination and currentDestination.id
-        local wayPoint = ADGraphManager:getWayPointById(currentDestinationID)
-        if wayPoint then
-            if not self.lastTrailer then
-                self.lastTrailer, self.trainLength = self:getLastTrailer()
-            end
-            if self.lastTrailer then
-                local x, y, z = getWorldTranslation(self.lastTrailer.components[1].node)
-                distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:stopAndHoldVehicle distance %s", tostring(distance))
-            end
+    local currentDestination = self.vehicle.ad.stateModule:getCurrentDestination()
+    local currentDestinationID = currentDestination and currentDestination.id
+    local wayPoint = ADGraphManager:getWayPointById(currentDestinationID)
+    if wayPoint then
+        if not self.lastTrailer then
+            self.lastTrailer, self.trainLength = self:getLastTrailer()
+        end
+        if self.lastTrailer then
+            local x, y, z = getWorldTranslation(self.lastTrailer.components[1].node)
+            distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:stopAndHoldVehicle distance %s", tostring(distance))
         end
     end
 
@@ -209,15 +198,15 @@ function ADTrainModule:isTargetReached()
     end
 
     local ret = true
-    if self.destinationID then
-        local wayPoint = ADGraphManager:getWayPointById(self.destinationID)
-        if wayPoint then
-            if not self.lastTrailer then
-                self.lastTrailer, self.trainLength = self:getLastTrailer()
-            end
-            -- local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    local currentDestination = self.vehicle.ad.stateModule:getCurrentDestination()
+    local currentDestinationID = currentDestination and currentDestination.id
+    local wayPoint = ADGraphManager:getWayPointById(currentDestinationID)
+    if wayPoint then
+        if not self.lastTrailer then
+            self.lastTrailer, self.trainLength = self:getLastTrailer()
+        end
+        if self.lastTrailer then
             local x, y, z = getWorldTranslation(self.lastTrailer.components[1].node)
-
             local distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
             if (g_updateLoopIndex % (60) == 0) then
                 AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:isTargetReached distance %s", tostring(distance))
@@ -226,14 +215,9 @@ function ADTrainModule:isTargetReached()
             if ret then
                 AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAINS, "ADTrainModule:isTargetReached ADTrainModule.MIN_TARGET_DISTANCE")
             end
-
-            return ret
-        else
-            return true
         end
-    else
-        return true
     end
+    return ret
 end
 
 function ADTrainModule:isInRangeToLoadUnloadTarget()
