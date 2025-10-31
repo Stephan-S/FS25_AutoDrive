@@ -51,7 +51,7 @@ function ADCollSensorSplit:onUpdate(dt)
     end
 
     if not self.newHit then
-        if self.sensorParameters.minDynamicLengthVehicles then
+        if self.sensorParameters.minDynamicLength then
             self.boxes = self:getBoxShapes(self.sensorParameters.minDynamicLength)
             for _, box in pairs(self.boxes) do
                 local offsetCompensation = math.max(-math.tan(box.rx) * box.size[3], 0)
