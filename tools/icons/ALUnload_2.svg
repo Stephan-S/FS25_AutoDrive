@@ -1,0 +1,27 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="fill" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#ffffff;stop-opacity:1;" offset="0" />
+    </linearGradient>
+
+    <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#000000;stop-opacity:1;" offset="0" />
+    </linearGradient>
+
+    <linearGradient id="fsGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop style="stop-color:#89b010;stop-opacity:1;" offset="0" />
+    </linearGradient>
+  </defs>
+  <!-- Button background -->
+  <rect x="2" y="2" width="124" height="124" fill="#181818" fill-opacity="0.25" />
+
+  <!-- Truck -->
+  <path id="truck front" style="fill:url(#fill);stroke:url(#outline);stroke-width:1"
+    d="m 63,8 q 19,0 19,6 l 1,14 -40,0 1,-14 q 0,-6 19,-6 z" />
+  <path id="truck window" style="fill:url(#outline)"
+    d="m 45,15 q 17,-3 36,0 l 0,6 q -17,-2 -36,0 z" />
+  <rect id="truck bed" x="41" y="29" width="44" height="70" rx="3" fill="url(#fill)" stroke="url(#outline)" stroke-width="1"/>
+
+  <!-- Unload area -->
+  <rect id="unload" x="45" y="33" width="36" height="62" rx="3" fill="url(#fsGreen)" stroke="url(#outline)" stroke-width="1"/>
+</svg>
