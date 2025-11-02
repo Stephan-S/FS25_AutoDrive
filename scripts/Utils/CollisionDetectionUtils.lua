@@ -175,7 +175,7 @@ end
 
 function AutoDrive.debugDrawBoundingBoxForVehicles()
     local vehicle = AutoDrive.getControlledVehicle()
-    if vehicle ~= nil and vehicle.getIsEntered ~= nil and vehicle:getIsEntered() then
+    if vehicle ~= nil and AutoDrive:getIsEntered(vehicle) then
         local PosX, _, PosZ = getWorldTranslation(vehicle.components[1].node)
         local maxDistance = AutoDrive.drawDistance
         for _, otherVehicle in pairs(AutoDrive.getAllVehicles()) do

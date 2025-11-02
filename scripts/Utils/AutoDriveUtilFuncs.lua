@@ -127,6 +127,7 @@ function AutoDrive.getMinLookaheadByVehicleType(vehicle)
             min_lookAhead = 4
         end
     end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "AutoDrive.getMinLookaheadByVehicleType %.1f", math.max(min_lookAhead, 2))
     return math.max(min_lookAhead, 2)
 end
 
@@ -758,9 +759,9 @@ end
 -- This is the alternative MP approach
 function AutoDrive:getIsEntered(vehicle)
     local user = nil
-    if g_dedicatedServer ~= nil and vehicle ~= nil and g_currentMission.userManager ~= nil and g_currentMission.userManager.getUserByConnection ~= nil and vehicle.getOwner ~= nil then
+    if g_dedicatedServer ~= nil and vehicle ~= nil and g_currentMission.userManager ~= nil and g_currentMission.userManager.getUserByUserId ~= nil and vehicle.spec_enterable then
         -- MP
-        user = g_currentMission.userManager:getUserByConnection(vehicle:getOwner())
+        user = g_currentMission.userManager:getUserByUserId(vehicle.spec_enterable.controllerUserId)
     else
         -- SP
         if vehicle ~= nil and vehicle.getIsEntered ~= nil then
@@ -988,7 +989,7 @@ function AutoDrive:autostartHelpers()
 
     for _, vehicle in pairs(AutoDrive.getAllVehicles()) do
         if vehicle ~= nil and vehicle.ad ~= nil and vehicle.ad.stateModule ~= nil then
-            if vehicle.ad.stateModule.activeBeforeSave then
+            if vehicle.ad.stateModule.activeBeforeSave and vehicle.ad.stateModule:getActualFarmId() ~= FarmManager.SPECTATOR_FARM_ID then
                 vehicle.ad.stateModule:getCurrentMode():start(AutoDrive.USER_PLAYER)
             end
         end

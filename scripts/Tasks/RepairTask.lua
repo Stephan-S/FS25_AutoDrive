@@ -23,7 +23,7 @@ function RepairTask:setUp()
         self.state = RepairTask.STATE_DRIVING
         self.vehicle.ad.drivePathModule:setPathTo(self.destinationID)
     end
-    AutoDriveMessageEvent.sendNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_task_drive_to_repair_point;", 5000, self.vehicle.ad.stateModule:getName())
+    AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_task_drive_to_repair_point;", 5000, self.vehicle.ad.stateModule:getName())
     self.trailers, _ = AutoDrive.getAllUnits(self.vehicle)
     AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, false)
 end

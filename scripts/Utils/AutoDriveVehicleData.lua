@@ -95,7 +95,7 @@ function AutoDriveVehicleData:onEnterVehicle()
             actualparkDestination = self.advd.parkDestination
         end
         local rootVehicle = self:getRootVehicle()
-        if rootVehicle ~= nil and rootVehicle.ad ~= nil and (rootVehicle.getIsEntered ~= nil and rootVehicle:getIsEntered()) and self == rootVehicle then
+        if rootVehicle ~= nil and rootVehicle.ad ~= nil and AutoDrive:getIsEntered(rootVehicle) and self == rootVehicle then
             if actualparkDestination == nil then
                 actualparkDestination = -1
             end
@@ -122,7 +122,7 @@ function AutoDriveVehicleData:onSelect()
             end
 
             local rootVehicle = self:getRootVehicle()
-            if rootVehicle ~= nil and rootVehicle.ad ~= nil and (rootVehicle.getIsEntered ~= nil and rootVehicle:getIsEntered()) then
+            if rootVehicle ~= nil and rootVehicle.ad ~= nil and AutoDrive:getIsEntered(rootVehicle) then
                 -- propagate park destination only if vehicle is entered, as Giants engine also select vehicle, tools on startup
                 AutoDriveVehicleData:assignRootVehicleParkDestination(rootVehicle, actualparkDestination)
             end
@@ -147,7 +147,7 @@ function AutoDriveVehicleData:onPreDetach(attacherVehicle, implement)
             end
 
             local rootVehicle = attacherVehicle:getRootVehicle()
-            if rootVehicle ~= nil and rootVehicle.ad ~= nil and (rootVehicle.getIsEntered ~= nil and rootVehicle:getIsEntered()) then
+            if rootVehicle ~= nil and rootVehicle.ad ~= nil and AutoDrive:getIsEntered(rootVehicle) then
                 -- propagate park destination only if vehicle is entered, as Giants engine also select vehicle, tools on startup
                 AutoDriveVehicleData:assignRootVehicleParkDestination(rootVehicle, actualparkDestination)
             end

@@ -808,7 +808,8 @@ AutoDrive.settings.useBeaconLights = {
     text = "gui_ad_useBeaconLights",
     tooltip = "gui_ad_useBeaconLights_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.activeUnloading = {
@@ -1034,7 +1035,8 @@ AutoDrive.settings.useWorkLightsLoading = {
     text = "gui_ad_worklightsWhenLoading",
     tooltip = "gui_ad_worklightsWhenLoading_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.useWorkLightsSilo = {
@@ -1045,7 +1047,8 @@ AutoDrive.settings.useWorkLightsSilo = {
     text = "gui_ad_worklightsWhenSilo",
     tooltip = "gui_ad_worklightsWhenSilo_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.useHazardLightReverse = {
@@ -1056,7 +1059,8 @@ AutoDrive.settings.useHazardLightReverse = {
     text = "gui_ad_hazardLightReverse",
     tooltip = "gui_ad_hazardLightReverse_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.scaleLines = {
