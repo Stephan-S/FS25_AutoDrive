@@ -148,13 +148,12 @@ function ADCollSensorSplit:buildBoxShape(x, y, z, width, height, length, vecZ, v
 end
 
 function ADCollSensorSplit:getBoxShapes(minLength)
-    local vehicle = self.vehicle
+    local width, length = AutoDrive.getVehicleDimensions(self.vehicle, false)
 
-    local width, length = AutoDrive.getVehicleDimensions(vehicle, false)
+    local lookAheadDistance = math.clamp(self.vehicle.lastSpeedReal * 3600 * 15.5 / 40, minLength, 50)
+    local steeringAngle = math.deg(math.abs(self.vehicle.rotatedTime))
 
-    local lookAheadDistance = math.clamp(vehicle.lastSpeedReal * 3600 * 15.5 / 40, minLength, 50)
-
-    local vecZ = {x = math.sin(vehicle.rotatedTime), z = math.cos(vehicle.rotatedTime)}
+    local vecZ = {x = math.sin(self.vehicle.rotatedTime), z = math.cos(self.vehicle.rotatedTime)}
     local vecX = {x = vecZ.z, z = -vecZ.x}
 
     local boxYPos = AutoDrive.getSetting("collisionHeigth", self.vehicle) or 2
@@ -165,11 +164,16 @@ function ADCollSensorSplit:getBoxShapes(minLength)
     local boxes = {}
     local locationZ = self.location.z
     if self.position == ADSensor.POS_FRONT then
-        if vehicle.ad and vehicle.ad.adDimensions and vehicle.ad.adDimensions.maxLengthFront and vehicle.ad.adDimensions.maxLengthFront > 0 then
-            locationZ = vehicle.ad.adDimensions.maxLengthFront
+        if self.vehicle.ad and self.vehicle.ad.adDimensions and self.vehicle.ad.adDimensions.maxLengthFront and self.vehicle.ad.adDimensions.maxLengthFront > 0 then
+            locationZ = self.vehicle.ad.adDimensions.maxLengthFront
         end
     end
-    for i=1, numberOfBoxes do
+    local firstBox = 1
+    if steeringAngle > 30 then
+        firstBox = 2
+        numberOfBoxes = numberOfBoxes - 1
+    end
+    for i=firstBox, numberOfBoxes do
         local xOffset = (-width / 2) + (i - 0.5) * boxWidth
         boxes[i] = self:buildBoxShape(
             self.location.x + xOffset, boxYPos, locationZ,
