@@ -1105,9 +1105,7 @@ function ADGraphManager:checkResetVehicleDestinations(destination)
             end
             if destination == vehicle.ad.stateModule:getCurrentDestinationId() then
                 local marker = ADGraphManager:getMapMarkerById(1)
-                if marker ~= nil then
-                    vehicle.ad.stateModule:setCurrentDestination(1)
-                end
+                vehicle.ad.stateModule:setCurrentDestination(marker)
             end
         end
     end
