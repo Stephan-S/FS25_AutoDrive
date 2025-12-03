@@ -40,7 +40,7 @@ function ADSpecialDrivingModule:update(dt)
     if self.shouldStopOrHoldVehicle then
         self:stopAndHoldVehicle(dt)
     end
-    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) and self.vehicle.getIsEntered ~= nil and self.vehicle:getIsEntered() then
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) and AutoDrive:getIsEntered(self.vehicle) then
         local dbg = {}
         dbg.isStoppingVehicle = self:isStoppingVehicle()
         dbg.unloadingIntoBunkerSilo = self.unloadingIntoBunkerSilo
@@ -91,7 +91,7 @@ function ADSpecialDrivingModule:stopAndHoldVehicle(dt)
 
     if self.stoppedTimer:done() then
         self.motorShouldBeStopped = true
-        if self:shouldStopMotor() and self.vehicle:getIsMotorStarted() and (not g_currentMission.missionInfo.automaticMotorStartEnabled) then
+        if self:shouldStopMotor() and self.vehicle:getIsMotorStarted() then
             self.vehicle:stopMotor()
         end
     end

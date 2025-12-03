@@ -153,9 +153,17 @@ function AutoDrive.getObjectFillLevels(object)
                 updateFillLevels(fillUnitIndex)
             elseif object.spec_baleLoader and object.spec_baleLoader.fillUnitIndex and object.spec_baleLoader.fillUnitIndex > 0 and object.spec_baleLoader.fillUnitIndex == fillUnitIndex then
                 updateFillLevels(fillUnitIndex)
-            elseif spec_dischargeable and fillUnit and fillUnit.exactFillRootNode then
-                if object.getFillUnitCapacity and object:getFillUnitCapacity(fillUnitIndex) > 0 then
-                    updateFillLevels(fillUnitIndex)
+            elseif fillUnit and fillUnit.exactFillRootNode then
+                if object.getFillUnitSupportedFillTypes and object.getFillUnitCapacity and object:getFillUnitCapacity(fillUnitIndex) > 0 then
+                    local fillTypes = object:getFillUnitSupportedFillTypes(fillUnitIndex)
+                    if fillTypes[FillType.SEEDS]
+                        or fillTypes[FillType.FERTILIZER]
+                        or fillTypes[FillType.LIQUIDFERTILIZER]
+                        or fillTypes[FillType.HERBICIDE]
+                    then
+                        -- consider fillable tanks
+                        updateFillLevels(fillUnitIndex)
+                    end
                 end
             end
         end
@@ -1041,7 +1049,7 @@ function AutoDrive.getValidSupportedFillTypes(vehicle, excludedVehicles)
     if trailers then
         for _, trailer in pairs(trailers) do
             if trailer.getFillUnits and (excludedVehicles == nil or not table.contains(excludedVehicles, trailer)) then
-                for fillUnitIndex, _ in pairs(trailer:getFillUnits()) do
+                for fillUnitIndex, fillUnit in pairs(trailer:getFillUnits()) do
 
                     if trailer.spec_sowingMachine and trailer.getSowingMachineFillUnitIndex and trailer:getSowingMachineFillUnitIndex() > 0 then
                         if trailer:getSowingMachineFillUnitIndex() == fillUnitIndex then
@@ -1061,6 +1069,19 @@ function AutoDrive.getValidSupportedFillTypes(vehicle, excludedVehicles)
                     if trailer.spec_treePlanter and trailer.spec_treePlanter.fillUnitIndex and trailer.spec_treePlanter.fillUnitIndex > 0 then
                         if trailer.spec_treePlanter.fillUnitIndex == fillUnitIndex then
                             getsupportedFillTypes(trailer, fillUnitIndex)
+                        end
+                    end
+                    if fillUnit and fillUnit.exactFillRootNode then
+                        if trailer.getFillUnitSupportedFillTypes and trailer.getFillUnitCapacity and trailer:getFillUnitCapacity(fillUnitIndex) > 0 then
+                            local fillTypes = trailer:getFillUnitSupportedFillTypes(fillUnitIndex)
+                            if fillTypes[FillType.SEEDS]
+                                or fillTypes[FillType.FERTILIZER]
+                                or fillTypes[FillType.LIQUIDFERTILIZER]
+                                or fillTypes[FillType.HERBICIDE]
+                            then
+                                -- consider fillable tanks
+                                getsupportedFillTypes(trailer, fillUnitIndex)
+                            end
                         end
                     end
                 end
@@ -1095,9 +1116,11 @@ function AutoDrive.setValidSupportedFillType(vehicle, excludedImplementIndex)
         end
     end
 
+    vehicle.ad.hasAL = false
     if trailers then
         for _, trailer in ipairs(trailers) do
             if AutoDrive:hasAL(trailer) and (excludedVehicles == nil or not table.contains(excludedVehicles, trailer)) then
+                vehicle.ad.hasAL = true
                 alFillType = AutoDrive:getALCurrentFillType(trailer)
                 if alFillType ~= nil then
                     -- first found is sufficient
@@ -1134,6 +1157,6 @@ function AutoDrive:setValidSupportedFillTypesForAllVehicles()
     -- This is called once via AutoDrive:init. We initially suppress filltype updates to deal with 
     -- the random order of onPostAttachImplement calls. This function repeats those suppressed calls.
     for _, vehicle in pairs(self:getAllVehicles()) do
-        self:setValidSupportedFillType(vehicle)
+        AutoDrive.setValidSupportedFillType(vehicle)
     end
 end

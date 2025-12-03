@@ -23,7 +23,7 @@ function ParkTask:setUp()
             self.actualParkDestinationName = ADGraphManager:getMapMarkerById(actualParkDestination).name
             self.vehicle.ad.onRouteToPark = true
         else
-            AutoDriveMessageEvent.sendMessage(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_parkVehicle_noPosSet;", 5000, self.vehicle.ad.stateModule:getName())
+            AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_parkVehicle_noPosSet;", 5000, self.vehicle.ad.stateModule:getName())
         end
     end
 

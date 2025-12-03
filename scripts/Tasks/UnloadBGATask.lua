@@ -684,7 +684,7 @@ function UnloadBGATask:vehicleHasTrailersAttached(vehicle)
     local tipTrailers = {}
     if trailers ~= nil then
         for _, trailer in pairs(trailers) do
-            _, maxCapacity, _ = AutoDrive.getObjectNonFuelFillLevels(trailer)
+            local _, maxCapacity, _ = AutoDrive.getObjectNonFuelFillLevels(trailer)
             
             if trailer.typeName == "trailer" or (maxCapacity >= 7000) then
                 table.insert(tipTrailers, trailer)

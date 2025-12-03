@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Ha az automatikusan felismert szélesség túl kicsi, ezzel növelhető" />
 		<text name="gui_ad_preCallLevel"								text="Hívás előtti szint" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="A kirakodó hívása a beállított kitöltési szintnél." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Egyik sem" />
 		<text name="gui_ad_onlyPickup"									text="Csak átvétel" />
 		<text name="gui_ad_onlyDeliver"								text="Csal szállítás" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Ha az automatikusan észlelt lapátmagasság nem megfelelő, ezzel állíthatja be a magasságot" />
 		<text name="gui_ad_showMarkersOnMap"							text="Célok megjelenítése" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Mutassa a célokat a térképen" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Célok a térképen" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="A térképen jelölt pontkora kattintva állítsa be a cél / kirakodás célpontját" />
 		<text name="gui_ad_cornerSpeed"								text="Kanyarodási sebesség" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
 		<text name="gui_ad_ALUnload"									text="Autoload: Kirakodási pozíció" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Ki - nincs automatikus kirakodás, középső kirakodás a rakodóplatformon, a jármű bal / jobb oldali kirakodási helyzete (a pozíció a jármű beállításától függ, nem AD-tól!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Autoload kirakodás tiltva" />
 		<text name="gui_ad_AL_center"									text="Autoload kirakodás középre" />
 		<text name="gui_ad_AL_left"									text="Autoload kirakodás balra" />

@@ -149,7 +149,7 @@ function ADTrailerModule:update(dt)
     end
     local distanceToUnload = AutoDrive.getDistanceToUnloadPosition(self.vehicle)
 
-    if self.vehicle.ad.stateModule:getCurrentMode():shouldUnloadAtTrigger() and (AutoDrive.isInRangeToLoadUnloadTarget(self.vehicle) or distanceToUnload < (AutoDrive.MAX_BUNKERSILO_LENGTH)) then
+    if self.vehicle.ad.stateModule:getCurrentMode():shouldUnloadAtTrigger() and (AutoDrive.isInRangeToLoadUnloadTarget(self.vehicle) or distanceToUnload < (ADTriggerManager.getMaxBunkerSiloLength()  + AutoDrive.getMaxTriggerDistance(self.vehicle))) then
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAILERINFO, "ADTrailerModule:update updateUnload")
         if not updateStatesDone then
             self:updateStates()
@@ -168,7 +168,8 @@ function ADTrailerModule:update(dt)
             if self.activeAL == false then
                 AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_TRAILERINFO, "ADTrailerModule:updateLoad trailer with AL found -> activate AL in all trailers")
                 self.activeAL = true
-                AutoDrive.activateALTrailers(self.vehicle, self.trailers)
+                -- AutoDrive.activateALTrailers(self.vehicle, self.trailers)
+                -- do not activate AL here, vehicle might still move, loading not possible during drive!
                 -- no further actions required, monitoring via fill level - see load from source without trigger
             end
         else
@@ -622,9 +623,9 @@ function ADTrailerModule:lookForPossibleUnloadTrigger(trailer)
     end
 
     local trailerX, trailerY, trailerZ = getWorldTranslation(trailer.components[1].node)
-    local isInBunkerSiloRange = distanceToTarget < (AutoDrive.MAX_BUNKERSILO_LENGTH)
+    local isInBunkerSiloRange = distanceToTarget < (ADTriggerManager.getMaxBunkerSiloLength() + AutoDrive.getMaxTriggerDistance(self.vehicle))
     if isInBunkerSiloRange then
-        for _, trigger in pairs(ADTriggerManager.getUnloadTriggers()) do
+        for _, trigger in pairs(ADTriggerManager.getBunkerSilos()) do
             if trigger and trigger.bunkerSiloArea ~= nil then
                 local triggerX, _, triggerZ = ADTriggerManager.getTriggerPos(trigger)
                 if triggerX ~= nil then

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
-<modDesc descVersion="97">
+<modDesc descVersion="105">
 	<author>AutoDrive Team</author>
 	<title>
 		<en>AutoDrive</en>
@@ -21,7 +21,7 @@ Changelog: Adeguamenti necessari per FS25, adeguamento dei colori, conversione d
 ]]>
 		</it>
 		<fr>
-<![CDATA[Ce mod peut être utilisé pour créer un réseau de routes permettant aux véhicules de conduire de manière autonome. Une fois la configuration effectuée, vous pouvez indiquer à un tracteur situé près du réseau de se rendre à n’importe quel point, tel que le magasin, le champ 1 ou un point de vente.
+<![CDATA[Ce mod peut être utilisé pour créer un réseau de routes permettant aux véhicules de conduire de manière autonome. Une fois la configuration effectuée, vous pouvez indiquer à un tracteur situé près du réseau de se rendre à n'importe quel point, tel que le magasin, le champ 1 ou un point de vente.
 Changelog: adaptations nécessaires pour le FS25, adaptation des couleurs, conversion de tous les graphiques, nouvelle création des menus, corrections et optimisation de tous les scripts et routines, adaptation du HUD, infos complètes et release notes : https://github.com/Stephan-S/FS25_AutoDrive
 ]]>
 		</fr>
@@ -35,8 +35,13 @@ Changelog: Ajustes necesarios para FS25, ajuste de color, conversión de todos l
 Changelog: Необходимые корректировки для FS25, настройка цвета, преобразование всей графики, новое создание меню, исправления и оптимизация всех скриптов и процедур, настройка HUD, полная информация и примечания к выпуску: https://github.com/Stephan-S/FS25_AutoDrive
 ]]>
 		</ru>
+		<zh>
+<![CDATA[这款模组可用于为车辆创建自动驾驶的路线网络。设置完成后，您可以命令靠近路线网络的拖拉机行驶到任何地点，例如商店、1号农田或销售点。
+更新日志：针对 FS25 的必要调整、颜色调整、所有图形的转换、菜单的新建、所有脚本和例程的修正与优化、HUD 调整，完整信息和发布说明请访问：https://github.com/Stephan-S/FS25_AutoDrive
+]]>
+		</zh>
 	</description>
-	<version>3.0.0.6</version>
+	<version>3.0.0.8</version>
 	<multiplayer supported="true" />
 	<iconFilename>icon_AutoDrive.dds</iconFilename>
 	<extraSourceFiles>

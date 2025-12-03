@@ -50,6 +50,7 @@ function ADDrivePathModule:reset()
     if self.vehicle.spec_aiJobVehicle ~= nil then
         self.vehicle.spec_aiJobVehicle.aiSteeringSpeed = 0.004
     end
+    self.min_lookAhead = AutoDrive.getMinLookaheadByVehicleType(self.vehicle)
 end
 
 function ADDrivePathModule:setPathTo(wayPointId)
@@ -221,7 +222,7 @@ function ADDrivePathModule:isCloseToWaypoint()
                 return true
             end
             -- Check if the angle between vehicle and current wp and current wp to next wp is over 90° - then we should already make the switch
-            if i == 1 then
+            if i == 1 and wp_current and wp_ahead then
                 local angle = AutoDrive.angleBetween({x = wp_ahead.x - wp_current.x, z = wp_ahead.z - wp_current.z}, {x = wp_current.x - x, z = wp_current.z - z})
                 angle = math.abs(angle)
 
@@ -286,7 +287,7 @@ function ADDrivePathModule:followWaypoints(dt)
             self.speedLimit = math.min(self.vehicle.ad.trailerModule:getBunkerSiloSpeed(), self.speedLimit)
             maxSpeedDiff = 1
         else
-            if self.distanceToTarget < (AutoDrive.MAX_BUNKERSILO_LENGTH + AutoDrive.getMaxTriggerDistance(self.vehicle)) and AutoDrive.isVehicleInBunkerSiloArea(self.vehicle) then
+            if self.distanceToTarget < (ADTriggerManager.getMaxBunkerSiloLength() + AutoDrive.getMaxTriggerDistance(self.vehicle)) and AutoDrive.isVehicleInBunkerSiloArea(self.vehicle) then
                 -- vehicle enters drive through bunker silo
                 self.speedLimit = math.min(12, self.speedLimit)
                 maxSpeedDiff = 3
@@ -346,6 +347,9 @@ function ADDrivePathModule:followWaypoints(dt)
         --local worldX, _, worldZ = AutoDrive.worldToLocal(self.vehicle, self.targetX, y, self.targetZ)
         --print("dt: " .. dt .. " acc: " .. self.acceleration .. " x: " .. worldX .. " z: " .. worldZ .. " speedLimit: " .. self.speedLimit)
         --AIVehicleUtil.driveToPoint(self.vehicle, dt, self.acceleration, true, true, worldX, worldZ, self.speedLimit)
+
+        -- local tX, _, tZ = worldToLocal(self.vehicle:getAISteeringNode(), self.targetX, y, self.targetZ)
+        -- AIVehicleUtil.driveToPoint(self.vehicle, dt, self.acceleration, true, true, tX, tZ, self.speedLimit)
     end
 end
 
@@ -656,7 +660,7 @@ function ADDrivePathModule:getLookAheadTarget()
     end
 
     local distanceToCurrentTarget = MathUtil.vector2Length(x - wp_current.x, z - wp_current.z)
-    local lookAheadDistance = AutoDrive.getSetting("lookAheadTurning")
+    local lookAheadDistance = self.min_lookAhead
     local lookAheadRemaining = lookAheadDistance - distanceToCurrentTarget
 
     local lookAheadID = 0
@@ -682,11 +686,12 @@ function ADDrivePathModule:getLookAheadTarget()
         targetX = targetX + addX
         targetZ = targetZ + addZ
     end
-    
+
     if AutoDrive.isEditorModeEnabled() and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) then
-        ADDrawingManager:addLineTask(x, y+2.2, z, wp_current.x, y+2.2, wp_current.z, 1, 0.8, 0, 0)
-        ADDrawingManager:addLineTask(x, y+2.3, z, wp_ahead.x, y+2.3, wp_ahead.z, 1, 1, 0.2, 0.2)
-        ADDrawingManager:addLineTask(x, y+2.4, z, targetX, y+2.4, targetZ, 1.5, 0, 1, 0)
+        ADDrawingManager:addLineTask(x, y+2.2, z, wp_current.x, y+2.2, wp_current.z, 1.5, 0, 0, 1)
+        ADDrawingManager:addLineTask(x, y+2.3, z, wp_ahead.x, y+2.4, wp_ahead.z, 1.5, 1, 0, 0)
+        ADDrawingManager:addLineTask(x, y+2.4, z, targetX, y+2.6, targetZ, 1.5, 0, 1, 0)
+        ADDrawingManager:addLineTask(targetX, y+2.4, targetZ, targetX, y+5, targetZ, 1.5, 0, 1, 0)
     end
     return targetX, targetZ
 end

@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Hvis automatisk detekteret og skovl breden er for lille, kan den øges med denne værdi" />
 		<text name="gui_ad_preCallLevel"								text="Tilkald påfyldningsniveau" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Tilkalder aflæsser ved dette påfyldningsniveau." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Ingen" />
 		<text name="gui_ad_onlyPickup"									text="Kun opfyldning" />
 		<text name="gui_ad_onlyDeliver"								text="Kun aflevering" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Hvis automatisk registreret skovlehøjde er forkert. Brug denne til at justere jord højden" />
 		<text name="gui_ad_showMarkersOnMap"							text="Vis markører" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Vis markører/destinationer på mini map" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Skift til markører" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Indstil mål/aflæs mål, når du klikker på kort -hotspots" />
 		<text name="gui_ad_cornerSpeed"								text="Hjørne hastighed" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Ja - AutoDrive aflæssere forsøger at planlægge en vej fremad for at tilpasse sig 90° drejninger af mejetærskeren. / Nej - Aflæssere vil bakke før sving" />
 		<text name="gui_ad_ALUnload"									text="AutoLoad: Aflæsposition" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Fra-ingen automatisk aflæsning, midter-aflæsning på læsseplatform, venstre/bag/højre køretøjs aflæsningsposition (position afhænger af køretøjets opsætning, ikke AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Aflæsning fra" />
 		<text name="gui_ad_AL_center"									text="Aflæsning midt" />
 		<text name="gui_ad_AL_left"									text="Aflæsning venstre" />

@@ -760,6 +760,7 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
         local rearChasePos = AutoDrive.createWayPointRelativeToVehicle(self.combine, 0, rearChaseTermZ)
         local angleToLeftChaseSide = self:getAngleToChasePos(leftChasePos)
         local angleToRearChaseSide = self:getAngleToChasePos(rearChasePos)
+        local chaseSideSetting = AutoDrive.getSetting("chaseSide", self.combine)
 
         -- Default to the side of the harvester the unloader is already on
         -- then check if there is a better side
@@ -779,6 +780,16 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
         elseif AutoDrive:getIsCPActive(self.combine) and AutoDrive.combineIsTurning(self.combine) then
             chaseNode = rearChasePos
             sideIndex = AutoDrive.CHASEPOS_REAR
+        elseif chaseSideSetting ~= AutoDrive.CHASEPOS_AUTO then
+            -- consider chaseSide setting
+            sideIndex = chaseSideSetting
+            if chaseSideSetting == AutoDrive.CHASEPOS_LEFT then
+                chaseNode = leftChasePos
+            elseif chaseSideSetting == AutoDrive.CHASEPOS_RIGHT then
+                chaseNode = rightChasePos
+            else
+                chaseNode = rearChasePos
+            end
         elseif (not leftBlocked) and ((self:isUnloaderOnCorrectSide(AutoDrive.CHASEPOS_LEFT) and angleToLeftChaseSide < angleToRearChaseSide) or planningPhase) then
             chaseNode = leftChasePos
             sideIndex = AutoDrive.CHASEPOS_LEFT

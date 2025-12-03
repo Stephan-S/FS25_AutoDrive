@@ -1,13 +1,13 @@
 ADTriggerManager = {}
 
 ADTriggerManager.tipTriggers = {}
+ADTriggerManager.bunkerSilos = {}
+ADTriggerManager.bunkerSilosResult = {}
 ADTriggerManager.siloTriggers = {}
 ADTriggerManager.repairTriggers = {}
 
 ADTriggerManager.searchedForTriggers = false
-
-AutoDrive.MAX_REFUEL_TRIGGER_DISTANCE = 15
-AutoDrive.REFUEL_LEVEL = 0.15
+ADTriggerManager.maxBunkerSiloLength = 0
 
 function ADTriggerManager.load()
 end
@@ -49,6 +49,7 @@ function ADTriggerManager.addItems(items)
             end
 
 -- Unloading
+--[[
             unloadingStation = (item.spec_silo and item.spec_silo.unloadingStation)
             or (item.spec_husbandry and item.spec_husbandry.unloadingStation)
             or (item.spec_sellingStation and item.spec_sellingStation.sellingStation)
@@ -68,11 +69,10 @@ function ADTriggerManager.addItems(items)
                     table.insert(ADTriggerManager.tipTriggers, item.spec_husbandryFood.feedingTrough)
                 end
             end
+]]
 
             if item.spec_bunkerSilo then
-                if not table.contains(ADTriggerManager.tipTriggers, item.spec_bunkerSilo.bunkerSilo) then
-                    table.insert(ADTriggerManager.tipTriggers, item.spec_bunkerSilo.bunkerSilo)
-                end
+                ADTriggerManager.addBunkerSilo(item.spec_bunkerSilo.bunkerSilo)
             end
 
 -- Repair
@@ -89,6 +89,8 @@ end
 function ADTriggerManager.loadAllTriggers()
     ADTriggerManager.searchedForTriggers = true
     ADTriggerManager.tipTriggers = {}
+    ADTriggerManager.bunkerSilos = {}
+    ADTriggerManager.bunkerSilosResult = {}
     ADTriggerManager.siloTriggers = {}
     ADTriggerManager.repairTriggers = {}
 
@@ -122,11 +124,11 @@ function ADTriggerManager.loadAllTriggers()
                     table.insert(ADTriggerManager.siloTriggers, object)
                 end
             end
-            if object.exactFillRootNode ~= nil then
-                if not table.contains(ADTriggerManager.tipTriggers, object) then
-                    table.insert(ADTriggerManager.tipTriggers, object)
-                end
-			end
+            -- if object.exactFillRootNode ~= nil then
+            --     if not table.contains(ADTriggerManager.tipTriggers, object) then
+            --         table.insert(ADTriggerManager.tipTriggers, object)
+            --     end
+            -- end
         end
     end
 
@@ -142,6 +144,13 @@ function ADTriggerManager.getUnloadTriggers()
         ADTriggerManager.loadAllTriggers()
     end
     return ADTriggerManager.tipTriggers
+end
+
+function ADTriggerManager.getBunkerSilos()
+    if not ADTriggerManager.searchedForTriggers then
+        ADTriggerManager.loadAllTriggers()
+    end
+    return ADTriggerManager.bunkerSilosResult
 end
 
 function ADTriggerManager.getLoadTriggers()
@@ -296,6 +305,10 @@ function ADTriggerManager.getTriggerPos(trigger)
     return x, y, z
 end
 
+function ADTriggerManager.getMaxBunkerSiloLength()
+    return ADTriggerManager.maxBunkerSiloLength
+end
+
 function ADTriggerManager:loadTriggerLoad(superFunc, ...)
     local result = superFunc(self, ...)
 
@@ -317,6 +330,21 @@ end
 
 function ADTriggerManager:onPlaceableBuy()
     ADTriggerManager.searchedForTriggers = false
+    ADTriggerManager.maxBunkerSiloLength = 0
+    ADTriggerManager.loadAllTriggers()
+end
+
+function ADTriggerManager:onPlaceableSell()
+    local bunkerSilo = self.spec_bunkerSilo and self.spec_bunkerSilo.bunkerSilo
+    if bunkerSilo then
+        if bunkerSilo.ad == nil then
+            bunkerSilo.ad = {}
+        end
+        bunkerSilo.ad.isSold = true
+    end
+    ADTriggerManager.searchedForTriggers = false
+    ADTriggerManager.maxBunkerSiloLength = 0
+    ADTriggerManager.loadAllTriggers()
 end
 
 function ADTriggerManager.triggerSupportsFillType(trigger, fillType)
@@ -485,6 +513,171 @@ function ADTriggerManager:getMarkerAtStation(sellingStation, vehicle, maxTrigger
         end
     end
     return closest
+end
+
+function ADTriggerManager.addBunkerSiloAreaV(bunkerSilo)
+    if bunkerSilo and bunkerSilo.bunkerSiloArea and bunkerSilo.bunkerSiloArea.sx then
+        local sx, sy, sz = bunkerSilo.bunkerSiloArea.sx, bunkerSilo.bunkerSiloArea.sy, bunkerSilo.bunkerSiloArea.sz
+        local wx, wy, wz = bunkerSilo.bunkerSiloArea.wx, bunkerSilo.bunkerSiloArea.wy, bunkerSilo.bunkerSiloArea.wz
+        local hx, hy, hz = bunkerSilo.bunkerSiloArea.hx, bunkerSilo.bunkerSiloArea.hy, bunkerSilo.bunkerSiloArea.hz
+        local vx = hx + (wx - sx)
+        local vy = hy + (wy - sy)
+        local vz = hz + (wz - sz)
+        bunkerSilo.bunkerSiloArea.vx = vx
+        bunkerSilo.bunkerSiloArea.vy = vy
+        bunkerSilo.bunkerSiloArea.vz = vz
+        return true
+    else
+        return false
+    end
+end
+
+function ADTriggerManager.getBunkerSiloAreasConnectionType(bunkerSilo1, bunkerSilo2)
+    if bunkerSilo1 and bunkerSilo1.bunkerSiloArea and bunkerSilo1.bunkerSiloArea.vx and
+        bunkerSilo2 and bunkerSilo2.bunkerSiloArea and bunkerSilo2.bunkerSiloArea.vx then
+        if math.abs(bunkerSilo1.bunkerSiloArea.sx - bunkerSilo2.bunkerSiloArea.hx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.sz - bunkerSilo2.bunkerSiloArea.hz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.wx - bunkerSilo2.bunkerSiloArea.vx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.wz - bunkerSilo2.bunkerSiloArea.vz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+            return 1
+        end
+        if math.abs(bunkerSilo1.bunkerSiloArea.sx - bunkerSilo2.bunkerSiloArea.wx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.sz - bunkerSilo2.bunkerSiloArea.wz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.wx - bunkerSilo2.bunkerSiloArea.sx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.wz - bunkerSilo2.bunkerSiloArea.sz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+            return 2
+        end
+        if math.abs(bunkerSilo1.bunkerSiloArea.vx - bunkerSilo2.bunkerSiloArea.hx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.vz - bunkerSilo2.bunkerSiloArea.hz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.hx - bunkerSilo2.bunkerSiloArea.vx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.hz - bunkerSilo2.bunkerSiloArea.vz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+            return 3
+        end
+        if math.abs(bunkerSilo1.bunkerSiloArea.vx - bunkerSilo2.bunkerSiloArea.wx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.vz - bunkerSilo2.bunkerSiloArea.wz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.hx - bunkerSilo2.bunkerSiloArea.sx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
+            math.abs(bunkerSilo1.bunkerSiloArea.hz - bunkerSilo2.bunkerSiloArea.sz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+            return 4
+        end
+    end
+    return 0
+end
+
+function ADTriggerManager.connectBunkerSilos(bunkerSilo1, bunkerSilo2, bunkerSiloConnectionType)
+    local bunkerSilo = {}
+    local sx, sy, sz, wx, wy, wz, hx, hy, hz, vx, vy, vz, dwx, dwy, dwz, dhx, dhy, dhz
+    if bunkerSiloConnectionType == 1 then
+        sx = bunkerSilo2.bunkerSiloArea.sx
+        sy = bunkerSilo2.bunkerSiloArea.sy
+        sz = bunkerSilo2.bunkerSiloArea.sz
+        wx = bunkerSilo2.bunkerSiloArea.wx
+        wy = bunkerSilo2.bunkerSiloArea.wy
+        wz = bunkerSilo2.bunkerSiloArea.wz
+        hx = bunkerSilo1.bunkerSiloArea.hx
+        hy = bunkerSilo1.bunkerSiloArea.hy
+        hz = bunkerSilo1.bunkerSiloArea.hz
+        vx = bunkerSilo1.bunkerSiloArea.vx
+        vy = bunkerSilo1.bunkerSiloArea.vy
+        vz = bunkerSilo1.bunkerSiloArea.vz
+    elseif bunkerSiloConnectionType == 2 then
+        sx = bunkerSilo2.bunkerSiloArea.vx
+        sy = bunkerSilo2.bunkerSiloArea.vy
+        sz = bunkerSilo2.bunkerSiloArea.vz
+        wx = bunkerSilo2.bunkerSiloArea.hx
+        wy = bunkerSilo2.bunkerSiloArea.hy
+        wz = bunkerSilo2.bunkerSiloArea.hz
+        hx = bunkerSilo1.bunkerSiloArea.hx
+        hy = bunkerSilo1.bunkerSiloArea.hy
+        hz = bunkerSilo1.bunkerSiloArea.hz
+        vx = bunkerSilo1.bunkerSiloArea.vx
+        vy = bunkerSilo1.bunkerSiloArea.vy
+        vz = bunkerSilo1.bunkerSiloArea.vz
+    elseif bunkerSiloConnectionType == 3 then
+        sx = bunkerSilo2.bunkerSiloArea.sx
+        sy = bunkerSilo2.bunkerSiloArea.sy
+        sz = bunkerSilo2.bunkerSiloArea.sz
+        wx = bunkerSilo2.bunkerSiloArea.wx
+        wy = bunkerSilo2.bunkerSiloArea.wy
+        wz = bunkerSilo2.bunkerSiloArea.wz
+        hx = bunkerSilo1.bunkerSiloArea.wx
+        hy = bunkerSilo1.bunkerSiloArea.wy
+        hz = bunkerSilo1.bunkerSiloArea.wz
+        vx = bunkerSilo1.bunkerSiloArea.sx
+        vy = bunkerSilo1.bunkerSiloArea.sy
+        vz = bunkerSilo1.bunkerSiloArea.sz
+    elseif bunkerSiloConnectionType == 4 then
+        sx = bunkerSilo2.bunkerSiloArea.vx
+        sy = bunkerSilo2.bunkerSiloArea.vy
+        sz = bunkerSilo2.bunkerSiloArea.vz
+        wx = bunkerSilo2.bunkerSiloArea.hx
+        wy = bunkerSilo2.bunkerSiloArea.hy
+        wz = bunkerSilo2.bunkerSiloArea.hz
+        hx = bunkerSilo1.bunkerSiloArea.wx
+        hy = bunkerSilo1.bunkerSiloArea.wy
+        hz = bunkerSilo1.bunkerSiloArea.wz
+        vx = bunkerSilo1.bunkerSiloArea.sx
+        vy = bunkerSilo1.bunkerSiloArea.sy
+        vz = bunkerSilo1.bunkerSiloArea.sz
+    else
+        return nil
+    end
+    dwx = wx - sx
+    dwy = wy - sy
+    dwz = wz - sz
+    dhx = hx - sx
+    dhy = hy - sy
+    dhz = hz - sz
+    bunkerSilo.bunkerSiloArea = {sx = sx, sy = sy, sz = sz, wx = wx, wy =wy, wz = wz, hx = hx, hy = hy, hz = hz, vx = vx, vy = vy, vz = vz, dwx = dwx, dwy = dwy, dwz = dwz, dhx = dhx, dhy = dhy, dhz = dhz}
+    bunkerSilo.interactionTriggerNode = bunkerSilo1.interactionTriggerNode
+    return bunkerSilo
+end
+
+function ADTriggerManager.addBunkerSilo(bunkerSilo)
+    local isSold = bunkerSilo.ad and bunkerSilo.ad.isSold
+    if table.contains(ADTriggerManager.bunkerSilos, bunkerSilo) or isSold then
+        -- bunkerSilo already added or sold
+        return
+    end
+
+    ADTriggerManager.addBunkerSiloAreaV(bunkerSilo)
+    table.insert(ADTriggerManager.bunkerSilos, bunkerSilo)
+
+    local isConnected = false
+    if #ADTriggerManager.bunkerSilosResult > 0 then
+        for _, bunkerSiloResult in ipairs(ADTriggerManager.bunkerSilosResult) do
+            local isOppositeConnected = false
+            local bunkerSiloConnectionType = ADTriggerManager.getBunkerSiloAreasConnectionType(bunkerSilo, bunkerSiloResult)
+            if bunkerSiloConnectionType == 0 then
+                -- test the opposite direction
+                bunkerSiloConnectionType = ADTriggerManager.getBunkerSiloAreasConnectionType(bunkerSiloResult, bunkerSilo)
+                if bunkerSiloConnectionType > 0 then
+                    isOppositeConnected = true
+                end
+            end
+            if bunkerSiloConnectionType > 0 then
+                local bunkerSiloConnected
+                if not isOppositeConnected then
+                    bunkerSiloConnected = ADTriggerManager.connectBunkerSilos(bunkerSilo, bunkerSiloResult, bunkerSiloConnectionType)
+                else
+                    bunkerSiloConnected = ADTriggerManager.connectBunkerSilos(bunkerSiloResult, bunkerSilo, bunkerSiloConnectionType)
+                end
+                if bunkerSiloConnected then
+                    local length = MathUtil.vector2Length(bunkerSiloConnected.bunkerSiloArea.hx - bunkerSiloConnected.bunkerSiloArea.sx, bunkerSiloConnected.bunkerSiloArea.hz - bunkerSiloConnected.bunkerSiloArea.sz)
+                    ADTriggerManager.maxBunkerSiloLength = math.max(ADTriggerManager.maxBunkerSiloLength, length)
+                    table.removeValue(ADTriggerManager.bunkerSilosResult, bunkerSiloResult)
+                    table.insert(ADTriggerManager.bunkerSilosResult, bunkerSiloConnected)
+                    isConnected = true
+                    break
+                end
+            end
+        end
+    end
+
+    if not isConnected then
+        local length = MathUtil.vector2Length(bunkerSilo.bunkerSiloArea.hx - bunkerSilo.bunkerSiloArea.sx, bunkerSilo.bunkerSiloArea.hz - bunkerSilo.bunkerSiloArea.sz)
+        ADTriggerManager.maxBunkerSiloLength = math.max(ADTriggerManager.maxBunkerSiloLength, length)
+        table.insert(ADTriggerManager.bunkerSilosResult, bunkerSilo)
+    end
 end
 
 function AutoDrive:checkIfPathTraversedOverPosition(wayPoint, targetPosition, radius, maxSteps)

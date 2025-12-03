@@ -30,7 +30,7 @@ function ADCollisionDetectionModule:detectObstacle()
             local sensorLocation = self.vehicle.ad.sensors.frontSensorDynamicShort:getLocationByPosition()
 			local vehX, vehY, vehZ = getWorldTranslation(self.vehicle.components[1].node)
             local worldOffsetX, worldOffsetY, worldOffsetZ =  AutoDrive.localDirectionToWorld(self.vehicle, sensorLocation.x, 0, sensorLocation.z)
-            for _, trigger in pairs(ADTriggerManager.getUnloadTriggers()) do
+            for _, trigger in pairs(ADTriggerManager.getBunkerSilos()) do
                 if trigger and trigger.bunkerSiloArea ~= nil then
                     local x1, z1 = trigger.bunkerSiloArea.sx, trigger.bunkerSiloArea.sz
                     local x2, z2 = trigger.bunkerSiloArea.wx, trigger.bunkerSiloArea.wz
@@ -233,7 +233,7 @@ function ADCollisionDetectionModule:checkReverseCollision()
     local mostBackImplement = AutoDrive.getMostBackImplementOf(self.vehicle)
 
     local trailer = nil
-    if trailerCount > 1 and self.vehicle.trailer ~= nil and self.vehicle.trailer ~= self.vehicle then
+    if trailers and trailerCount > 1 and self.vehicle.trailer ~= nil and self.vehicle.trailer ~= self.vehicle then
         -- vehicle.trailer is the controlable reverse attachable
         trailer = trailers[trailerCount]
     elseif mostBackImplement ~= nil then

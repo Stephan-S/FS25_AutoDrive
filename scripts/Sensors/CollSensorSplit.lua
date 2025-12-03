@@ -1,4 +1,6 @@
 ADCollSensorSplit = ADInheritsFrom(ADSensor)
+ADCollSensorSplit.maskVehicles = CollisionFlag.VEHICLE + CollisionFlag.TRAFFIC_VEHICLE + CollisionFlag.TRAFFIC_VEHICLE_BLOCKING
+ADCollSensorSplit.maskObjects = CollisionFlag.DEFAULT + CollisionFlag.STATIC_OBJECT + CollisionFlag.DYNAMIC_OBJECT + CollisionFlag.TERRAIN_DELTA + CollisionFlag.TREE + CollisionFlag.BUILDING
 
 function ADCollSensorSplit:new(vehicle, sensorParameters)
     local o = ADCollSensorSplit:create()
@@ -6,16 +8,11 @@ function ADCollSensorSplit:new(vehicle, sensorParameters)
     o.hit = false
     o.newHit = false
     o.vehicle = vehicle;
-    o.mask = 0
+    o.boxes = nil
     return o
 end
 
-function ADCollSensorSplit.getMask()
-    return ADCollSensor.getMask()
-end
-
 function ADCollSensorSplit:onUpdate(dt)
-    self.mask = self:getMask()
     -- Here i want to generate an array of boxes instead of a large rotated single one
 
     -- Old
@@ -37,20 +34,36 @@ function ADCollSensorSplit:onUpdate(dt)
     --              \ \/
     --               \/
 
-    local boxes = self:getBoxShapes()
 
     self.hit = self.newHit
     self:setTriggered(self.hit)
     self.newHit = false
-    for _, box in pairs(boxes) do
-        local offsetCompensation = math.max(-math.tan(box.rx) * box.size[3], 0)
-        box.y = math.max(getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, box.x, 300, box.z), box.y) + offsetCompensation
-        overlapBox(box.x, box.y, box.z, box.rx, box.ry, 0, box.size[1], box.size[2], box.size[3], "collisionTestCallback", self, self.mask, true, true, true, true)
+    self.boxes = nil
+
+    if self.sensorParameters.minDynamicLengthForVehicles then
+        -- check for vehicles, AI vehicles
+        self.boxes = self:getBoxShapes(self.sensorParameters.minDynamicLengthForVehicles)
+        for _, box in pairs(self.boxes) do
+            local offsetCompensation = math.max(-math.tan(box.rx) * box.size[3], 0)
+            box.y = math.max(getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, box.x, 300, box.z), box.y) + offsetCompensation
+            overlapBox(box.x, box.y, box.z, box.rx, box.ry, 0, box.size[1], box.size[2], box.size[3], "collisionTestCallbackSplit", self, ADCollSensorSplit.maskVehicles, true, true, true, true)
+        end
     end
-    self:onDrawDebug(boxes)
+
+    if not self.newHit then
+        if self.sensorParameters.minDynamicLength then
+            self.boxes = self:getBoxShapes(self.sensorParameters.minDynamicLength)
+            for _, box in pairs(self.boxes) do
+                local offsetCompensation = math.max(-math.tan(box.rx) * box.size[3], 0)
+                box.y = math.max(getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, box.x, 300, box.z), box.y) + offsetCompensation
+                overlapBox(box.x, box.y, box.z, box.rx, box.ry, 0, box.size[1], box.size[2], box.size[3], "collisionTestCallbackSplit", self, ADCollSensorSplit.maskObjects, true, true, true, true)
+            end
+        end
+    end
+    self:onDrawDebug(self.boxes)
 end
 
-function ADCollSensorSplit:collisionTestCallback(transformId)
+function ADCollSensorSplit:collisionTestCallbackSplit(transformId)
     local unloadDriver = ADHarvestManager:getAssignedUnloader(self.vehicle)
     local collisionObject = g_currentMission.nodeToObject[transformId]
 
@@ -134,14 +147,13 @@ function ADCollSensorSplit:buildBoxShape(x, y, z, width, height, length, vecZ, v
     return box
 end
 
-function ADCollSensorSplit:getBoxShapes()
-    local vehicle = self.vehicle
+function ADCollSensorSplit:getBoxShapes(minLength)
+    local width, length = AutoDrive.getVehicleDimensions(self.vehicle, false)
 
-    local width, length = AutoDrive.getVehicleDimensions(vehicle, false)
+    local lookAheadDistance = math.clamp(self.vehicle.lastSpeedReal * 3600 * 15.5 / 40, minLength, 50)
+    local steeringAngle = math.deg(math.abs(self.vehicle.rotatedTime))
 
-    local lookAheadDistance = math.clamp(vehicle.lastSpeedReal * 3600 * 15.5 / 40, self.minDynamicLength, 50)
-    
-    local vecZ = {x = math.sin(vehicle.rotatedTime), z = math.cos(vehicle.rotatedTime)}
+    local vecZ = {x = math.sin(self.vehicle.rotatedTime), z = math.cos(self.vehicle.rotatedTime)}
     local vecX = {x = vecZ.z, z = -vecZ.x}
 
     local boxYPos = AutoDrive.getSetting("collisionHeigth", self.vehicle) or 2
@@ -152,11 +164,16 @@ function ADCollSensorSplit:getBoxShapes()
     local boxes = {}
     local locationZ = self.location.z
     if self.position == ADSensor.POS_FRONT then
-        if vehicle.ad and vehicle.ad.adDimensions and vehicle.ad.adDimensions.maxLengthFront and vehicle.ad.adDimensions.maxLengthFront > 0 then
-            locationZ = vehicle.ad.adDimensions.maxLengthFront
+        if self.vehicle.ad and self.vehicle.ad.adDimensions and self.vehicle.ad.adDimensions.maxLengthFront and self.vehicle.ad.adDimensions.maxLengthFront > 0 then
+            locationZ = self.vehicle.ad.adDimensions.maxLengthFront
         end
     end
-    for i=1, numberOfBoxes do
+    local firstBox = 1
+    if steeringAngle > 30 then
+        firstBox = 2
+        numberOfBoxes = numberOfBoxes - 1
+    end
+    for i=firstBox, numberOfBoxes do
         local xOffset = (-width / 2) + (i - 0.5) * boxWidth
         boxes[i] = self:buildBoxShape(
             self.location.x + xOffset, boxYPos, locationZ,
@@ -170,6 +187,9 @@ end
 
 function ADCollSensorSplit:onDrawDebug(boxes)
     if self.drawDebug or AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+        if boxes == nil then
+            return
+        end
         local red = 1
         local green = 0
         local blue = 0

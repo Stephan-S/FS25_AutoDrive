@@ -104,9 +104,9 @@ function ADMessagesManager:addMessage(vehicle, messageType, text, duration)
 end
 
 function ADMessagesManager:addNotification(vehicle, messageType, text, duration)
-    if AutoDrive.getControlledVehicle() == vehicle then
+    if vehicle and vehicle == AutoDrive.getControlledVehicle() then
         self:addMessage(vehicle, messageType, text, duration)
-    else
+    elseif vehicle and vehicle.ad and vehicle.ad.stateModule and vehicle.ad.stateModule:getActualFarmId() == g_localPlayer:getFarmId() and not AutoDrive:getIsEntered(vehicle) then
         local exists = false
         if self.currentNotification ~= nil and self.currentNotification.messageType == messageType and self.currentNotification.text == text and self.currentNotification.vehicle == vehicle then
             exists = true
@@ -126,7 +126,7 @@ function ADMessagesManager:addNotification(vehicle, messageType, text, duration)
 end
 
 function ADMessagesManager:removeCurrentMessage()
-    self:addToHistory(self.currentMessage)
+    -- self:addToHistory(self.currentMessage)
     self.currentMessage = nil
     self.currentMessageTimer = 0
 end

@@ -755,6 +755,17 @@ AutoDrive.settings.preCallLevel = {
     isVehicleSpecific = true
 }
 
+AutoDrive.settings.chaseSide = {
+    values = {AutoDrive.CHASEPOS_AUTO, AutoDrive.CHASEPOS_LEFT, AutoDrive.CHASEPOS_REAR, AutoDrive.CHASEPOS_RIGHT},
+    texts = {"Auto", "AD_task_chase_side_left", "AD_task_chase_side_rear", "AD_task_chase_side_right"},
+    default = 1,
+    current = 1,
+    text = "gui_ad_chaseSide",
+    tooltip = "gui_ad_chaseSide_tooltip",
+    translate = true,
+    isVehicleSpecific = true
+}
+
 AutoDrive.settings.rotateTargets = {
     values = {AutoDrive.RT_NONE, AutoDrive.RT_ONLYPICKUP, AutoDrive.RT_ONLYDELIVER, AutoDrive.RT_PICKUPANDDELIVER},
     texts = {"gui_ad_none", "gui_ad_onlyPickup", "gui_ad_onlyDeliver", "gui_ad_PickupandDeliver"},
@@ -797,7 +808,8 @@ AutoDrive.settings.useBeaconLights = {
     text = "gui_ad_useBeaconLights",
     tooltip = "gui_ad_useBeaconLights_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.activeUnloading = {
@@ -857,8 +869,8 @@ AutoDrive.settings.autoRepair = {
 }
 
 AutoDrive.settings.showMarkersOnMap = {
-    values = {false, true},
-    texts = {"gui_ad_no", "gui_ad_yes"},
+    values = {0x00, 0x01, 0x02, 0x03},
+    texts = {"gui_ad_no", "gui_ad_mainMenuMap", "gui_ad_ingameMap", "gui_ad_both"},
     default = 2,
     current = 2,
     text = "gui_ad_showMarkersOnMap",
@@ -1047,7 +1059,8 @@ AutoDrive.settings.useWorkLightsLoading = {
     text = "gui_ad_worklightsWhenLoading",
     tooltip = "gui_ad_worklightsWhenLoading_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.useWorkLightsSilo = {
@@ -1058,7 +1071,8 @@ AutoDrive.settings.useWorkLightsSilo = {
     text = "gui_ad_worklightsWhenSilo",
     tooltip = "gui_ad_worklightsWhenSilo_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.useHazardLightReverse = {
@@ -1069,7 +1083,8 @@ AutoDrive.settings.useHazardLightReverse = {
     text = "gui_ad_hazardLightReverse",
     tooltip = "gui_ad_hazardLightReverse_tooltip",
     translate = true,
-    isVehicleSpecific = true
+    isVehicleSpecific = false,
+    isUserSpecific = false
 }
 
 AutoDrive.settings.scaleLines = {

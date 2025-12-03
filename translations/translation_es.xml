@@ -13,10 +13,10 @@
 		<text name="input_ADRecord_Dual"								text="AD: Añadir ruta 2 direcciones" />
 		<text name="input_ADRecord_SubPrio"							text="AD: Añadir ruta secundaria" />
 		<text name="input_ADRecord_SubPrioDual"						text="AD: Añadir ruta secundaria 2 direcciones" />
-		<text name="input_ADRecord_TwoWay"								text="AD: Record 2 routes simultanous 1 direction normal" />
-		<text name="input_ADRecord_Dual_TwoWay"						text="AD: Record 2 routes simultanous 2 way route" />
-		<text name="input_ADRecord_SubPrio_TwoWay"						text="AD: Record 2 routes simultanous 1 direction secondary route" />
-		<text name="input_ADRecord_SubPrioDual_TwoWay"					text="AD: Record 2 routes simultanous 2 way secondary route" />
+		<text name="input_ADRecord_TwoWay"								text="AD: Grabar 2 rutas simultáneas en 1 dirección normal" />
+		<text name="input_ADRecord_Dual_TwoWay"						text="AD: Grabar 2 rutas simultáneas en 2 direcciones" />
+		<text name="input_ADRecord_SubPrio_TwoWay"						text="AD: Grabar 2 rutas simultáneas en 1 dirección secundaria" />
+		<text name="input_ADRecord_SubPrioDual_TwoWay"					text="AD: Grabar 2 rutas simultáneas en 2 direcciones secundarias" />
 		<text name="input_ADSelectTarget"								text="AD: Seleccionar siguiente destino" />
 		<text name="input_ADSelectPreviousTarget"						text="AD: Seleccionar destino anterior" />
 		<text name="input_AD_Speed_up"									text="AD: Aumentar velocidad" />
@@ -97,13 +97,13 @@
 		<text name="gui_ad_blinkValue"									text="Intermitentes automáticos" />
 		<text name="gui_ad_blinkValue_tooltip"							text="Ángulo de giro para activar los intermitentes automáticamente. (0 = intermitentes desactivados)." />
 		<text name="gui_ad_pipe_offset"								text="Desplazamiento respecto al tubo de descarga" />
-		<text name="gui_ad_pipe_offset_tooltip"						text="Additional offset applied to the detected pipe position" />
+		<text name="gui_ad_pipe_offset_tooltip"						text="Desplazamiento adicional aplicado a la posición detectada del tubo" />
 		<text name="gui_ad_followDistance"								text="Distancia de la cosechadora" />
 		<text name="gui_ad_followDistance_tooltip"						text="La distancia que se mantiene de la cosechadora cuando se sigue por detrás" />
 		<text name="gui_ad_lookahead_turning"							text="Distancia de detección delantera (giros)" />
 		<text name="gui_ad_lookahead_turning_tooltip"					text="La distancia a la que el vehículo mira hacia adelante para ajustar la dirección a seguir por el siguiente segmento" />
 		<text name="gui_ad_useFastestRoute"							text="Usar la ruta más rápida" />
-		<text name="gui_ad_useFastestRoute_tooltip"					text="Tener en cuenta la ruta más rapida en lugar de la más corta, al calcular las mejores rutas" />
+		<text name="gui_ad_useFastestRoute_tooltip"					text="Tener en cuenta la ruta más rápida en lugar de la más corta, al calcular las mejores rutas" />
 		<text name="gui_ad_mapMarkerDetour"							text="Desvío máximo" />
 		<text name="gui_ad_mapMarkerDetour_tooltip"					text="Desvío máximo para evitar objetivos" />
 		<text name="gui_ad_siloEmpty"									text="Si el silo está vacío" />
@@ -119,8 +119,8 @@
 		<text name="gui_ad_FS19"										text="FS 19" />
 		<text name="gui_ad_BSMRange"									text="Rango Bunker Silo Manager" />
 		<text name="gui_ad_BSMRange_tooltip"							text="En este rango los vehículos llegan uno por uno al bunker silo de destino." />
-		<text name="gui_ad_UMRange"									text="Bunker Silo / Unload Manager Range" />
-		<text name="gui_ad_UMRange_tooltip"							text="In this range vehicles to destination bunker silo / same unload destination one by one get driveway" />
+		<text name="gui_ad_UMRange"									text="Rango Bunker Silo / Unload Manager" />
+		<text name="gui_ad_UMRange_tooltip"							text="En este rango, los vehículos obtienen acceso al bunker silo o destino de descarga uno por uno." />
 		<text name="ad_bga_init"										text="Inicializando" />
 		<text name="ad_bga_waiting"									text="Esperando por Remolque/Silo" />
 		<text name="ad_bga_active"										text="Activo" />
@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Si el ancho de la pala detectado automáticamente es demasiado pequeño, se puede aumentar con este valor" />
 		<text name="gui_ad_preCallLevel"								text="Nivel para llamar" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Llama al remolque al nivel de llenado establecido." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Ninguno" />
 		<text name="gui_ad_onlyPickup"									text="Solo recogida" />
 		<text name="gui_ad_onlyDeliver"								text="Solo entrega" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Si la altura de la pala detectada automáticamente es incorrecta, usa esto para ajustar la altura objetivo del suelo" />
 		<text name="gui_ad_showMarkersOnMap"							text="Mostrar Marcadores" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Mostrar Marcadores/Destinos en el mapa del juego" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Cambiar a Marcadores" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Establecer objetivo/descargar objetivo, al hacer clic en los puntos del mapa" />
 		<text name="gui_ad_cornerSpeed"								text="Velocidad de la esquina" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sí: Los descargadores de AutoDrive intentan planificar un camino hacia adelante para adaptarse al giro de 90° de la cosechadora./No - Los descargadores se revertirán antes del giro" />
 		<text name="gui_ad_ALUnload"									text="Autocarga: Posición de descarga" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Apagado: La posición de descarga depende de la configuración del vehículo, no de AutoDrive)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="No descargar" />
 		<text name="gui_ad_AL_center"									text="Descargar sobre el vehiculo" />
 		<text name="gui_ad_AL_left"									text="Descargar a la izquierda" />
@@ -276,10 +282,10 @@
 		<text name="gui_ad_FoldImplements_tooltip"						text="AutoDrive esperará a que las herramientas se plieguen antes de comenzar" />
 		<text name="gui_ad_RecordWhileNotInVehicle"					text="Grabar sin conductor" />
 		<text name="gui_ad_RecordWhileNotInVehicle_tooltip"			text="AutoDrive seguirá grabando si el conductor abandona el vehículo" />
-		<text name="gui_ad_RecordDriveDirectionOffset"					text="Record offset in driving direction" />
-		<text name="gui_ad_RecordDriveDirectionOffset_tooltip"			text="Move recording from vehicle to the left (-0.1 .. -6m) or right (0.1 .. 6m). Driving reverse wil stop recording!" />
-		<text name="gui_ad_RecordOppositeDriveDirectionOffset"			text="Record offset in opposite driving direction" />
-		<text name="gui_ad_RecordOppositeDriveDirectionOffset_tooltip"	text="Move recording from vehicle to the left (-0.1 .. -6m) or right (0.1 .. 6m). Driving reverse wil stop recording!" />
+		<text name="gui_ad_RecordDriveDirectionOffset"					text="Desplazamiento de grabación en dirección de conducción" />
+		<text name="gui_ad_RecordDriveDirectionOffset_tooltip"			text="Mover la grabación desde el vehículo hacia la izquierda (-0.1 .. -6m) o derecha (0.1 .. 6m). ¡Conducir en reversa detendrá la grabación!" />
+		<text name="gui_ad_RecordOppositeDriveDirectionOffset"			text="Desplazamiento de grabación en dirección opuesta" />
+		<text name="gui_ad_RecordOppositeDriveDirectionOffset_tooltip"	text="Mover la grabación desde el vehículo hacia la izquierda (-0.1 .. -6m) o derecha (0.1 .. 6m). ¡Conducir en reversa detendrá la grabación!" />
 		<text name="gui_ad_settingsPage_title"							text="Ajustes - AutoDrive" />
 		<text name="gui_ad_userSettingsPage_title"						text="Ajustes de usuario - AutoDrive" />
 		<text name="gui_ad_vehicleSettingsPage_title"					text="Ajustes del vehículo - AutoDrive" />

@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Otomatik olarak algılanan kepçe genişliği çok küçükse bu değer ile artırılabilir." />
 		<text name="gui_ad_preCallLevel"								text="Çağrı öncesi seviyesi" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Ayarlanan doldurma seviyesinde ön çağrı boşaltıcı." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Yok" />
 		<text name="gui_ad_onlyPickup"									text="sadece Pickup" />
 		<text name="gui_ad_onlyDeliver"								text="sadece teslim et" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Otomatik olarak algılanırsa kepçe yüksekliği yanlıştır. Hedef zemin yüksekliğini ayarlamak için bunu kullanın" />
 		<text name="gui_ad_showMarkersOnMap"							text="İşaretçileri göster" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Oyun içi haritada işaretçileri / hedefleri göster" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="İşaretçilere geç" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Harita etkin noktalarına tıklandığında hedef / boşaltma hedefi ayarlayın" />
 		<text name="gui_ad_cornerSpeed"								text="Dönüş hızı" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
 		<text name="gui_ad_ALUnload"									text="AutoLoad: Unload Position" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Off-no automatic unload, center-unload on loading platform, left / right vehicle unload position (Position depend on vehicle setup, not AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Unload Off" />
 		<text name="gui_ad_AL_center"									text="Unload center" />
 		<text name="gui_ad_AL_left"									text="Unload left" />

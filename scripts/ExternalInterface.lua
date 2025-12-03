@@ -648,7 +648,12 @@ function AutoDrive:setALOn(object)
             -- loading not possible during movement
             -- set loading state On
             AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALOn ualStartLoad")
-            object:ualStartLoad()
+            if object.ualSetMaterialTypeIndex and object.ualStartLoad then
+                local fillTypeID = rootVehicle.ad.stateModule:getFillType()
+                object:ualSetMaterialTypeIndex(fillTypeID)
+                -- need to set the fillType before ualStartLoad as it resets always to ALL
+                object:ualStartLoad()
+            end
         end
     end
 end
@@ -668,7 +673,9 @@ function AutoDrive:setALOff(object)
     if spec and object.ualStopLoad then
         -- set loading state off
         AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALOff ualStopLoad")
-        object:ualStopLoad()
+        if object.ualStopLoad then
+            object:ualStopLoad()
+        end
     end
 end
 
@@ -678,8 +685,8 @@ function AutoDrive.activateALTrailers(vehicle, trailers)
     end
     AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:activateALTrailers")
     if #trailers > 0 then
-        for i=1, #trailers do
-            AutoDrive:setALOn(trailers[i])
+        for _, trailer in ipairs(trailers) do
+            AutoDrive:setALOn(trailer)
         end
     end
 end
@@ -690,8 +697,8 @@ function AutoDrive.deactivateALTrailers(vehicle, trailers)
     end
     AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:deactivateTrailerAL")
     if #trailers > 0 then
-        for i=1, #trailers do
-            AutoDrive:setALOff(trailers[i])
+        for _, trailer in ipairs(trailers) do
+            AutoDrive:setALOff(trailer)
         end
     end
 end
@@ -769,8 +776,10 @@ function AutoDrive:unloadAL(object)
                     end
                 else
                     AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:unloadAL spec_universalAutoload ualUnload")
-                    object:ualSetUnloadPosition(unloadPosition)
-                    object:ualUnload()
+                    if object.ualSetUnloadPosition and object.ualUnload then
+                        object:ualSetUnloadPosition(unloadPosition)
+                        object:ualUnload()
+                    end
                 end
             end
         end
@@ -818,6 +827,7 @@ function AutoDrive:getALObjectFillLevels(object) -- used by getIsFillUnitEmpty, 
         AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:getALObjectFillLevels fillCapacity %s fillLevel %s fillFreeCapacity %s", tostring(fillCapacity), tostring(fillLevel), tostring(fillFreeCapacity))
     end
     local filledToUnload = AutoDrive.isUnloadFillLevelReached(rootVehicle, fillLevel, fillFreeCapacity, fillCapacity)
+    AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:getALObjectFillLevels filledToUnload %s ", tostring(filledToUnload))
     return fillLevel, fillCapacity, filledToUnload, fillFreeCapacity
 end
 
@@ -842,7 +852,12 @@ function AutoDrive:getALFillTypes(object) -- used by PullDownList, getSupportedF
     -- spec_universalAutoload
     local spec = object.spec_universalAutoload
     if spec and AutoDrive:hasAL(object) then
-        AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:getALCurrentFillType spec_universalAutoload function not supported!")
+        AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:getALFillTypes spec_universalAutoload retrieve fillTypes...")
+        for index, fillType in ipairs(g_fillTypeManager:getFillTypes()) do
+            if fillType.isBaleType or fillType.isPalletType or (fillType.palletFilename ~= nil) then
+                table.insert(fillTypes, {fillTypeID = index, fillTypeName = fillType.title})
+            end
+        end
     end
     AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:getALFillTypes #fillTypes %s", tostring(#fillTypes))
     return fillTypes
@@ -852,7 +867,6 @@ function AutoDrive:getALCurrentFillType(object) -- used by onEnterVehicle, onPos
     if object == nil then
         return nil
     end
-
     -- spec_aPalletAutoLoader
     local spec = object.spec_aPalletAutoLoader
     if spec and AutoDrive:hasAL(object) and spec.currentautoLoadTypeIndex then
@@ -862,34 +876,67 @@ function AutoDrive:getALCurrentFillType(object) -- used by onEnterVehicle, onPos
     local spec = object.spec_universalAutoload
     if spec and AutoDrive:hasAL(object) then
         AutoDrive.debugPrint(object, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:getALCurrentFillType spec_universalAutoload function not supported!")
+        local rootVehicle = object.getRootVehicle and object:getRootVehicle()
+        if rootVehicle then
+            return rootVehicle.ad.stateModule:getFillType()
+        else
+            return AutoDrive.UAL_FILLTYPE_ALL -- assume all fillTypes in UAL
+        end
     end
     return nil
 end
 
-function AutoDrive:setALFillType(vehicle, fillType) -- used by PullDownList
-    if vehicle == nil or fillType == nil then
+function AutoDrive:setALFillType(vehicle, fillTypeID) -- used by PullDownList
+    if vehicle == nil or fillTypeID == nil then
         return false
     end
     AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType")
     local trailers, trailerCount = AutoDrive.getAllUnits(vehicle)
     if trailers and trailerCount > 0 then
-        for i=1, trailerCount do
-            local object = trailers[i]
+        local rootVehicle = trailers[1].getRootVehicle and trailers[1]:getRootVehicle()
+        if rootVehicle then
+            rootVehicle.ad.ALCurrentFillTypeID = fillTypeID
+        end
+
+        for _, trailer in ipairs(trailers) do
             -- spec_aPalletAutoLoader
-            local spec = object.spec_aPalletAutoLoader
-            if spec and AutoDrive:hasAL(object) and object.SetLoadingState and object.SetAutoloadType then
-                AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType spec_aPalletAutoLoader fillType %s", tostring(fillType))
+            local spec = trailer.spec_aPalletAutoLoader
+            if spec and AutoDrive:hasAL(trailer) and trailer.SetLoadingState and trailer.SetAutoloadType then
+                AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType spec_aPalletAutoLoader fillTypeID %s", tostring(fillTypeID))
                 -- set loading state off
-                object:SetLoadingState(1)
-                object:SetAutoloadType(fillType)
+                trailer:SetLoadingState(1)
+                trailer:SetAutoloadType(fillTypeID)
             end
             -- spec_universalAutoload
-            local spec = object.spec_universalAutoload
-            if spec and AutoDrive:hasAL(object) then
+            local spec = trailer.spec_universalAutoload
+            if spec and AutoDrive:hasAL(trailer) then
                 AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType spec_universalAutoload function not supported!")
+                if trailer.ualSetMaterialTypeIndex then
+                    trailer:ualSetMaterialTypeIndex(fillTypeID)
+                end
             end
         end
     end
+end
+
+function AutoDrive.objectsToLoadAvailable(vehicle, trailers)
+    if vehicle == nil or trailers == nil then
+        return false
+    end
+    local objectsToLoadAvailable = false
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:objectsToLoadAvailable")
+    if #trailers > 0 then
+        for _, trailer in ipairs(trailers) do
+            -- spec_universalAutoload
+            local spec = trailer.spec_universalAutoload
+            if spec and AutoDrive:hasAL(trailer) then
+                if trailer.ualGetTotalAvailableCount then
+                    objectsToLoadAvailable = objectsToLoadAvailable or trailer:ualGetTotalAvailableCount() > 0
+                end
+            end
+        end
+    end
+    return objectsToLoadAvailable
 end
 
 function AutoDrive:handleAIFinished(vehicle)

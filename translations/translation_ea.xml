@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Si el ancho de la pala detectado automáticamente es demasiado pequeño, se puede aumentar con este valor" />
 		<text name="gui_ad_preCallLevel"								text="Nivel para llamar" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Llama al remolque al nivel de llenado establecido." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Ninguno" />
 		<text name="gui_ad_onlyPickup"									text="Solo recogida" />
 		<text name="gui_ad_onlyDeliver"								text="Solo entrega" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Si la altura de la pala detectada automáticamente es incorrecta, usa esto para ajustar la altura objetivo del suelo" />
 		<text name="gui_ad_showMarkersOnMap"							text="Mostrar Marcadores" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Mostrar Marcadores/Destinos en el mapa del juego" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Cambiar a Marcadores" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Establecer objetivo/descargar objetivo, al hacer clic en los puntos del mapa" />
 		<text name="gui_ad_cornerSpeed"								text="Velocidad de la esquina" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sí: Los descargadores de AutoDrive intentan planificar un camino hacia adelante para adaptarse al giro de 90° de la cosechadora./No - Los descargadores se revertirán antes del giro" />
 		<text name="gui_ad_ALUnload"									text="Autocarga: Posición de descarga" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Apagado: La posición de descarga depende de la configuración del vehículo, no de AutoDrive)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="No descargar" />
 		<text name="gui_ad_AL_center"									text="Descargar sobre el vehiculo" />
 		<text name="gui_ad_AL_left"									text="Descargar a la izquierda" />

@@ -1,8 +1,3 @@
-AutoDrive.CHASEPOS_LEFT = 1
-AutoDrive.CHASEPOS_RIGHT = -1
-AutoDrive.CHASEPOS_REAR = 3
-AutoDrive.CHASEPOS_FRONT = 4
-AutoDrive.CHASEPOS_UNKNOWN = 0
 
 -- harvester types
 function AutoDrive.setCombineType(vehicle)

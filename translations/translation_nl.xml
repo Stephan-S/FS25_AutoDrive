@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Als de automatisch gedetecteerde shovel te klein is, kan dat met deze waarde worden verhoogd" />
 		<text name="gui_ad_preCallLevel"								text="Vulniveau eerder oproepen" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Bestuurder eerder oproepen op het ingestelde vulniveau." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Geen" />
 		<text name="gui_ad_onlyPickup"									text="alleen Ophalen" />
 		<text name="gui_ad_onlyDeliver"								text="alleen Afleveren" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Als de automatisch gedetecteerde bladhoogte niet correct is. Gebruik dit om de doelhoogte van de grond aan te passen" />
 		<text name="gui_ad_showMarkersOnMap"							text="Toon markeringen" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Toon markeringen/bestemmingen op de spelkaart" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Spring naar markering" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Selecteer markering om er naar toe te gaan" />
 		<text name="gui_ad_cornerSpeed"								text="Hoeksnelheid" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Ja - AutoDrive lossers proberen een pad naar voren te plannen om zich aan te passen aan de 90° draaiingen van de oogstmachine. / Nee - ontladers zullen omkeren voor ze draaien" />
 		<text name="gui_ad_ALUnload"									text="Autoload: Los positie" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Uit-niet automatisch lossen, midden-centraal lossen op de laadplaats, links-/ rechts-/ lospositie van het voertuig (De positie hangt af van de instelling van het voertuig, niet van AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Lossen uit" />
 		<text name="gui_ad_AL_center"									text="Lossen midden" />
 		<text name="gui_ad_AL_left"									text="Lossen links" />

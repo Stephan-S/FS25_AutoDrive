@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="如果自動檢測到的工具寬度太小，可以增加這個值" />
 		<text name="gui_ad_preCallLevel"								text="預呼叫級別" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="設定預呼叫卸載車輛的填充水平。" />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="無" />
 		<text name="gui_ad_onlyPickup"									text="僅裝載" />
 		<text name="gui_ad_onlyDeliver"								text="僅卸載" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="如果自動檢測到的工具高度不正確。 使用它來調整目標地面高度" />
 		<text name="gui_ad_showMarkersOnMap"							text="顯示標記" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="在遊戲地圖上顯示標記/目的地" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="切換到標記" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="在點擊地圖熱點時設置目標/卸載目標" />
 		<text name="gui_ad_cornerSpeed"								text="轉彎速度" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="是 - AutoDrive 卸料車輛嘗試規劃一條前進路徑以適應聯合收割機的 90° 轉彎。 / 否 - 卸載車輛將在轉彎前倒車" />
 		<text name="gui_ad_ALUnload"									text="自動裝載：卸載位置" />
 		<text name="gui_ad_ALUnload_tooltip"							text="開關自動裝載(Autoload拖車MOD)，裝載拖車中間卸載，左右邊卸載(位置取決於車輛設置,而不是AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="關閉卸載" />
 		<text name="gui_ad_AL_center"									text="中間卸載" />
 		<text name="gui_ad_AL_left"									text="左邊卸載" />

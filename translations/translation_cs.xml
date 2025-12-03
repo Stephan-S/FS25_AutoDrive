@@ -1,22 +1,22 @@
 <?xml version='1.0' encoding='utf-8'?>
 <l10n>
-	<translationContributors>璃月雷神，Simba</translationContributors>
+	<translationContributors>Awen</translationContributors>
 	<texts>
 		<text name="UNKNOWN"											text="未知" />
 		<text name="input_ADToggleHud"									text="AD: 切换 HUD" />
 		<text name="input_ADToggleHudExtension"						text="AD: 显示 HUD 信息" />
-		<text name="input_ADToggleMouse"								text="AD: 切换鼠标" />
+		<text name="input_ADToggleMouse"								text="AD: 显示鼠标" />
 		<text name="input_ADEnDisable"									text="AD: 启用/禁用" />
-		<text name="input_ADSilomode"									text="AD: 更改模式" />
-		<text name="input_ADPreviousMode"								text="AD: 上一模式" />
-		<text name="input_ADRecord"									text="AD: 记录" />
-		<text name="input_ADRecord_Dual"								text="AD: 记录双向路线" />
-		<text name="input_ADRecord_SubPrio"							text="AD: 记录次要路线" />
-		<text name="input_ADRecord_SubPrioDual"						text="AD: 记录双向次要路线" />
-		<text name="input_ADRecord_TwoWay"								text="AD: Record 2 routes simultanous 1 direction normal" />
-		<text name="input_ADRecord_Dual_TwoWay"						text="AD: Record 2 routes simultanous 2 way route" />
-		<text name="input_ADRecord_SubPrio_TwoWay"						text="AD: Record 2 routes simultanous 1 direction secondary route" />
-		<text name="input_ADRecord_SubPrioDual_TwoWay"					text="AD: Record 2 routes simultanous 2 way secondary route" />
+		<text name="input_ADSilomode"									text="AD: 下一个运输模式" />
+		<text name="input_ADPreviousMode"								text="AD: 上一个运输模式" />
+		<text name="input_ADRecord"									text="AD: 录制单向路径" />
+		<text name="input_ADRecord_Dual"								text="AD: 录制双向路径" />
+		<text name="input_ADRecord_SubPrio"							text="AD: 录制次优先级路径" />
+		<text name="input_ADRecord_SubPrioDual"						text="AD: 录制倒车路径" />
+		<text name="input_ADRecord_TwoWay"								text="AD: 录制两条同向路径" />
+		<text name="input_ADRecord_Dual_TwoWay"						text="AD: 录制两条对向路径" />
+		<text name="input_ADRecord_SubPrio_TwoWay"						text="AD: 录制两条次优先级路径" />
+		<text name="input_ADRecord_SubPrioDual_TwoWay"					text="AD: 录制两条倒车路径" />
 		<text name="input_ADSelectTarget"								text="AD: 选择下一个目标" />
 		<text name="input_ADSelectPreviousTarget"						text="AD: 选择上一个目标" />
 		<text name="input_AD_Speed_up"									text="AD: 提高速度" />
@@ -78,8 +78,8 @@
 		<text name="AD_No_Refuel_Station"								text="找不到加油站：" />
 		<text name="AD_No_Repair_Station"								text="找不到维修站：" />
 		<text name="AD_Wrong_Mode_takeover_from_CP"					text="错误的AD模式与CP一起工作" />
-		<text name="AD_Unable_to_start_AIJob"							text="Not able to start AI Helper" />
-		<text name="AD_AIJob_active"									text="AI Helper still active!" />
+		<text name="AD_Unable_to_start_AIJob"							text="无法启动 AI 助手" />
+		<text name="AD_AIJob_active"									text="AI 助手仍在活动中 ！" />
 		<text name="AD_MODE_DRIVETO"									text="驾驶" />
 		<text name="AD_MODE_DELIVERTO"									text="送货" />
 		<text name="AD_MODE_PICKUPANDDELIVER"							text="取货和送货" />
@@ -97,7 +97,7 @@
 		<text name="gui_ad_blinkValue"									text="自动转向灯" />
 		<text name="gui_ad_blinkValue_tooltip"							text="自动启用转向灯的转向角度。 (0 = 转向灯自动停用)" />
 		<text name="gui_ad_pipe_offset"								text="伸出螺旋钻" />
-		<text name="gui_ad_pipe_offset_tooltip"						text="Additional offset applied to the detected pipe position" />
+		<text name="gui_ad_pipe_offset_tooltip"						text="调整检测到的卸料管位置的额外偏移值" />
 		<text name="gui_ad_followDistance"								text="收割机距离" />
 		<text name="gui_ad_followDistance_tooltip"						text="跟随收割机后端时保持距离" />
 		<text name="gui_ad_lookahead_turning"							text="前视距离（转弯）" />
@@ -119,8 +119,8 @@
 		<text name="gui_ad_FS19"										text="FS 19" />
 		<text name="gui_ad_BSMRange"									text="筒仓装载范围" />
 		<text name="gui_ad_BSMRange_tooltip"							text="在这个范围内，车辆一个接一个地到达目的筒仓，进入车道" />
-		<text name="gui_ad_UMRange"									text="Bunker Silo / Unload Manager Range" />
-		<text name="gui_ad_UMRange_tooltip"							text="In this range vehicles to destination bunker silo / same unload destination one by one get driveway" />
+		<text name="gui_ad_UMRange"									text="筒仓 / 卸载管理器范围" />
+		<text name="gui_ad_UMRange_tooltip"							text="在此范围内，前往目标筒仓或相同卸载点的车辆将逐一进入车道" />
 		<text name="ad_bga_init"										text="初始化" />
 		<text name="ad_bga_waiting"									text="等待拖车/筒仓" />
 		<text name="ad_bga_active"										text="活跃" />
@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="如果自动检测到的工具宽度太小，可以增加这个值" />
 		<text name="gui_ad_preCallLevel"								text="预呼叫级别" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="设定预呼叫卸载车辆的填充水平。" />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="无" />
 		<text name="gui_ad_onlyPickup"									text="仅装载" />
 		<text name="gui_ad_onlyDeliver"								text="仅卸载" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="如果自动检测到的工具高度不正确。 使用它来调整目标地面高度" />
 		<text name="gui_ad_showMarkersOnMap"							text="显示标记" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="在游戏地图上显示标记/目的地" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="切换到标记" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="在点击地图热点时设置目标/卸载目标" />
 		<text name="gui_ad_cornerSpeed"								text="转弯速度" />
@@ -231,8 +236,8 @@
 		<text name="gui_ad_playSounds_tooltip"							text="启用鼠标点击和通知的音效" />
 		<text name="gui_ad_scaleLines"									text="缩放线" />
 		<text name="gui_ad_scaleLines_tooltip"							text="连接线的比例" />
-		<text name="gui_ad_scaleMarkerText"							text="Scale Destination Name" />
-		<text name="gui_ad_scaleMarkerText_tooltip"					text="Scale Size of Destination Names" />
+		<text name="gui_ad_scaleMarkerText"							text="缩放目的地名称" />
+		<text name="gui_ad_scaleMarkerText_tooltip"					text="调整目的地名称文字的大小" />
 		<text name="gui_ad_syncMultiTargets"							text="同步多个目的地" />
 		<text name="gui_ad_syncMultiTargets_tooltip"					text="如果几个司机开车到同一个目的地，目的地选择是同步的。" />
 		<text name="gui_ad_enableParkAtJobFinished"					text="工作完成后停车" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="是 - AutoDrive 卸料车辆尝试规划一条前进路径以适应联合收割机的 90° 转弯。 / 否 - 卸载车辆将在转弯前倒车" />
 		<text name="gui_ad_ALUnload"									text="自动装载：卸载位置" />
 		<text name="gui_ad_ALUnload_tooltip"							text="开关自动装载(Autoload拖车MOD)，装载拖车中间卸载，左右边卸载(位置取决于车辆设置,而不是AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="关闭卸载" />
 		<text name="gui_ad_AL_center"									text="中间卸载" />
 		<text name="gui_ad_AL_left"									text="左边卸载" />
@@ -258,28 +264,28 @@
 		<text name="gui_ad_noUnloaderAvailable"						text="没有可用的相同目标司机" />
 		<text name="gui_ad_remainingDriveTimeInterval"					text="剩余驾驶时间" />
 		<text name="gui_ad_remainingDriveTimeInterval_tooltip"			text="对于外部模块：计算剩余驾驶时间的间隔。如果出现性能提升或停用问题。" />
-		<text name="gui_ad_adpd_showError"								text="AutoDrive: The Network is inconsistent and could not be imported, error code" />
-		<text name="gui_ad_adpd_showConfirmation"						text="AutoDrive: Would you like to import the AD Network from the Placeable?" />
-		<text name="gui_ad_pathfinder"									text="Pathfinder algorithm" />
-		<text name="gui_ad_pathfinder_tooltip"							text="Choose which pathfinder algorithm is used (when not on network)" />
-		<text name="gui_ad_pathfinder_astar"							text="A-Star + Dubbins" />
-		<text name="gui_ad_pathfinder_custom"							text="AutoDrive Custom" />
-		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="Routemanager on Server" />
-		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="Enable route manager on dedicated servers" />
-		<text name="gui_ad_autostartHelpers"							text="Autostart helpers" />
-		<text name="gui_ad_autostartHelpers_tooltip"					text="Automatically restart active helpers after loading a savegame" />
-		<text name="gui_ad_detectSwath"								text="Swath detection" />
-		<text name="gui_ad_detectSwath_tooltip"						text="Decides if swaths are detected as fruit on field" />
-		<text name="gui_ad_colorAssignmentMode"						text="Custom colors" />
-		<text name="gui_ad_colorAssignmentMode_tooltip"				text="Enables selection of custom colors for AutoDrive" />
-		<text name="gui_ad_FoldImplements"								text="Fold implements" />
-		<text name="gui_ad_FoldImplements_tooltip"						text="AutoDrive will wait for implements to fold up before starting" />
-		<text name="gui_ad_RecordWhileNotInVehicle"					text="Record without driver" />
-		<text name="gui_ad_RecordWhileNotInVehicle_tooltip"			text="AutoDrive will keep recording if driver leaves the vehicle" />
-		<text name="gui_ad_RecordDriveDirectionOffset"					text="Record offset in driving direction" />
-		<text name="gui_ad_RecordDriveDirectionOffset_tooltip"			text="Move recording from vehicle to the left (-0.1 .. -6m) or right (0.1 .. 6m). Driving reverse wil stop recording!" />
-		<text name="gui_ad_RecordOppositeDriveDirectionOffset"			text="Record offset in opposite driving direction" />
-		<text name="gui_ad_RecordOppositeDriveDirectionOffset_tooltip"	text="Move recording from vehicle to the left (-0.1 .. -6m) or right (0.1 .. 6m). Driving reverse wil stop recording!" />
+		<text name="gui_ad_adpd_showError"								text="AutoDrive：网络结构不一致，无法导入，错误代码：" />
+		<text name="gui_ad_adpd_showConfirmation"						text="AutoDrive：你想从 Placeable 中导入 AutoDrive 路径吗？" />
+		<text name="gui_ad_pathfinder"									text="路径搜索算法" />
+		<text name="gui_ad_pathfinder_tooltip"							text="选择当不在路径网络上时使用的寻路算法" />
+		<text name="gui_ad_pathfinder_astar"							text="A-Star + Dubbins（A + 车辆轨迹）*" />
+		<text name="gui_ad_pathfinder_custom"							text="AutoDrive 自定义算法" />
+		<text name="gui_ad_enableRoutesManagerOnDediServer"			text="服务器启用路线管理器" />
+		<text name="gui_ad_enableRoutesManagerOnDediServer_tooltip"	text="在专用服务器上启用路线管理器" />
+		<text name="gui_ad_autostartHelpers"							text="自动重启助手" />
+		<text name="gui_ad_autostartHelpers_tooltip"					text="加载存档后自动重启正在运行的助手" />
+		<text name="gui_ad_detectSwath"								text="识别草垄（swath）" />
+		<text name="gui_ad_detectSwath_tooltip"						text="决定是否将草垄识别为田地上的作物" />
+		<text name="gui_ad_colorAssignmentMode"						text="自定义颜色" />
+		<text name="gui_ad_colorAssignmentMode_tooltip"				text="启用 AutoDrive 的自定义配色方案" />
+		<text name="gui_ad_FoldImplements"								text="收起农具后出发" />
+		<text name="gui_ad_FoldImplements_tooltip"						text="AutoDrive 会等农具收好再启动" />
+		<text name="gui_ad_RecordWhileNotInVehicle"					text="无驾驶员时录制" />
+		<text name="gui_ad_RecordWhileNotInVehicle_tooltip"			text="如果玩家离开载具，AutoDrive 将继续录制路线。" />
+		<text name="gui_ad_RecordDriveDirectionOffset"					text="录制双路径同向车道间距偏移量" />
+		<text name="gui_ad_RecordDriveDirectionOffset_tooltip"			text="将录制同向的路径点相对于载具向左 (-0.1 至 -6米) 或向右 (0.1 至 6米) 偏移。注意：倒车时会停止录制！" />
+		<text name="gui_ad_RecordOppositeDriveDirectionOffset"			text="录制双路径对向车道间距偏移量" />
+		<text name="gui_ad_RecordOppositeDriveDirectionOffset_tooltip"	text="将对向车道的录制点相对于载具向左 (-0.1 至 -6米) 或向右 (0.1 至 6米) 偏移。注意：倒车时会停止录制！" />
 		<text name="gui_ad_settingsPage_title"							text="设置 - AutoDrive" />
 		<text name="gui_ad_userSettingsPage_title"						text="用户设置 - AutoDrive" />
 		<text name="gui_ad_vehicleSettingsPage_title"					text="车辆设置 - AutoDrive" />
@@ -336,10 +342,10 @@
 		<text name="ad_color_previewOk"								text="19 曲线预览没问题，没有碰撞" />
 		<text name="ad_color_previewNotOk"								text="20 曲线预览注意，有碰撞" />
 		<text name="ad_color_textInputBackground"						text="21 输入文本、目标等的信息。" />
-		<text name="ad_color_hudTextDefault"							text="22 HUD text, normal items" />
-		<text name="ad_color_hudTextHover"								text="23 HUD text, hovering on normal items" />
-		<text name="ad_color_hudTextSpecial"							text="24 HUD text, active items and folders" />
-		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD text, hovering on active items and folders" />
+		<text name="ad_color_hudTextDefault"							text="22 HUD 文本，普通项目" />
+		<text name="ad_color_hudTextHover"								text="23 HUD 界面普通文本（悬停）" />
+		<text name="ad_color_hudTextSpecial"							text="24 HUD 界面活动项/文件夹文本" />
+		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD 界面活动项/文件夹文本（悬停" />
 		<text name="button_delete_all"									text="全部删除" />
 		<text name="button_reset_selected"								text="重置选择" />
 		<text name="AD_task_pathfinding"								text="查找路径" />

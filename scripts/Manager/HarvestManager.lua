@@ -86,15 +86,9 @@ function ADHarvestManager:fireUnloader(unloader, harvester)
         local follower = unloader.ad.modes[AutoDrive.MODE_UNLOAD]:getFollowingUnloader()
         if follower ~= nil then
             follower.ad.taskModule:abortAllTasks()
-            if AutoDrive.getSetting("parkInField", follower) then
-                follower.ad.taskModule:addTask(ClearCropTask:new(follower, harvester))
-            end
             follower.ad.taskModule:addTask(StopAndDisableADTask:new(follower, ADTaskModule.DONT_PROPAGATE, true))
         end
         unloader.ad.taskModule:abortAllTasks()
-        if AutoDrive.getSetting("parkInField", unloader) then
-            unloader.ad.taskModule:addTask(ClearCropTask:new(unloader, harvester))
-        end
         unloader.ad.taskModule:addTask(StopAndDisableADTask:new(unloader, ADTaskModule.DONT_PROPAGATE, true))
     end
     self:unregisterAsUnloader(unloader)
@@ -118,12 +112,15 @@ function ADHarvestManager:update(dt)
         if vehicle.isTrailedHarvester then
             vehicle = vehicle.trailingVehicle
         end
-        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle))) then
+        local unloader = self:getAssignedUnloader(harvester)
+        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
+            or (vehicle.ad.onRouteToRefuel or vehicle.ad.onRouteToRepair) -- harvester is going to refuel or park
+            or (unloader ~= nil and unloader.ad.stateModule:getFirstMarker() ~= vehicle.ad.stateModule:getFirstMarker()) -- harvester - unloader targets do not match
+        then
             -- ADHarvestManager.debugMsg(harvester, "ADHarvestManager:update change to idleHarvesters")
             table.insert(self.idleHarvesters, harvester)
             table.removeValue(self.harvesters, harvester)
 
-            local unloader = self:getAssignedUnloader(harvester)
             if unloader ~= nil then
                 -- ADHarvestManager.debugMsg(harvester, "ADHarvestManager:update fireUnloader %s"
                 -- , tostring(unloader and unloader:getName())

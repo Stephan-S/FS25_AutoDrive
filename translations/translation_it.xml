@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Se la larghezza della pala rilevata automaticamente è troppo piccola, può essere aumentata con questo valore" />
 		<text name="gui_ad_preCallLevel"								text="Anticipa chiamata per scarico" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Anticipa chiamata per scarico al livello impostato" />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Nessuna" />
 		<text name="gui_ad_onlyPickup"									text="Solo ritiro" />
 		<text name="gui_ad_onlyDeliver"								text="Solo consegna" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Se l'altezza della pala rilevata automaticamente non è corretta. Utilizzare questo valore per regolare l'altezza dal suolo" />
 		<text name="gui_ad_showMarkersOnMap"							text="Visualizza marcatori " />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Visualizza marcatori/destinazioni sulla mappa in gioco" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Vai ai marcatori ( Solo quando si è su un veicolo )" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Imposta la destinazione quando si fa clic sugli hotspot della mappa ( Solo quando si è su un veicolo )" />
 		<text name="gui_ad_cornerSpeed"								text="Velocità di svolta" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sì - gli scaricatori AutoDrive cercano di pianificare un percorso in avanti per adattarsi alla svolta a 90° della mietitrebbia. / No - Gli scaricatori si invertiranno prima del turno" />
 		<text name="gui_ad_ALUnload"									text="Autoload: Posizione di scarico" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Spento - nessuno scarico automatic, Centrale - scarico sulla piattaforma di carico, Sinistra/Destra/Dietro - questa posizione dipende dalla configurazione del veicolo, non da AD!" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Scaricamento Spento" />
 		<text name="gui_ad_AL_center"									text="Scarica al centro" />
 		<text name="gui_ad_AL_left"									text="Scarica a sinistra" />

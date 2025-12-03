@@ -473,7 +473,7 @@ function AutoDrive.dumpTable(inputTable, name, maxDepth, currentDepth)
 	end
 end
 
-addConsoleCommand("adSetDebugChannel", "Set new debug channel", "setDebugChannel", AutoDrive)
+-- addConsoleCommand("adSetDebugChannel", "Set new debug channel", "setDebugChannel", AutoDrive)
 
 function AutoDrive:setDebugChannel(newDebugChannel)
 	if newDebugChannel ~= nil then
@@ -495,7 +495,7 @@ function AutoDrive:setDebugChannel(newDebugChannel)
 	AutoDrive.showNetworkEvents()
 end
 
-addConsoleCommand("adDumpTable", "Dump Table to log", "dumpTableToLog", AutoDrive)
+-- addConsoleCommand("adDumpTable", "Dump Table to log", "dumpTableToLog", AutoDrive)
 
 function AutoDrive:dumpTableToLog(input, ...)
 	local f = getfenv(0).loadstring('return ' .. input)
@@ -910,13 +910,13 @@ function AutoDrive:ConnectionSendEvent(superFunc, event, deleteEvent, force)
 	AutoDrive.debug.lastSentEvent = eCopy
 end
 
-function NetworkNode:addPacketSize(packetType, packetSizeInBytes)
-	if (AutoDrive.debug.connectionSendEventBackup ~= nil or AutoDrive.debug.serverBroadcastEventBackup ~= nil) and packetType == NetworkNode.PACKET_EVENT then
-		AutoDrive.debug.lastSentEventSize = packetSizeInBytes
-	end
-	if self.showNetworkTraffic then
-		self.packetBytes[packetType] = self.packetBytes[packetType] + packetSizeInBytes
-	end
+function NetworkNode:addPacketSize(connection, packetType, packetSizeInBytes)
+    if (AutoDrive.debug.connectionSendEventBackup ~= nil or AutoDrive.debug.serverBroadcastEventBackup ~= nil) and packetType == NetworkNode.PACKET_EVENT then
+        AutoDrive.debug.lastSentEventSize = packetSizeInBytes
+    end
+    if self.showNetworkTraffic or self.showNetworkTrafficClients then
+        self.packetBytes[packetType][connection] = (self.packetBytes[packetType][connection] or 0) + packetSizeInBytes
+    end
 end
 
 function AutoDrive.tableClone(org)
@@ -1037,13 +1037,25 @@ Sprayer.registerOverwrittenFunctions =
 	return result
 end
  ]]
-function AutoDrive:zoomSmoothly(superFunc, offset)
+
+function AutoDrive:handleSplineCurvature(offset)
+	-- returns true is the event was handled
 	if AutoDrive.splineInterpolation ~= nil and AutoDrive.splineInterpolation.valid then
         AutoDrive.splineInterpolationUserCurvature = math.clamp(AutoDrive.splineInterpolationUserCurvature + offset/12, 0.49, 3.5)
-		return
+		return true
 	end
-	if not AutoDrive.mouseWheelActive then -- don't zoom camera when mouse wheel is used to scroll targets (thanks to sperrgebiet)
+	return AutoDrive.mouseWheelActive
+end
+
+function AutoDrive:zoomSmoothly(superFunc, offset)
+	if not AutoDrive:handleSplineCurvature(offset) then
 		superFunc(self, offset)
+	end
+end
+
+function AutoDrive:onZoomTopDownCamera(superFunc, action, offset, ...)
+	if not AutoDrive:handleSplineCurvature(-offset) then
+		superFunc(self, action, offset, ...)
 	end
 end
 
@@ -1078,7 +1090,12 @@ function AutoDrive:onFillTypeSelection(fillType)
                             AutoDrive.debugPrint(fillableObject.object, AutoDrive.DC_VEHICLEINFO, "AutoDrive:onFillTypeSelection getFillUnitAllowsFillType")
                             if fillableObject.object.getFillUnitFreeCapacity and fillableObject.object:getFillUnitFreeCapacity(fillableObject.fillUnitIndex) > 0 then
                                 AutoDrive.debugPrint(fillableObject.object, AutoDrive.DC_VEHICLEINFO, "AutoDrive:onFillTypeSelection setIsLoading self.selectedFillType %s -> fillType %s", tostring(self.selectedFillType), tostring(fillType))
-                                self:setIsLoading(true, fillableObject.object, fillableObject.fillUnitIndex, fillType)
+                                local rootVehicle = fillableObject.object.rootVehicle
+                                local onRouteToRefuel = rootVehicle and rootVehicle.ad and rootVehicle.ad.onRouteToRefuel
+                                if not onRouteToRefuel then
+                                    -- do not load any fuel type in case of refuel active!
+                                    self:setIsLoading(true, fillableObject.object, fillableObject.fillUnitIndex, fillType)
+                                end
                                 break
                             end
                         end

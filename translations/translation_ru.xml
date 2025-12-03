@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Если автоматически определенная ширина ковша слишком мала, ее можно увеличить с помощью этого значения." />
 		<text name="gui_ad_preCallLevel"								text="Уровень предварительного вызова" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Предварительный вызов разгружающего при заданном уровне заполнения." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="не менять" />
 		<text name="gui_ad_onlyPickup"									text="только Загрузки" />
 		<text name="gui_ad_onlyDeliver"								text="только Доставки" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Если автоматически определена неправильная высота ковша, используйте эту настройку, чтобы установить необходимую высоту от земли." />
 		<text name="gui_ad_showMarkersOnMap"							text="Отображать маркеры" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Отображать маркеры/пункты назначения на карте." />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Переключение через маркеры" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Устанавливать локацию/точку разгрузки при нажатии на горячие точки на карте." />
 		<text name="gui_ad_cornerSpeed"								text="Скорость в повороте" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Да - Разгрузчики AutoDrive пытаются планировать путь вперед чтобы адаптироваться к повороту комбайна на 90°. / Нет - Разгрузчики сдадут назад перед поворотом." />
 		<text name="gui_ad_ALUnload"									text="Автозагрузка: положение разгрузки" />
 		<text name="gui_ad_ALUnload_tooltip"							text="ВЫКЛ-без авторазгрузки, центр-разгрузить на платформу, влево / вправо от техники (Положение зависит от настроек автомобиля, а не AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Разгрузка ВЫКЛ" />
 		<text name="gui_ad_AL_center"									text="Разгрузка в центр" />
 		<text name="gui_ad_AL_left"									text="Разгрузка влево" />

@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="If automatically detected shovel width is too small, it can be increased with this value" />
 		<text name="gui_ad_preCallLevel"								text="Pre call level" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Pre call unloader at the set fill level." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="None" />
 		<text name="gui_ad_onlyPickup"									text="only Pickup" />
 		<text name="gui_ad_onlyDeliver"								text="only Deliver" />
@@ -210,7 +212,10 @@
 		<text name="gui_ad_shovelHeight"								text="Shovel height" />
 		<text name="gui_ad_shovelHeight_tooltip"						text="If automatically detected shovel height is incorrect. Use this to adjust the target ground height" />
 		<text name="gui_ad_showMarkersOnMap"							text="Show markers" />
-		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Show markers/destinations on the ingame map" />
+		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Show markers/destinations on the main map/ingame map" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Switch to markers" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Set target/unload target when clicking on map hotspots" />
 		<text name="gui_ad_cornerSpeed"								text="Corner speed" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
 		<text name="gui_ad_ALUnload"									text="Autoload: Unload Position" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Off-no automatic unload, center-unload on loading platform, left / right vehicle unload position (Position depend on vehicle setup, not AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Unload Off" />
 		<text name="gui_ad_AL_center"									text="Unload center" />
 		<text name="gui_ad_AL_left"									text="Unload left" />

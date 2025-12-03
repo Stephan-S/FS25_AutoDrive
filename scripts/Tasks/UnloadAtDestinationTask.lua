@@ -103,7 +103,15 @@ function UnloadAtDestinationTask:update(dt)
                 --AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "UnloadAtDestinationTask:update isTargetReached isActiveAtTrigger")
                 AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, true)
                 local fillLevel = AutoDrive.getAllFillLevels(self.trailers)
-                if fillLevel < 0.1 or self.isContinued or (((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYDELIVER or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders")) and (not ((self.vehicle.ad.drivePathModule:getIsReversing() and self.vehicle.ad.trailerModule:getBunkerTrigger() ~= nil)))) then
+                if
+                    fillLevel < 0.1
+                    or self.isContinued
+                    or (
+                        ((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYDELIVER or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders")) 
+                        and (not (self.vehicle.ad.drivePathModule:getIsReversing() and self.vehicle.ad.trailerModule:getBunkerTrigger() ~= nil))
+                        and self.vehicle.ad.trailerModule:getHasAL() ~= true
+                    )
+                    then
                     --AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "UnloadAtDestinationTask:update fillLevel < 0.1")
                     AutoDrive.setAugerPipeOpen(self.trailers, false)
                     self:finished()

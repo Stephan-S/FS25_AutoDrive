@@ -309,11 +309,13 @@ function AutoDrivePlaceableData.readGraphFromXml(xmlFile, placeable)
                 AutoDrive.debugMsg(nil, "ERROR AutoDrivePlaceableData.readGraphFromXml missing marker name")
                 return -6
             end
+--[[
             mapMarker.group = "All"
             -- make sure group existst
             if ADGraphManager:getGroupByName(mapMarker.group) == nil then
                 ADGraphManager:addGroup(mapMarker.group)
             end
+]]
             table.insert(AutoDrivePlaceableData.mapMarkers, mapMarker) -- collect all mapMarkers to be created, but do it only at end if everthing is fine
             mapMarker = {}
             mapMarkerCounter = mapMarkerCounter + 1
@@ -379,15 +381,23 @@ function AutoDrivePlaceableData.readGraphFromXml(xmlFile, placeable)
     -- user confirmed import
     if AutoDrivePlaceableData.mapMarkers and #AutoDrivePlaceableData.mapMarkers > 0
         and AutoDrivePlaceableData.wayPoints and #AutoDrivePlaceableData.wayPoints > 0 then
-
-        for _, mapMarker in pairs(AutoDrivePlaceableData.mapMarkers) do
-            ADGraphManager:createMapMarker(mapMarker.id, mapMarker.name)
-        end
-
-        for _, wp in pairs(AutoDrivePlaceableData.wayPoints) do
-            ADGraphManager:createWayPointWithConnections(wp.x, wp.y, wp.z, wp.out, wp.incoming, wp.flags)
-        end
-        AutoDrive:notifyDestinationListeners()
+            AutoDrivePlaceableData:createPlaceable(AutoDrivePlaceableData.wayPoints, AutoDrivePlaceableData.mapMarkers)
     end
     return 0 -- OK
+end
+
+function AutoDrivePlaceableData:createPlaceable(wayPoints, mapMarkers, sendEvent)
+    if sendEvent == nil or sendEvent == true then
+        -- Propagating way point deletion all over the network
+        CreatePlaceableEvent.sendEvent(wayPoints, mapMarkers)
+    else
+        for _, wp in pairs(wayPoints) do
+            ADGraphManager:createWayPointWithConnections(wp.x, wp.y, wp.z, wp.out, wp.incoming, wp.flags, false)
+        end
+        for _, mapMarker in pairs(mapMarkers) do
+            ADGraphManager:createMapMarker(mapMarker.id, mapMarker.name, false)
+        end
+
+        AutoDrive:notifyDestinationListeners()
+    end
 end

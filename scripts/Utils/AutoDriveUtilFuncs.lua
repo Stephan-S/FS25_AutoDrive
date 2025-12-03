@@ -79,8 +79,6 @@ function AutoDrive.defineMinDistanceByVehicleType(vehicle, reverse)
     local min_distance = vehicle.size.length / 2
     if vehicle.getAISteeringNode ~= nil then
         local _, _, diffZ = localToLocal(vehicle:getAISteeringNode(), vehicle.components[1].node, 0, 0, 0)
-        
-        -- diffZ > 0 -> steering node ahead of vehicle center
         if reverse ~= true then
             min_distance = min_distance - diffZ
         else
@@ -88,9 +86,49 @@ function AutoDrive.defineMinDistanceByVehicleType(vehicle, reverse)
         end
         -- print(string.format("Min distance for %s is %.2f with diffZ %.2f", vehicle:getName(), min_distance, diffZ))
     end
-
-    
     return math.max(min_distance, 0.1)
+end
+
+function AutoDrive.getMinLookaheadByVehicleType(vehicle)
+    local min_lookAhead = vehicle.size.length / 2
+    if vehicle.spec_crabSteering and vehicle.spec_crabSteering.hasSteeringModes and vehicle.spec_articulatedAxis and vehicle.spec_articulatedAxis.componentJoint then
+        min_lookAhead = 3
+        local currentMode = vehicle.spec_crabSteering.steeringModes[vehicle.spec_crabSteering.state]
+        if currentMode and currentMode.articulatedAxis and currentMode.articulatedAxis.locked then
+            if vehicle.spec_crabSteering.distFromCompJointToCenterOfBackWheels then
+                min_lookAhead = min_lookAhead + vehicle.spec_crabSteering.distFromCompJointToCenterOfBackWheels
+            end
+        end
+    elseif vehicle.spec_articulatedAxis and vehicle.spec_articulatedAxis.componentJoint then
+        min_lookAhead = 3
+    elseif vehicle.getAISteeringNode ~= nil then
+        local _, _, diffZ = localToLocal(vehicle:getAISteeringNode(), vehicle.components[1].node, 0, 0, 0)
+        if diffZ < 0 then
+            -- front steering
+            local maxAxleDiff = 0
+            local spec = vehicle.spec_wheels
+            if spec and spec.wheels then
+                for i, wheel in ipairs(spec.wheels) do
+                    if wheel.repr then
+                        local _, _, diffZ = localToLocal(wheel.repr, vehicle:getAISteeringNode(), 0, 0, 0)
+                        if diffZ > maxAxleDiff then
+                            maxAxleDiff = diffZ
+                        end
+                    end
+                end
+            end
+            if maxAxleDiff > 0 then
+                min_lookAhead = maxAxleDiff * 2
+            else
+                min_lookAhead = vehicle.size.length
+            end
+        else
+            -- back steering
+            min_lookAhead = 4
+        end
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "AutoDrive.getMinLookaheadByVehicleType %.1f", math.max(min_lookAhead, 2))
+    return math.max(min_lookAhead, 2)
 end
 
 function AutoDrive.defineMinDistanceByVehicleTypeOld(vehicle)
@@ -209,7 +247,7 @@ function AutoDrive.isVehicleInBunkerSiloArea(vehicle)
         -- check only for bunker silo if should unload to improve performance
         return false
     end
-    for _, trigger in pairs(ADTriggerManager.getUnloadTriggers()) do
+    for _, trigger in pairs(ADTriggerManager.getBunkerSilos()) do
         local x, y, z = getWorldTranslation(vehicle.components[1].node)
         local tx, _, tz = x, y, z + 1
         if trigger ~= nil and trigger.bunkerSiloArea ~= nil then
@@ -295,6 +333,36 @@ function AutoDrive.cycleEditorShowMode()
         end
     end
 end
+
+function AutoDrive.isInConstructionMode()
+    if not g_gui:getIsGuiVisible() or g_gui.currentGuiName ~= "ConstructionScreen" or g_constructionScreen == nil then
+        -- not in construction screen
+        return false
+    end
+    if g_constructionScreen.categorySelector == nil  or g_constructionScreen.categories == nil or g_constructionScreen.camera == nil then
+        return false
+    end
+    local index = g_constructionScreen.categorySelector.selectedIndex
+    if index == nil or g_constructionScreen.categories[index] == nil then
+        return false
+    end
+    return true
+end
+
+function AutoDrive.isInConstructionModeLandScaping()
+    local index = g_constructionScreen.categorySelector.selectedIndex
+    -- consider landscaping category
+    return AutoDrive.isInConstructionMode() and index and g_constructionScreen.categories[index].name == "LANDSCAPING"
+end
+
+function AutoDrive.isMouseActiveForHud()
+    return not g_gui:getIsGuiVisible() or (g_gui.currentGuiName == "InGameMenu" and AutoDrive.aiFrameOpen)
+end
+
+function AutoDrive.isMouseActiveForEditor()
+    return not g_gui:getIsGuiVisible() or AutoDrive.isInConstructionModeLandScaping()
+end
+
 
 function AutoDrive.getSelectedWorkTool(vehicle)
     local selectedWorkTool = nil
@@ -384,10 +452,31 @@ function AutoDrive.foldAllImplements(vehicle)
     AutoDrive.setAugerPipeOpen(implements, false) -- close all pipes first
     AutoDrive.closeAllCurtains(implements, true) -- close curtain at UAL trailers
     for _, implement in pairs(implements) do
-        spec = implement.spec_baleLoader
-        if spec and spec.doStateChange then
-            if spec.isInWorkPosition and spec.emptyState == BaleLoader.EMPTY_NONE then
-                spec:doStateChange(BaleLoader.CHANGE_BUTTON_WORK_TRANSPORT)
+        local specs = implement.spec_baleLoader and implement.spec_baler
+        if specs then
+            if not implement.spec_baleLoader.fullAutomaticUnloading then
+                -- TODO: check in case an implement without fullAutomaticUnloading comes into picture
+                -- at the moment only Krone BiG Pack 1290 HDP VC use this configuration of baler and baleunloader with fullAutomaticUnloading
+                if implement:getFillUnitFillLevel(implement.spec_baleLoader.fillUnitIndex) > 0 then
+                    -- BaleLoader
+                    if implement:getIsAutomaticBaleUnloadingAllowed() then
+                        if not implement:getIsAutomaticBaleUnloadingInProgress() then
+                            implement:startAutomaticBaleUnloading()
+                        end
+                    end
+                else
+                    -- Baler
+                    if implement:isUnloadingAllowed() then
+                        implement:dropBaleFromPlatform()
+                    end
+                end
+            end
+        else
+            spec = implement.spec_baleLoader
+            if spec and spec.doStateChange then
+                if spec.isInWorkPosition and spec.emptyState == BaleLoader.EMPTY_NONE then
+                    spec:doStateChange(BaleLoader.CHANGE_BUTTON_WORK_TRANSPORT)
+                end
             end
         end
         spec = implement.spec_plow
@@ -397,12 +486,27 @@ function AutoDrive.foldAllImplements(vehicle)
             end
         end
         spec = implement.spec_foldable
-        if spec and not AutoDrive.isVehicleFolded(implement) then
-            if spec ~= nil and implement.getToggledFoldDirection then
-                if implement:getToggledFoldDirection() ~= spec.turnOnFoldDirection then
-                    local toggledFoldDirection = implement:getToggledFoldDirection()
-                    if implement.getIsFoldAllowed and toggledFoldDirection and implement:getIsFoldAllowed(toggledFoldDirection) and implement.setFoldState then
-                        implement:setFoldState(toggledFoldDirection, false)
+        if spec then
+            local shouldFold = true
+            if implement.spec_baler then
+                -- delay folding for baler with and without collector to ensure all unloadable bales are unloaded before folding
+                if implement.ad == nil then
+                    implement.ad = {}
+                end
+                if implement:getIsBaleUnloading() then
+                    implement.ad.foldDelay = g_time
+                end
+                if implement.ad.foldDelay and implement.ad.foldDelay + 1000 > g_time then
+                    shouldFold = false
+                end
+            end
+            if shouldFold and not AutoDrive.isVehicleFolded(implement) then
+                if spec ~= nil and implement.getToggledFoldDirection then
+                    if implement:getToggledFoldDirection() ~= spec.turnOnFoldDirection then
+                        local toggledFoldDirection = implement:getToggledFoldDirection()
+                        if implement.getIsFoldAllowed and toggledFoldDirection and implement:getIsFoldAllowed(toggledFoldDirection) and implement.setFoldState then
+                            implement:setFoldState(toggledFoldDirection, false)
+                        end
                     end
                 end
             end
@@ -429,6 +533,12 @@ function AutoDrive.getAllImplementsFolded(vehicle)
             ret = ret and not implement:getIsAutomaticBaleUnloadingInProgress()
             ret = ret and not implement:getIsBaleLoaderFoldingPlaying()
             ret = ret and spec.emptyState == BaleLoader.EMPTY_NONE
+        end
+
+        spec = implement.spec_baler
+        if spec then
+            -- baler
+            ret = ret and implement:getIsFoldAllowed() and not implement:getIsBaleUnloading()
         end
 
         spec = implement.spec_foldable
@@ -649,9 +759,9 @@ end
 -- This is the alternative MP approach
 function AutoDrive:getIsEntered(vehicle)
     local user = nil
-    if g_dedicatedServer ~= nil and vehicle ~= nil and g_currentMission.userManager ~= nil and g_currentMission.userManager.getUserByConnection ~= nil and vehicle.getOwner ~= nil then
+    if g_dedicatedServer ~= nil and vehicle ~= nil and g_currentMission.userManager ~= nil and g_currentMission.userManager.getUserByUserId ~= nil and vehicle.spec_enterable then
         -- MP
-        user = g_currentMission.userManager:getUserByConnection(vehicle:getOwner())
+        user = g_currentMission.userManager:getUserByUserId(vehicle.spec_enterable.controllerUserId)
     else
         -- SP
         if vehicle ~= nil and vehicle.getIsEntered ~= nil then
@@ -736,23 +846,30 @@ function AutoDrive.getADFocusVehicle(debug)
     return vehicle
 end
 
-function AutoDrive.getSupportedFillTypesOfAllUnitsAlphabetically(vehicle)
+function AutoDrive.getSupportedFillTypesOfAllUnitsAlphabetically(vehicle, excludedFillType)
     local supportedFillTypes = {}
-    local autoLoadFillTypes = nil -- AutoLoad - TODO: return the correct fillTypes
+    local autoLoadFillTypes = nil -- AutoLoad
 
     if vehicle ~= nil then
-        local hasAL = false
         local trailers, _ = AutoDrive.getAllUnits(vehicle)
         if trailers then
+            -- AutoLoad
             for _, trailer in ipairs(trailers) do
-                hasAL = hasAL or AutoDrive:hasAL(trailer)
+                if AutoDrive:hasAL(trailer) then
+                    local alFillTypes = AutoDrive:getALFillTypes(trailer)
+                    if alFillTypes ~= nil and #alFillTypes > 0 then
+                        -- self.autoLoadFillTypes is either nil or it contains items. It is never empty.
+                        autoLoadFillTypes = alFillTypes
+                        break
+                    end
+                end
             end
         end
-        supportedFillTypes = {}
-        if trailers and hasAL then
-            -- AutoLoad - TODO: return the correct fillTypes
-            for trailerIndex, trailer in ipairs(trailers) do
-                autoLoadFillTypes = AutoDrive:getALFillTypes(trailer)
+        if autoLoadFillTypes ~= nil then
+            for _, fillType in ipairs(autoLoadFillTypes) do
+                if fillType.fillTypeID ~= excludedFillType then
+                    table.insert(supportedFillTypes, fillType.fillTypeID)
+                end
             end
         else
             local dischargeableUnits = AutoDrive.getAllDischargeableUnits(vehicle, true)
@@ -872,7 +989,7 @@ function AutoDrive:autostartHelpers()
 
     for _, vehicle in pairs(AutoDrive.getAllVehicles()) do
         if vehicle ~= nil and vehicle.ad ~= nil and vehicle.ad.stateModule ~= nil then
-            if vehicle.ad.stateModule.activeBeforeSave then
+            if vehicle.ad.stateModule.activeBeforeSave and vehicle.ad.stateModule:getActualFarmId() ~= FarmManager.SPECTATOR_FARM_ID then
                 vehicle.ad.stateModule:getCurrentMode():start(AutoDrive.USER_PLAYER)
             end
         end

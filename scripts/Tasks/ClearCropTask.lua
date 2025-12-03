@@ -58,9 +58,22 @@ function ClearCropTask:setUp()
         )
     end
     if self.harvester and AutoDrive.getDistanceBetween(self.vehicle, self.harvester) < ClearCropTask.MAX_HARVESTER_DISTANCE then
-        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, 0, self.vehicleTrainLength * 1))
-        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, 0, self.vehicleTrainLength * 2))
-        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, 0, self.vehicleTrainLength * 3))
+        local leftSensorFruit = self.harvester.ad.sensors.leftSensorFruit:pollInfo()
+        local leftFrontSensorFruit = self.harvester.ad.sensors.leftFrontSensorFruit:pollInfo()
+        local leftFree = not (leftSensorFruit or leftFrontSensorFruit)
+        local rightFrontSensorFruit = self.harvester.ad.sensors.rightFrontSensorFruit:pollInfo()
+        local rightSensorFruit = self.harvester.ad.sensors.rightSensorFruit:pollInfo()
+        local rightFree = not (rightSensorFruit or rightFrontSensorFruit)
+        local offfsetX = 0
+        if leftFree then
+            offfsetX = 3
+        elseif rightFree  then
+            offfsetX = -3
+        end
+        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, offfsetX, self.vehicleTrainLength * 1))
+        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, offfsetX, self.vehicleTrainLength * 2))
+        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, offfsetX, self.vehicleTrainLength * 3))
+        table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.harvester, offfsetX, self.vehicleTrainLength * 4))
     else
         table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.vehicle, (ClearCropTask.TARGET_DISTANCE_SIDE / 2) * cleartowards, ClearCropTask.TARGET_DISTANCE_FRONT_STEP * 0.5))
         table.insert(self.wayPoints, AutoDrive.createWayPointRelativeToVehicle(self.vehicle, ClearCropTask.TARGET_DISTANCE_SIDE * cleartowards, ClearCropTask.TARGET_DISTANCE_FRONT_STEP * 1))
@@ -78,11 +91,12 @@ function ClearCropTask:update(dt)
     end
 
     -- Check if the driver and trailers have left the crop yet
-    if not AutoDrive.isVehicleOrTrailerInCrop(self.vehicle, true) then
-        ClearCropTask.debugMsg(self.vehicle, "ClearCropTask:update not isVehicleOrTrailerInCrop")
-        self:finished()
-        return
-    end
+    -- TODO: due to missing doku for FSDensityMapUtil.getFruitArea this is not working properly, so deactivated until a suitable solution is found
+    -- if not AutoDrive.isVehicleOrTrailerInCrop(self.vehicle, true) then
+    --     ClearCropTask.debugMsg(self.vehicle, "ClearCropTask:update not isVehicleOrTrailerInCrop")
+    --     self:finished()
+    --     return
+    -- end
     self.stuckTimer:timer(true, ClearCropTask.STUCK_TIME, dt)
     if self.stuckTimer:done() then
         ClearCropTask.debugMsg(self.vehicle, "ClearCropTask:update stuckTimer:done")

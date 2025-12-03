@@ -417,345 +417,416 @@ function AutoDriveHud:isMouseOverHud( x, y)
     end
 end
 
-function AutoDriveHud:mouseEvent(vehicle, posX, posY, isDown, isUp, button)
-	local mouseActiveForAutoDrive = (not g_gui:getIsGuiVisible() or AutoDrive.aiFrameOpen) and (g_inputBinding:getShowMouseCursor() == true)
+function AutoDriveHud:mouseEventOnHudElements(vehicle, posX, posY, isDown, isUp, button)
+	-- returns "handled"
+	if self.hudElements ~= nil then
+		-- Start with highest layer value (last in array), and then iterate backwards.
+		for i = #self.hudElements, 1, -1 do
+			local element = self.hudElements[i]
+			local layer = element.layer
+			local mouseEventHandled, silent = element:mouseEvent(vehicle, posX, posY, isDown, isUp, button, layer)
+			if mouseEventHandled then
+				-- Maybe a PullDownList have been expanded/collapsed, so need to refresh layer sequence
+				self:refreshHudElementsLayerSequence()
+				if silent == nil or silent == false then
+					AutoDrive.playSample(AutoDrive.mouseClickSample, 0.45)
+				end
+				return true -- handled
+			end
+		end
+	end
+	if AutoDrive.pullDownListExpanded > 0 and button >= 1 and button <= 3 and isUp then
+		AutoDrive.Hud:closeAllPullDownLists(vehicle)
+	end
+	if self.isMoving then
+		if (button == 1 and isUp) or not AutoDrive.isMouseActiveForHud() then
+			self:stopMovingHud()
+		else
+			self:moveHud(posX, posY)
+		end
+		return true -- handled
+	end
+	return false -- not handled
+end
 
+function AutoDriveHud:mouseEventHandleSelection(vehicle, isUp, button)
+	if
+		not AutoDrive.leftLSHIFTmodifierKeyPressed
+		and not AutoDrive.leftCTRLmodifierKeyPressed
+		and AutoDrive.leftALTmodifierKeyPressed 
+		and not AutoDrive.rightSHIFTmodifierKeyPressed
+		and vehicle.ad.newcreated == nil
+		and vehicle.ad.selectedNodeId ~= nil
+		then
+		-- selected node and LALT pressed       
+		AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent selection start")
+        vehicle.ad.selectionRange = vehicle.ad.selectionRange or 1	-- start with 1m range
+		AutoDrive.mouseWheelActive = true
+		if button == 4 and isUp and vehicle.ad.selectionRange > 1 then
+			AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent decrement")
+			-- decrement range
+			vehicle.ad.selectionActive = true
+			vehicle.ad.selectionRange = vehicle.ad.selectionRange - 0.5
+			vehicle.ad.selectionWayPoints = self:getSelectionWayPoints(vehicle)
+		elseif button == 5 and isUp and vehicle.ad.selectionRange < AutoDrive.drawDistance / 2 then
+			AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent increment")
+			-- increment range
+			vehicle.ad.selectionActive = true
+			vehicle.ad.selectionRange = vehicle.ad.selectionRange + 0.5
+			vehicle.ad.selectionWayPoints = self:getSelectionWayPoints(vehicle)
+		elseif vehicle.ad.selectionActive then
+			-- activated again
+			vehicle.ad.selectionWayPoints = self:getSelectionWayPoints(vehicle)
+		end
+		if button == 1 and isUp and vehicle.ad.selectionActive then
+			-- delete selected wayPoints
+			AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent delete selection")
+			ADGraphManager:deleteWayPointsInSelection(vehicle)
+			vehicle:resetWayPointsDistance()
+			vehicle.ad.selectedNodeId = nil
+		end
+	else
+		-- clear selection wayPoints
+		if vehicle.ad.selectionWayPoints and #vehicle.ad.selectionWayPoints > 0 then
+			for _, wayPointId in pairs(vehicle.ad.selectionWayPoints) do
+				local wayPoint = ADGraphManager:getWayPointById(wayPointId)
+				wayPoint.isSelected = false
+			end
+			vehicle.ad.selectionWayPoints = {}
+		end
+	end
+end
+
+function AutoDriveHud:mouseEventResetSelectedNode(vehicle)
+    if
+        not AutoDrive.leftLSHIFTmodifierKeyPressed
+        and not AutoDrive.leftCTRLmodifierKeyPressed
+        and not AutoDrive.leftALTmodifierKeyPressed
+        and not AutoDrive.rightSHIFTmodifierKeyPressed
+        and vehicle.ad.newcreated ~= nil 
+        and vehicle.ad.selectedNodeId == vehicle.ad.newcreated
+        then
+        -- if LCTRL is not pressed - no auto-connect to previous created new point, disable selected point
+        AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent selectedNodeId = nil")
+        vehicle.ad.selectedNodeId = nil
+        vehicle.ad.newcreated = nil
+    end
+end
+
+function AutoDriveHud:mouseEventFindHoveredNode(vehicle)
+    -- try to get a waypoint in mouse range
+    for _, point in pairs(vehicle:getWayPointsInRange(0, AutoDrive.drawDistance)) do
+        if AutoDrive.mouseIsAtPos(point, 0.01) then
+            vehicle.ad.hoveredNodeId = point.id
+            return
+        end
+    end
+end
+
+function AutoDriveHud:mouseEventCreateSplineInterpolation(vehicle)
+    if vehicle.ad.selectedNodeId ~= nil and vehicle.ad.selectedNodeId ~= vehicle.ad.hoveredNodeId then
+        AutoDrive:createSplineInterpolationBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId))
+    end
+end
+
+function AutoDriveHud:mouseEventConnectWaypoints(vehicle, connectDual)
+    if vehicle.ad.selectedNodeId ~= vehicle.ad.hoveredNodeId then
+        local reverseDirection = AutoDrive.rightSHIFTmodifierKeyPressed
+
+        if not table.contains(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId).out, vehicle.ad.hoveredNodeId) then
+            -- connect selected point with hovered point
+
+            if AutoDrive.splineInterpolation ~= nil and AutoDrive.splineInterpolation.valid and AutoDrive.splineInterpolation.waypoints ~= nil and #AutoDrive.splineInterpolation.waypoints > 2 then
+                local waypoints = {}
+                local lastHeight = ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId).y
+                for wpId, wp in pairs(AutoDrive.splineInterpolation.waypoints) do
+                    if wpId ~= 1 and wpId < (#AutoDrive.splineInterpolation.waypoints - 1) then
+                        if math.abs(wp.y - lastHeight) > 1 then -- prevent point dropping into the ground in case of bridges etc
+                            wp.y = lastHeight
+                        end
+                        table.insert(waypoints, {x=wp.x, y=wp.y, z=wp.z})
+                        lastHeight = wp.y
+                    end
+                end
+
+                ADGraphManager:createSplineConnection(vehicle.ad.selectedNodeId, waypoints, vehicle.ad.hoveredNodeId, connectDual)
+            else
+                AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 1 vehicle.ad.selectedNodeId %d vehicle.ad.hoveredNodeId %d", vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
+                ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId), reverseDirection, connectDual)
+            end
+
+            AutoDrive.splineInterpolationUserCurvature = nil
+        else
+            AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 1 vehicle.ad.selectedNodeId %d vehicle.ad.hoveredNodeId %d", vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
+            ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId), reverseDirection, connectDual)
+        end
+    end    
+    AutoDrive.playSample(AutoDrive.selectedWayPointSample, 0.75)
+    
+    -- unselect point
+    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent unselect point selectedNodeId = nil")
+    vehicle.ad.selectedNodeId = nil
+    return true
+end
+
+function AutoDriveHud:mouseEventSelectWaypoint(vehicle)
+    -- select point
+    -- no selectedNodeId: hoveredNodeId is now selectedNodeId
+    vehicle.ad.selectedNodeId = vehicle.ad.hoveredNodeId
+    AutoDrive.splineInterpolationUserCurvature = nil
+    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent select point selectedNodeId %d", vehicle.ad.selectedNodeId)
+    
+    AutoDrive.playSample(AutoDrive.selectedWayPointSample, 0.75)
+
+    -- color assignment goes in here
+    if AutoDrive.getSetting("colorAssignmentMode") and g_server ~= nil and g_client ~= nil and g_dedicatedServer == nil then
+        local colorPoint = ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId)
+        if colorPoint ~= nil and colorPoint.colors ~= nil then
+            AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent point.colors %.3f %.3f %.3f", colorPoint.colors[1], colorPoint.colors[2], colorPoint.colors[3])
+            vehicle.ad.selectedColorNodeId = vehicle.ad.selectedNodeId
+            vehicle.ad.selectedNodeId = nil
+            -- only allowed in single player game
+            ADInputManager:input_openColorSettings()
+        end
+    end
+end
+
+function AutoDriveHud:mouseEventSetupAutoConnection(vehicle, isUp, button)
+    -- if LCTRL is pressed, you can select a waypoint so that when you will create a new one they will be connected (auto connection to existing waypoint)
+    if 
+        button == 1
+        and isUp
+        and not AutoDrive.leftLSHIFTmodifierKeyPressed
+        and AutoDrive.leftCTRLmodifierKeyPressed
+        and not AutoDrive.leftALTmodifierKeyPressed
+        and not AutoDrive.rightSHIFTmodifierKeyPressed
+        and vehicle.ad.selectedNodeId == nil
+        and vehicle.ad.hoveredNodeId ~= nil
+        then
+        vehicle.ad.newcreated = vehicle.ad.hoveredNodeId
+        vehicle.ad.selectedNodeId = vehicle.ad.newcreated
+        AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent auto connection 1 selectedNodeId %d", vehicle.ad.selectedNodeId)
+    end
+end
+
+function AutoDriveHud:mouseEventSelectOrConnectWaypoint(vehicle, isUp, button)
+    -- returns adjustedPaths
+
+    local connectOneWay = not AutoDrive.leftLSHIFTmodifierKeyPressed and not AutoDrive.leftCTRLmodifierKeyPressed and not AutoDrive.leftALTmodifierKeyPressed
+    local connectDual = not AutoDrive.leftLSHIFTmodifierKeyPressed and AutoDrive.leftCTRLmodifierKeyPressed and AutoDrive.leftALTmodifierKeyPressed
+    if button == 1 and isUp and (connectOneWay or connectDual)
+        then
+        -- left mouse button to select point / connect to already selected point
+        if vehicle.ad.selectedNodeId ~= nil then
+            -- point selected - connect
+            return self:mouseEventConnectWaypoints(vehicle, connectDual)
+        else
+            -- select point
+            self:mouseEventSelectWaypoint(vehicle)
+        end
+    end
+    return false
+end
+
+function AutoDriveHud:mouseEventStartMovingNode(vehicle, isDown, button)
+    if
+        (button == 2 or button == 3)
+        and isDown
+        and not AutoDrive.leftLSHIFTmodifierKeyPressed
+        and not AutoDrive.leftCTRLmodifierKeyPressed
+        and not AutoDrive.leftALTmodifierKeyPressed
+        and not AutoDrive.rightSHIFTmodifierKeyPressed
+        then
+        -- middle or right mouse button to move points - waypoint at mouse position selected to move
+        if vehicle.ad.nodeToMoveId == nil then
+            vehicle.ad.nodeToMoveId = vehicle.ad.hoveredNodeId
+        end
+    end
+end
+
+function AutoDriveHud:mouseEventMoveNode(vehicle)
+    if vehicle.ad.nodeToMoveId ~= nil then
+        -- move point at mouse position
+        AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent moveNodeToMousePos nodeToMoveId %d", vehicle.ad.nodeToMoveId)
+        AutoDrive.moveNodeToMousePos(vehicle.ad.nodeToMoveId)
+    end
+end
+
+function AutoDriveHud:mouseEventFinishMovingNode(vehicle, isUp, button)
+    if
+        (button == 2 or button == 3)
+        and isUp
+        -- leftLSHIFT needed to be checked in changeWayPointPosition
+        and not AutoDrive.leftCTRLmodifierKeyPressed
+        and not AutoDrive.leftALTmodifierKeyPressed 
+        and not AutoDrive.rightSHIFTmodifierKeyPressed
+        then
+        if vehicle.ad.nodeToMoveId ~= nil then
+            -- middle or right mouse button to move points - end of move -> change waypoint coordinates now
+            ADGraphManager:changeWayPointPosition(vehicle.ad.nodeToMoveId)
+            vehicle.ad.nodeToMoveId = nil
+        end
+    end
+end
+
+function AutoDriveHud:mouseEventToggleWaypointPriority(vehicle, isUp, button, adjustedPaths)
+    -- if LSHIFT is pressed, selecting a waypoint will toggle its priority
+    if
+        button == 1
+        and isUp
+        and AutoDrive.leftLSHIFTmodifierKeyPressed
+        and not AutoDrive.leftCTRLmodifierKeyPressed
+        and not AutoDrive.leftALTmodifierKeyPressed
+        and not AutoDrive.rightSHIFTmodifierKeyPressed
+        and vehicle.ad.hoveredNodeId ~= nil
+        and vehicle.ad.selectedNodeId == nil
+        and not adjustedPaths
+        then
+        ADGraphManager:toggleWayPointAsSubPrio(vehicle.ad.hoveredNodeId)
+        AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleWayPointAsSubPrio 2 hoveredNodeId %d", vehicle.ad.hoveredNodeId)
+    end
+end
+
+function AutoDriveHud:mouseEventCreateWaypoint(vehicle, isUp, button)
+    if
+        vehicle.ad.nodeToMoveId == nil
+        and vehicle.ad.hoveredNodeId == nil
+        and button == 1
+        and isUp
+        -- and not AutoDrive.leftLSHIFTmodifierKeyPressed -- sub-priority
+        and AutoDrive.leftCTRLmodifierKeyPressed
+        -- and not AutoDrive.leftALTmodifierKeyPressed  -- dual connection
+        -- and not AutoDrive.rightSHIFTmodifierKeyPressed -- reverse
+        then
+        local reverseDirection = AutoDrive.rightSHIFTmodifierKeyPressed
+        local subPrio = AutoDrive.leftLSHIFTmodifierKeyPressed and not reverseDirection
+        local dualConnection = AutoDrive.leftALTmodifierKeyPressed and not reverseDirection
+            
+        --For rough depth assertion, we use the closest nodes location as this is roughly in the screen's center
+        local closest = vehicle:getClosestWayPoint()
+        closest = ADGraphManager:getWayPointById(closest)
+        if closest ~= nil then
+            local _, _, depth = project(closest.x, closest.y, closest.z)
+
+            local x, y, z = unProject(g_lastMousePosX, g_lastMousePosY, depth)
+            -- And just to correct for slope changes, we now set the height to the terrain height
+            y = AutoDrive:getTerrainHeightAtWorldPos(x, z)
+
+            local screenX, screenY, depthNew = project(x, y + AutoDrive.drawHeight + AutoDrive.getSetting("lineHeight"), z)
+
+            local maxLoops = 1000
+            local minDistance = MathUtil.vector2Length(g_lastMousePosX - screenX, g_lastMousePosY - screenY)
+            local minX, minY, minZ = x, y, z
+            while minDistance > 0.002 and maxLoops > 0 do
+                maxLoops = maxLoops - 1
+                if screenY > g_lastMousePosY then
+                    depth = depth - 0.0001
+                else
+                    depth = depth + 0.0001
+                end
+
+                x, y, z = unProject(g_lastMousePosX, g_lastMousePosY, depth)
+                y = AutoDrive:getTerrainHeightAtWorldPos(x, z)
+
+                screenX, screenY, depthNew = project(x, y + AutoDrive.drawHeight + AutoDrive.getSetting("lineHeight"), z)
+
+                local distance = MathUtil.vector2Length(g_lastMousePosX - screenX, g_lastMousePosY - screenY)
+                if distance < minDistance then
+                    minX = x
+                    minY = y
+                    minZ = z
+                    minDistance = distance
+                end
+            end
+
+            if AutoDrive.getSetting("colorAssignmentMode") and g_server ~= nil and g_client ~= nil and g_dedicatedServer == nil then
+                -- only allowed in single player game to create the color selection
+                AutoDrive.createColorSelectionWayPoints(vehicle)
+            else
+                ADGraphManager:createWayPoint(minX, minY, minZ)
+            end
+            -- auto connect to previous created point not working proper in MP, so deactivated at all
+            if g_server ~= nil and g_client ~= nil then -- this will be true on dedi servers !!!
+                -- auto connect only working in single player properly !
+                local createdId = ADGraphManager:getWayPointsCount()
+                
+                if subPrio then
+                    ADGraphManager:toggleWayPointAsSubPrio(createdId)
+                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleWayPointAsSubPrio 3 createdId %d", createdId)
+                end
+
+                if vehicle.ad.newcreated ~= nil and vehicle.ad.selectedNodeId == vehicle.ad.newcreated then
+                    -- connect only if previous created point is selected and newcreated ~= nil
+                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 2 vehicle.ad.selectedNodeId %d to %d", vehicle.ad.selectedNodeId, createdId)
+                    ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(createdId), reverseDirection, dualConnection)
+                end
+                vehicle.ad.newcreated = createdId
+                vehicle.ad.selectedNodeId = vehicle.ad.newcreated
+                AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent auto connection 2 selectedNodeId %d", vehicle.ad.selectedNodeId)
+            end
+        end
+    end
+end
+
+function AutoDriveHud:mouseEventDeleteWaypoint(vehicle, isUp, button, adjustedPaths)
+    if
+        vehicle.ad.hoveredNodeId ~= nil
+        and vehicle.ad.nodeToMoveId == nil
+        and vehicle.ad.selectedNodeId == nil
+        and not adjustedPaths
+        and button == 1
+        and isUp
+        and not AutoDrive.leftLSHIFTmodifierKeyPressed
+        and not AutoDrive.leftCTRLmodifierKeyPressed
+        and AutoDrive.leftALTmodifierKeyPressed
+        and not AutoDrive.rightSHIFTmodifierKeyPressed
+        then
+        -- Left alt for deleting the currently hovered node
+        AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent removeWayPoint hoveredNodeId %d", vehicle.ad.hoveredNodeId)
+        ADGraphManager:removeWayPoint(vehicle.ad.hoveredNodeId)
+    end
+end
+
+function AutoDriveHud:mouseEvent(vehicle, posX, posY, isDown, isUp, button)
+	local mouseActiveForAutoDrive = (AutoDrive.isMouseActiveForHud() or AutoDrive.isMouseActiveForEditor()) and g_inputBinding:getShowMouseCursor()
 	if mouseActiveForAutoDrive then
 		local mouseEventHandled = false
-		local silent = false
-		if AutoDrive.splineInterpolation ~= nil then			
+		if AutoDrive.splineInterpolation ~= nil then
 			AutoDrive.splineInterpolation.valid = false
 		end
 		AutoDrive.mouseWheelActive = false
-        if self.hudElements ~= nil then
-            -- Start with highest layer value (last in array), and then iterate backwards.
-            for i = #self.hudElements, 1, -1 do
-                local element = self.hudElements[i]
-                local layer = element.layer
-                mouseEventHandled, silent = element:mouseEvent(vehicle, posX, posY, isDown, isUp, button, layer)
-                if mouseEventHandled then
-                    -- Maybe a PullDownList have been expanded/collapsed, so need to refresh layer sequence
-                    self:refreshHudElementsLayerSequence()
-                    if silent == nil or silent == false then
-                        AutoDrive.playSample(AutoDrive.mouseClickSample, 0.45)
-                    end
-                    break
-                end
-            end
+
+        if AutoDrive.isMouseActiveForHud() then
+    		mouseEventHandled = self:mouseEventOnHudElements(vehicle, posX, posY, isDown, isUp, button)
         end
-		if (not mouseEventHandled) and (AutoDrive.pullDownListExpanded > 0) and (button >= 1 and button <= 3 and isUp) then
-			AutoDrive.Hud:closeAllPullDownLists(vehicle)
-		end
 
-		if self.isMoving then
-			if (button == 1 and isUp) or (g_inGameMenu.isOpen and not AutoDrive.aiFrameOpen) then
-				self:stopMovingHud()
-			else
-				self:moveHud(posX, posY)
-			end
-			mouseEventHandled = true
-		end
-
-        if g_gui:getIsGuiVisible() then
-            -- do not allow waypoint manipulation if any GUI is open
+        if not AutoDrive.isMouseActiveForEditor() then
+            -- disable waypoint manipulation
             AutoDrive.resetMouseSelections(vehicle)
         end
 
         vehicle.ad.hoveredNodeId = nil
         vehicle.ad.sectionWayPoints = {}
-        vehicle.ad.selectionRange = vehicle.ad.selectionRange or 1	-- start with 1m range
+        
         local adjustedPaths = false
-        if (not mouseEventHandled) and AutoDrive.isInExtendedEditorMode() and not g_gui:getIsGuiVisible() then
-            if
-                not AutoDrive.leftLSHIFTmodifierKeyPressed
-                and not AutoDrive.leftCTRLmodifierKeyPressed
-                and AutoDrive.leftALTmodifierKeyPressed 
-                and not AutoDrive.rightSHIFTmodifierKeyPressed
-                and vehicle.ad.newcreated == nil
-                and vehicle.ad.selectedNodeId ~= nil
-                then
-                -- selected node and LALT pressed
-                AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent selection start")
-                AutoDrive.mouseWheelActive = true
-                if button == 4 and isUp and vehicle.ad.selectionRange > 1 then
-                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent decrement")
-                    -- decrement range
-                    vehicle.ad.selectionActive = true
-                    vehicle.ad.selectionRange = vehicle.ad.selectionRange - 0.5
-                    vehicle.ad.selectionWayPoints = self:getSelectionWayPoints(vehicle)
-                elseif button == 5 and isUp and vehicle.ad.selectionRange < AutoDrive.drawDistance / 2 then
-                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent increment")
-                    -- increment range
-                    vehicle.ad.selectionActive = true
-                    vehicle.ad.selectionRange = vehicle.ad.selectionRange + 0.5
-                    vehicle.ad.selectionWayPoints = self:getSelectionWayPoints(vehicle)
-                elseif vehicle.ad.selectionActive then
-                    -- activated again
-                    vehicle.ad.selectionWayPoints = self:getSelectionWayPoints(vehicle)
-                end
-                if button == 1 and isUp and vehicle.ad.selectionActive then
-                    -- delete selected wayPoints
-                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent delete selection")
-                    ADGraphManager:deleteWayPointsInSelection(vehicle)
-                    vehicle:resetWayPointsDistance()
-                    vehicle.ad.selectedNodeId = nil
-                end
-            else
-                -- clear selection wayPoints
-                if vehicle.ad.selectionWayPoints and #vehicle.ad.selectionWayPoints > 0 then
-                    for _, wayPointId in pairs(vehicle.ad.selectionWayPoints) do
-                        local wayPoint = ADGraphManager:getWayPointById(wayPointId)
-                        wayPoint.isSelected = false
-                    end
-                    vehicle.ad.selectionWayPoints = {}
-                end
-            end
+        if not mouseEventHandled and AutoDrive.isInExtendedEditorMode() then
+            self:mouseEventHandleSelection(vehicle, isUp, button)
+            self:mouseEventResetSelectedNode(vehicle)
+            self:mouseEventFindHoveredNode(vehicle)
+            self:mouseEventMoveNode(vehicle)
 
-            if
-                not AutoDrive.leftLSHIFTmodifierKeyPressed
-                and not AutoDrive.leftCTRLmodifierKeyPressed
-                and not AutoDrive.leftALTmodifierKeyPressed 
-                and not AutoDrive.rightSHIFTmodifierKeyPressed
-                and vehicle.ad.newcreated ~= nil and vehicle.ad.selectedNodeId == vehicle.ad.newcreated
-                then
-				-- if LCTRL is not pressed - no auto-connect to previous created new point, disable selected point
-				AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent selectedNodeId = nil")
-				vehicle.ad.selectedNodeId = nil
-				vehicle.ad.newcreated = nil
-			end
-
-			-- 1st or 2nd Editor Mode enabled
-			-- try to get a waypoint in mouse range
-			for _, point in pairs(vehicle:getWayPointsInRange(0, AutoDrive.drawDistance)) do
-				if AutoDrive.mouseIsAtPos(point, 0.01) then
-					vehicle.ad.hoveredNodeId = point.id
-					break
-				end
-			end
-			if vehicle.ad.nodeToMoveId ~= nil then
-				-- move point at mouse position
-				AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent moveNodeToMousePos nodeToMoveId %d", vehicle.ad.nodeToMoveId)
-				AutoDrive.moveNodeToMousePos(vehicle.ad.nodeToMoveId)
-			end
 			if vehicle.ad.hoveredNodeId ~= nil then
-				if vehicle.ad.selectedNodeId ~= nil and vehicle.ad.selectedNodeId ~= vehicle.ad.hoveredNodeId then
-					AutoDrive:createSplineInterpolationBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId))
-				end
-
-				-- waypoint at mouse position
-				local connectOneWay = not AutoDrive.leftLSHIFTmodifierKeyPressed and not AutoDrive.leftCTRLmodifierKeyPressed and not AutoDrive.leftALTmodifierKeyPressed
-				local connectDual = not AutoDrive.leftLSHIFTmodifierKeyPressed and AutoDrive.leftCTRLmodifierKeyPressed and AutoDrive.leftALTmodifierKeyPressed
-                if button == 1 and isUp and (connectOneWay or connectDual)
-                    then
-					-- left mouse button to select point / connect to already selected point
-					if vehicle.ad.selectedNodeId ~= nil then
-						if vehicle.ad.selectedNodeId ~= vehicle.ad.hoveredNodeId then
-							local reverseDirection = AutoDrive.rightSHIFTmodifierKeyPressed
-
-							if not table.contains(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId).out, vehicle.ad.hoveredNodeId) then
-								-- connect selected point with hovered point
-
-								if AutoDrive.splineInterpolation ~= nil and AutoDrive.splineInterpolation.valid and AutoDrive.splineInterpolation.waypoints ~= nil and #AutoDrive.splineInterpolation.waypoints > 2 then								
-									local waypoints = {}
-									local lastHeight = ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId).y
-									for wpId, wp in pairs(AutoDrive.splineInterpolation.waypoints) do
-										if wpId ~= 1 and wpId < (#AutoDrive.splineInterpolation.waypoints - 1) then
-											if math.abs(wp.y - lastHeight) > 1 then -- prevent point dropping into the ground in case of bridges etc
-												wp.y = lastHeight
-											end
-											table.insert(waypoints, {x=wp.x, y=wp.y, z=wp.z})
-											lastHeight = wp.y
-										end
-									end
-
-									ADGraphManager:createSplineConnection(vehicle.ad.selectedNodeId, waypoints, vehicle.ad.hoveredNodeId, connectDual)
-								else
-									AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 1 vehicle.ad.selectedNodeId %d vehicle.ad.hoveredNodeId %d", vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
-									ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId), reverseDirection, connectDual)
-								end
-
-								AutoDrive.splineInterpolationUserCurvature = nil
-							else
-								AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 1 vehicle.ad.selectedNodeId %d vehicle.ad.hoveredNodeId %d", vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
-								ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId), reverseDirection, connectDual)
-							end
-						end
-							
-						AutoDrive.playSample(AutoDrive.selectedWayPointSample, 0.75)
-						-- unselect point
-						AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent unselect point selectedNodeId = nil")
-						vehicle.ad.selectedNodeId = nil
-						adjustedPaths = true	
-					else
-						-- select point
-						-- no selectedNodeId: hoveredNodeId is now selectedNodeId
-                        vehicle.ad.selectedNodeId = vehicle.ad.hoveredNodeId
-                        AutoDrive.splineInterpolationUserCurvature = nil
-                        AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent select point selectedNodeId %d", vehicle.ad.selectedNodeId)
-						
-						AutoDrive.playSample(AutoDrive.selectedWayPointSample, 0.75)
-
-                        -- color assignment goes in here
-                        if AutoDrive.getSetting("colorAssignmentMode") and g_server ~= nil and g_client ~= nil and g_dedicatedServer == nil then
-                            local colorPoint = ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId)
-                            if colorPoint ~= nil and colorPoint.colors ~= nil then
-                                AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent point.colors %.3f %.3f %.3f", colorPoint.colors[1], colorPoint.colors[2], colorPoint.colors[3])
-                                vehicle.ad.selectedColorNodeId = vehicle.ad.selectedNodeId
-                                vehicle.ad.selectedNodeId = nil
-                                -- only allowed in single player game
-                                ADInputManager:input_openColorSettings()
-                            end
-                        end
-					end
-				end
-
-				if (button == 2 or button == 3) and isDown 
-                    and not AutoDrive.leftLSHIFTmodifierKeyPressed
-                    and not AutoDrive.leftCTRLmodifierKeyPressed
-                    and not AutoDrive.leftALTmodifierKeyPressed 
-                    and not AutoDrive.rightSHIFTmodifierKeyPressed
-                    then
-					-- middle or right mouse button to move points - waypoint at mouse position selected to move
-					if vehicle.ad.nodeToMoveId == nil then
-						vehicle.ad.nodeToMoveId = vehicle.ad.hoveredNodeId
-					end
-				end
+                -- mouse is hovering over a waypoint
+                self:mouseEventCreateSplineInterpolation(vehicle)
+                adjustedPaths = self:mouseEventSelectOrConnectWaypoint(vehicle, isUp, button)
+                self:mouseEventStartMovingNode(vehicle, isDown, button)
 			end
-
-			if (button == 2 or button == 3) and isUp 
-                -- and not AutoDrive.leftLSHIFTmodifierKeyPressed -- leftLSHIFT needed to be checked in changeWayPointPosition
-                and not AutoDrive.leftCTRLmodifierKeyPressed
-                and not AutoDrive.leftALTmodifierKeyPressed 
-                and not AutoDrive.rightSHIFTmodifierKeyPressed
-                then
-				if vehicle.ad.nodeToMoveId ~= nil then
-					-- middle or right mouse button to move points - end of move -> change waypoint coordinates now
-					ADGraphManager:changeWayPointPosition(vehicle.ad.nodeToMoveId)
-					vehicle.ad.nodeToMoveId = nil
-				end
-			end
-
-			-- if LCTRL is pressed, you can select a waypoint so that when you will create a new one they will be connected (auto connection to existing waypoint)
-            if button == 1 and isUp
-                and not AutoDrive.leftLSHIFTmodifierKeyPressed
-                and AutoDrive.leftCTRLmodifierKeyPressed
-                and not AutoDrive.leftALTmodifierKeyPressed
-                and not AutoDrive.rightSHIFTmodifierKeyPressed
-                and vehicle.ad.selectedNodeId == nil
-                and vehicle.ad.hoveredNodeId ~= nil
-                then
-				vehicle.ad.newcreated = vehicle.ad.hoveredNodeId
-				vehicle.ad.selectedNodeId = vehicle.ad.newcreated
-				AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent auto connection 1 selectedNodeId %d", vehicle.ad.selectedNodeId)
-			end
-
-			-- if LSHIFT is pressed, selecting a waypoint will toggle its priority
-            if button == 1 and isUp
-                and AutoDrive.leftLSHIFTmodifierKeyPressed
-                and not AutoDrive.leftCTRLmodifierKeyPressed
-                and not AutoDrive.leftALTmodifierKeyPressed
-                and not AutoDrive.rightSHIFTmodifierKeyPressed
-                and vehicle.ad.hoveredNodeId ~= nil
-                and vehicle.ad.selectedNodeId == nil
-                and not adjustedPaths
-                then
-				ADGraphManager:toggleWayPointAsSubPrio(vehicle.ad.hoveredNodeId)
-				AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleWayPointAsSubPrio 2 hoveredNodeId %d", vehicle.ad.hoveredNodeId)
-			end
-
-			--If no node is hovered / moved - create new node
-			if vehicle.ad.nodeToMoveId == nil and vehicle.ad.hoveredNodeId == nil then
-                if button == 1 and isUp
-                    -- and not AutoDrive.leftLSHIFTmodifierKeyPressed -- sub-priority
-                    and AutoDrive.leftCTRLmodifierKeyPressed
-                    -- and not AutoDrive.leftALTmodifierKeyPressed  -- dual connection
-                    -- and not AutoDrive.rightSHIFTmodifierKeyPressed -- reverse
-                    then
-					local reverseDirection = AutoDrive.rightSHIFTmodifierKeyPressed
-					local subPrio = AutoDrive.leftLSHIFTmodifierKeyPressed and not reverseDirection
-					local dualConnection = AutoDrive.leftALTmodifierKeyPressed and not reverseDirection
-
-						
-					--For rough depth assertion, we use the closest nodes location as this is roughly in the screen's center
-					local closest = vehicle:getClosestWayPoint()
-					closest = ADGraphManager:getWayPointById(closest)
-					if closest ~= nil then
-						local _, _, depth = project(closest.x, closest.y, closest.z)
-
-						local x, y, z = unProject(g_lastMousePosX, g_lastMousePosY, depth)
-						-- And just to correct for slope changes, we now set the height to the terrain height
-						y = AutoDrive:getTerrainHeightAtWorldPos(x, z)
-
-						local screenX, screenY, depthNew = project(x, y + AutoDrive.drawHeight + AutoDrive.getSetting("lineHeight"), z)
-
-						local maxLoops = 1000
-						local minDistance = MathUtil.vector2Length(g_lastMousePosX - screenX, g_lastMousePosY - screenY)
-						local minX, minY, minZ = x, y, z
-						while minDistance > 0.002 and maxLoops > 0 do
-							maxLoops = maxLoops - 1
-							if screenY > g_lastMousePosY then
-								depth = depth - 0.0001
-							else
-								depth = depth + 0.0001
-							end
-
-							x, y, z = unProject(g_lastMousePosX, g_lastMousePosY, depth)
-							y = AutoDrive:getTerrainHeightAtWorldPos(x, z)
-
-							screenX, screenY, depthNew = project(x, y + AutoDrive.drawHeight + AutoDrive.getSetting("lineHeight"), z)
-
-							local distance = MathUtil.vector2Length(g_lastMousePosX - screenX, g_lastMousePosY - screenY)
-							if distance < minDistance then
-								minX = x
-								minY = y
-								minZ = z
-								minDistance = distance
-							end
-						end
-
-                        if AutoDrive.getSetting("colorAssignmentMode") and g_server ~= nil and g_client ~= nil and g_dedicatedServer == nil then
-                            -- only allowed in single player game to create the color selection
-                            AutoDrive.createColorSelectionWayPoints(vehicle)
-                        else
-                            ADGraphManager:createWayPoint(minX, minY, minZ)
-                        end
-						-- auto connect to previous created point not working proper in MP, so deactivated at all
-						if g_server ~= nil and g_client ~= nil then -- this will be true on dedi servers !!!
-							-- auto connect only working in single player properly !
-							local createdId = ADGraphManager:getWayPointsCount()
-							
-							if subPrio then
-								ADGraphManager:toggleWayPointAsSubPrio(createdId)
-								AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleWayPointAsSubPrio 3 createdId %d", createdId)
-							end
-
-							if vehicle.ad.newcreated ~= nil and vehicle.ad.selectedNodeId == vehicle.ad.newcreated then
-								-- connect only if previous created point is selected and newcreated ~= nil
-								AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 2 vehicle.ad.selectedNodeId %d to %d", vehicle.ad.selectedNodeId, createdId)
-								ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(createdId), reverseDirection, dualConnection)
-							end
-							vehicle.ad.newcreated = createdId
-							vehicle.ad.selectedNodeId = vehicle.ad.newcreated
-							AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent auto connection 2 selectedNodeId %d", vehicle.ad.selectedNodeId)
-						end
-					end
-				end
-			end
-
-			if vehicle.ad.hoveredNodeId ~= nil and vehicle.ad.nodeToMoveId == nil and vehicle.ad.selectedNodeId == nil and not adjustedPaths then
-                if button == 1 and isUp
-                    and not AutoDrive.leftLSHIFTmodifierKeyPressed
-                    and not AutoDrive.leftCTRLmodifierKeyPressed
-                    and AutoDrive.leftALTmodifierKeyPressed
-                    and not AutoDrive.rightSHIFTmodifierKeyPressed
-                    then
-					-- Left alt for deleting the currently hovered node
-					AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent removeWayPoint hoveredNodeId %d", vehicle.ad.hoveredNodeId)
-					ADGraphManager:removeWayPoint(vehicle.ad.hoveredNodeId)
-				end
-			end
-
-           AutoDrive.handleWayPointSection(vehicle, button, isUp)
+            self:mouseEventFinishMovingNode(vehicle, isUp, button)
+            self:mouseEventSetupAutoConnection(vehicle, isUp, button)
+            self:mouseEventToggleWaypointPriority(vehicle, isUp, button, adjustedPaths)
+            self:mouseEventCreateWaypoint(vehicle, isUp, button)
+            self:mouseEventDeleteWaypoint(vehicle, isUp, button, adjustedPaths)
+            AutoDrive.handleWayPointSection(vehicle, button, isUp)
 		else
 			AutoDrive.resetMouseSelections(vehicle)
 		end
@@ -794,7 +865,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                 if wayPointsDirection > 3 then
                     wayPointsDirection = 1
                 end
-                ADGraphManager:setConnectionBetweenWayPointsInSection(vehicle, wayPointsDirection)
+                ADGraphManager:setConnectionBetweenWayPointsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId, wayPointsDirection)
                 vehicle.ad.selectedNodeId = nil -- unselect the current node after action done
             end
 
@@ -812,7 +883,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                     else
                         flags = AutoDrive.FLAG_SUBPRIO
                     end
-                    ADGraphManager:setWayPointsFlagsInSection(vehicle, flags)
+                    ADGraphManager:setWayPointsFlagsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId, flags)
                     vehicle.ad.selectedNodeId = nil -- unselect the current node after action done
                 end
             end
@@ -823,7 +894,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                 and AutoDrive.leftALTmodifierKeyPressed
                 and not AutoDrive.rightSHIFTmodifierKeyPressed
                 then
-                ADGraphManager:deleteWayPointsInSection(vehicle)
+                ADGraphManager:deleteWayPointsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
                 vehicle.ad.selectedNodeId = nil -- unselect the current node to prevent further deletions nearby by mouse clicks
             end
         end
@@ -951,7 +1022,7 @@ function AutoDrive:ingameMapElementMouseEvent(superFunc, posX, posY, isDown, isU
         local hotspot = g_currentMission.hud.ingameMap.selectedHotspot
         if hotspot ~= nil and hotspot.isADMarker then
             local targetVehicle = AutoDrive.getADFocusVehicle()
-            if targetVehicle ~= nil and AutoDrive.getSetting("showMarkersOnMap") and AutoDrive.getSetting("switchToMarkersOnMap") then
+            if targetVehicle ~= nil and AutoDrive.showMarkersOnMainMenuMap() and AutoDrive.getSetting("switchToMarkersOnMap") then
                 AutoDriveHudInputEventEvent:sendFirstMarkerEvent(targetVehicle, hotspot.markerID)
                 return
             end
@@ -964,7 +1035,7 @@ function AutoDrive:ingameMapElementMouseEvent(superFunc, posX, posY, isDown, isU
                 local hotspotPosX, hotspotPosY =  hotspot.lastScreenPositionX, hotspot.lastScreenPositionY
                 if hotspotPosX and GuiUtils.checkOverlayOverlap(posX, posY, hotspotPosX, hotspotPosY, hotspot:getWidth(), hotspot:getHeight(), nil) then
                     local targetVehicle = AutoDrive.getADFocusVehicle()
-                    if targetVehicle ~= nil and AutoDrive.getSetting("showMarkersOnMap") and AutoDrive.getSetting("switchToMarkersOnMap") then
+                    if targetVehicle ~= nil and AutoDrive.showMarkersOnMainMenuMap() and AutoDrive.getSetting("switchToMarkersOnMap") then
                         AutoDriveHudInputEventEvent:sendSecondMarkerEvent(targetVehicle, hotspot.markerID)
                     end
                     break
@@ -974,14 +1045,6 @@ function AutoDrive:ingameMapElementMouseEvent(superFunc, posX, posY, isDown, isU
     end
 
 	return eventUsed
-end
-
-function AutoDrive:MapHotspot_getIsVisible(superFunc)
-	local superReturn = true
-	if superFunc ~= nil then
-		superReturn = superFunc(self)
-	end
-	return superReturn and ((not self.isADMarker) or AutoDrive.getSetting("showMarkersOnMap"))
 end
 
 function AutoDrive.getPlayerHotspot()
@@ -1107,7 +1170,15 @@ function AutoDrive.getPlaceableHotspot()
 	
 		return mapHotspot
 	end
-	
+
+function AutoDrive.showMarkersOnMainMenuMap()
+	return bit32.band(AutoDrive.getSetting("showMarkersOnMap"), 0x01) > 0
+end
+
+function AutoDrive.showMarkersOnIngameMap()
+	return bit32.band(AutoDrive.getSetting("showMarkersOnMap"), 0x02) > 0
+end
+
 function AutoDrive.updateDestinationsMapHotspots()
     AutoDrive.debugPrint(nil, AutoDrive.DC_DEVINFO, "AutoDrive.updateDestinationsMapHotspots()")
 
@@ -1124,26 +1195,10 @@ function AutoDrive.updateDestinationsMapHotspots()
 
 	-- Updating and adding hotspots
     for index, marker in ipairs(ADGraphManager:getMapMarkers()) do
-        local mapHotspot = PlaceableHotspot.new()
-
-        mapHotspot.width, mapHotspot.height = getNormalizedScreenValues(40, 40)
-        mapHotspot.isVisible = true
-        mapHotspot.icon =  g_overlayManager:createOverlay("ad_gui.marker", 0, 0, mapHotspot.width, mapHotspot.height)
-		mapHotspot.iconSmall = g_overlayManager:createOverlay("ad_gui.marker", 0, 0, mapHotspot.width, mapHotspot.height)
-
-		
-        if marker.isADDebug == true then
-            -- map hotspot debug
-            mapHotspot.isADDebug = true
-			mapHotspot.icon:setSliceId("ad_gui.debug_marker")
-        end
-
-        mapHotspot.isADMarker = true
-        mapHotspot.markerID = index
-
 		local wp = ADGraphManager:getWayPointById(marker.id)
         if wp ~= nil then
-            g_currentMission.hud:addMapHotspot(mapHotspot)
+			local mapHotspot = AutoDriveHotspot.new(index, marker)
+			g_currentMission.hud:addMapHotspot(mapHotspot)
             table.insert(AutoDrive.mapHotspotsBuffer, mapHotspot)
 
             mapHotspot:setWorldPosition(wp.x, wp.z)

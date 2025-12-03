@@ -1,5 +1,5 @@
 AutoDrive = {}
-AutoDrive.version = "3.0.0.6"
+AutoDrive.version = "3.0.0.8"
 
 AutoDrive.directory = g_currentModDirectory
 
@@ -84,6 +84,19 @@ AutoDrive.DIMENSION_ADDITION = 0.2
 AutoDrive.USER_PLAYER = 1
 AutoDrive.USER_GIANTS = 2
 AutoDrive.USER_CP = 3
+
+AutoDrive.CHASEPOS_UNKNOWN = 0
+AutoDrive.CHASEPOS_AUTO = 5
+AutoDrive.CHASEPOS_LEFT = 1
+AutoDrive.CHASEPOS_RIGHT = -1
+AutoDrive.CHASEPOS_REAR = 3
+AutoDrive.CHASEPOS_FRONT = 4
+
+AutoDrive.UAL_FILLTYPE_ALL = 1 -- value for set all materials in UniversalAutoload!
+
+AutoDrive.MAX_REFUEL_TRIGGER_DISTANCE = 15
+AutoDrive.REFUEL_LEVEL = 0.15
+AutoDrive.BUNKERSILO_CONNECTED_DISTANCE = 10
 
 AutoDrive.colors = {
 	ad_color_singleConnection = { 0, 1, 0, 1 },
@@ -224,6 +237,7 @@ function AutoDrive:loadMap(name)
 	LoadTrigger.onFillTypeSelection = Utils.appendedFunction(LoadTrigger.onFillTypeSelection, AutoDrive.onFillTypeSelection)
 
 	VehicleCamera.zoomSmoothly = Utils.overwrittenFunction(VehicleCamera.zoomSmoothly, AutoDrive.zoomSmoothly)
+	GuiTopDownCamera.onZoom = Utils.overwrittenFunction(GuiTopDownCamera.onZoom, AutoDrive.onZoomTopDownCamera)
 
 	LoadTrigger.load = Utils.overwrittenFunction(LoadTrigger.load, ADTriggerManager.loadTriggerLoad)
 
@@ -231,11 +245,13 @@ function AutoDrive:loadMap(name)
 
 	Placeable.onBuy = Utils.appendedFunction(Placeable.onBuy, ADTriggerManager.onPlaceableBuy)
 
-	MapHotspot.getIsVisible = Utils.overwrittenFunction(MapHotspot.getIsVisible, AutoDrive.MapHotspot_getIsVisible)
+	Placeable.onSell = Utils.appendedFunction(Placeable.onSell, ADTriggerManager.onPlaceableSell)
 
 	IngameMapElement.mouseEvent = Utils.overwrittenFunction(IngameMapElement.mouseEvent, AutoDrive.ingameMapElementMouseEvent)
 
 	FSBaseMission.removeVehicle = Utils.prependedFunction(FSBaseMission.removeVehicle, AutoDrive.preRemoveVehicle)
+
+	ConstructionScreen.draw = Utils.appendedFunction(ConstructionScreen.draw, AutoDrive.constructionScreenDraw)
 
 	ADRoutesManager:load()
 
@@ -257,10 +273,7 @@ function AutoDrive:loadMap(name)
 
 	InGameMenuMapFrame.refreshContextInput = Utils.appendedFunction(InGameMenuMapFrame.refreshContextInput, AutoDrive.refreshContextInputMapFrame)
 	BaseMission.draw = Utils.appendedFunction(BaseMission.draw, AutoDrive.drawBaseMission)
-	PlaceableHotspot.getCategory = Utils.overwrittenFunction(PlaceableHotspot.getCategory, AutoDrive.PlaceableHotspotGetCategory)
 	InGameMenuMapFrame.setMapSelectionItem = Utils.overwrittenFunction(InGameMenuMapFrame.setMapSelectionItem, AutoDrive.InGameMenuMapFrameSetMapSelectionItem)
-	MapHotspot.getRenderLast = Utils.overwrittenFunction(MapHotspot.getRenderLast, AutoDrive.MapHotspotGetRenderLast)
-
 end
 
 function AutoDrive:refreshContextInputMapFrame()
@@ -318,16 +331,9 @@ function AutoDrive:drawBaseMission()
 	end
 end
 
-function AutoDrive:PlaceableHotspotGetCategory()
-	if self.isADMarker then
-		return MapHotspot.CATEGORY_STEERABLE --MapHotspot.CATEGORY_PLAYER
-	end
-	return PlaceableHotspot.CATEGORY_MAPPING[self.placeableType]
-end
-
 function AutoDrive:InGameMenuMapFrameSetMapSelectionItem(superFunc, hotspot)
 	if hotspot ~= nil and hotspot.isADMarker and AutoDrive.aiFrameOpen then
-		if AutoDrive.getSetting("showMarkersOnMap") and AutoDrive.getSetting("switchToMarkersOnMap") then
+		if AutoDrive.showMarkersOnMainMenuMap() and AutoDrive.getSetting("switchToMarkersOnMap") then
 			local vehicle = AutoDrive.getADFocusVehicle()
 			if vehicle ~= nil then
 				AutoDriveHudInputEventEvent:sendFirstMarkerEvent(vehicle, hotspot.markerID)
@@ -336,13 +342,6 @@ function AutoDrive:InGameMenuMapFrameSetMapSelectionItem(superFunc, hotspot)
 		end
 	end
 	return superFunc(self, hotspot)
-end
-
-function AutoDrive:MapHotspotGetRenderLast(superFunc)
-	if self.isADMarker then
-		return true
-	end
-	return superFunc(self)
 end
 
 function AutoDrive.drawRouteOnMap()
@@ -591,7 +590,7 @@ end
 
 function AutoDrive:mouseEvent(posX, posY, isDown, isUp, button)
 	local vehicle = AutoDrive.getADFocusVehicle()
-	local mouseActiveForAutoDrive = (not g_gui:getIsGuiVisible() or AutoDrive.aiFrameOpen) and (g_inputBinding:getShowMouseCursor() == true)
+	local mouseActiveForAutoDrive = (AutoDrive.isMouseActiveForHud() or AutoDrive.isMouseActiveForEditor()) and g_inputBinding:getShowMouseCursor()
 
 	if not mouseActiveForAutoDrive then
 		AutoDrive.lastButtonDown = nil
@@ -687,6 +686,11 @@ function AutoDrive:update(dt)
 		end
 	end
 
+	if AutoDrive.hideMouseCursorOnNextTick == true and not g_inGameMenu.isOpen then
+		AutoDrive.hideMouseCursorOnNextTick = nil
+		g_inputBinding:setShowMouseCursor(false)
+	end
+
 	if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_NETWORKINFO) then
 		if AutoDrive.debug.lastSentEvent ~= nil then
 			AutoDrive.renderTable(0.3, 0.9, 0.009, AutoDrive.debug.lastSentEvent)
@@ -718,6 +722,15 @@ end
 function AutoDrive:draw()
 	ADDrawingManager:draw()
 	ADMessagesManager:draw()
+end
+
+function AutoDrive:constructionScreenDraw()
+	local vehicle = AutoDrive.getControlledVehicle()
+	if vehicle ~= nil and vehicle.ad ~= nil then
+		AutoDrive.onDrawEditorMode(vehicle)
+		AutoDrive.onDrawPreviews(vehicle)
+		ADDrawingManager:draw()
+	end
 end
 
 function AutoDrive:preRemoveVehicle(vehicle)

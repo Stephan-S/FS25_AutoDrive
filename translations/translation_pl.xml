@@ -169,6 +169,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Jeżeli automatycznie wykryta szerokość łychy jest zbyt mała, można ją zwiększyć o tą wartość" />
 		<text name="gui_ad_preCallLevel"								text="Wezwij kierowcę przy" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Poziom napełnienia, przy którym przywoływany jest kierowca." />
+		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
+		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
 		<text name="gui_ad_none"										text="Żadne" />
 		<text name="gui_ad_onlyPickup"									text="Tylko odbiór" />
 		<text name="gui_ad_onlyDeliver"								text="Tylko dostarczanie" />
@@ -211,6 +213,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Jeśli automatycznie wykryta wysokość łychy jest nieprawidłowa. Wykorzystaj to do regulacji wysokości podłoża, na którym znajduje się cel." />
 		<text name="gui_ad_showMarkersOnMap"							text="Pokaż znaczniki" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Pokaż znaczniki/cele na mapie w grze" />
+		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
+		<text name="gui_ad_ingameMap"									text="Ingame map" />
+		<text name="gui_ad_both"										text="Both" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Przełącz na znaczniki" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Ustaw cel/cel rozładunku po kliknięciu na punktach na mapie" />
 		<text name="gui_ad_cornerSpeed"								text="Prędkość na zakręcie" />
@@ -245,6 +250,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Tak - rozładowujący spróbują zaplanować ścieżkę i dostosować jazdę do kombajnu skręcającego o 90°. / Nie - Rozładowujący będą cofać przed skrętem" />
 		<text name="gui_ad_ALUnload"									text="Auto Ładowanie: Pozycja rozładowywania" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Włącz/wyłącz automatyczne rozładowywanie, rozładowywanie na środku platformy, z lewej / z prawej strony pozycji rozładowczej pojazdu (pozycja zależy od konfiguracji pojazdu nie od AD!)" />
+		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Rozładowywanie wyłączone" />
 		<text name="gui_ad_AL_center"									text="Rozładuj na środku" />
 		<text name="gui_ad_AL_left"									text="Rozładuj z lewej" />
