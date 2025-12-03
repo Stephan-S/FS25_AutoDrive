@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
-<modDesc descVersion="103">
+<modDesc descVersion="105">
 	<author>AutoDrive Team</author>
 	<title>
 		<en>AutoDrive</en>
@@ -41,7 +41,7 @@ Changelog: Необходимые корректировки для FS25, нас
 ]]>
 		</zh>
 	</description>
-	<version>3.0.0.7.RC</version>
+	<version>3.0.0.8</version>
 	<multiplayer supported="true" />
 	<iconFilename>icon_AutoDrive.dds</iconFilename>
 	<extraSourceFiles>
