@@ -164,12 +164,21 @@ function LoadAtDestinationTask:update(dt)
                 self.vehicle.ad.specialDrivingModule:stopVehicle()
                 self.vehicle.ad.specialDrivingModule:update(dt)
             else
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger -> drivePathModule:update")
-                if self.isReverseTriggerReached then
+                if self.vehicle.ad.trailerModule:wasAtSuitableTrigger() and AutoDrive.checkForContinueOnEmptyLoadTrigger(self.vehicle) then
+                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger + wasAtSuitableTrigger + should continue -> finished")
                     self:finished()
-                else
-                    self.vehicle.ad.drivePathModule:update(dt)
+                    return
                 end
+                if self.isReverseTriggerReached then
+                    self.fillLevel, _, self.filledToUnload, self.fillFreeCapacity = AutoDrive.getAllFillLevels(self.trailers)
+                    if self.filledToUnload then
+                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger isReverseTriggerReached -> finished")
+                        self:finished()
+                        return
+                    end
+                end
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger -> drivePathModule:update")
+                self.vehicle.ad.drivePathModule:update(dt)
             end
         end
     end
