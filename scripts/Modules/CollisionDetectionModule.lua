@@ -47,7 +47,7 @@ function ADCollisionDetectionModule:detectObstacle()
 		end
 	end
 
-	if ((g_updateLoopIndex + self.vehicle.id) % AutoDrive.PERF_FRAMES == 0) then
+	if (g_updateLoopIndex % AutoDrive.PERF_FRAMES == 0) then
 		local excludedList = self.vehicle.ad.taskModule:getActiveTask():getExcludedVehiclesForCollisionCheck()
 
 		local box = self.vehicle.ad.sensors.frontSensorDynamicLong:getBoxShape()
@@ -66,7 +66,7 @@ end
 function ADCollisionDetectionModule:detectAdTrafficOnRoute()
 	local wayPoints, currentWayPoint = self.vehicle.ad.drivePathModule:getWayPoints()
 	if self.vehicle.ad.stateModule:isActive() and wayPoints ~= nil and self.vehicle.ad.drivePathModule:isOnRoadNetwork() then
-		if ((g_updateLoopIndex + self.vehicle.id) % AutoDrive.PERF_FRAMES == 0) then
+		if (g_updateLoopIndex % AutoDrive.PERF_FRAMES == 0) then
 			self.trafficVehicle = nil
 			local idToCheck = 3
 			local alreadyOnDualRoute = false
@@ -160,7 +160,7 @@ end
 function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
 	local wayPoints, currentWayPoint = self.vehicle.ad.drivePathModule:getWayPoints()
 	if self.vehicle.ad.stateModule:isActive() and wayPoints ~= nil and self.vehicle.ad.drivePathModule:isOnRoadNetwork() then
-		if ((g_updateLoopIndex + self.vehicle.id) % AutoDrive.PERF_FRAMES == 0) then
+		if (g_updateLoopIndex % AutoDrive.PERF_FRAMES == 0) then
 			self.lastReverseCheck = false
 			local idToCheck = 1
 
