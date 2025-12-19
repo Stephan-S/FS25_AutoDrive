@@ -864,7 +864,7 @@ function AutoDrive:onDrawEditorMode()
             if wp then
                 if MathUtil.vector2Length(wp.x - x, wp.z - z) < maxDistance then
                     local scale = AutoDrive.getSetting("scaleMarkerText") or 1
-                    Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013) * scale, 0)
+                    Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013) * scale, 0, unpack(AutoDrive.currentColors.ad_color_markerText))
                     DrawingManager:addMarkerTask(wp.x, wp.y + 0.45, wp.z)
                 end
             end

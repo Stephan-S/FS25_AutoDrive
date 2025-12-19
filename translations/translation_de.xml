@@ -342,10 +342,13 @@
 		<text name="ad_color_previewOk"								text="19 Kurve Vorschauline OK, kollisionsfrei" />
 		<text name="ad_color_previewNotOk"								text="20 Kurve Vorschauline hat Kollision" />
 		<text name="ad_color_textInputBackground"						text="21 Hintergrund Eingabe von Texten, Zielen etc." />
-		<text name="ad_color_hudTextDefault"							text="22 HUD text, normal items" />
-		<text name="ad_color_hudTextHover"								text="23 HUD text, hovering on normal items" />
-		<text name="ad_color_hudTextSpecial"							text="24 HUD text, active items and folders" />
-		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD text, hovering on active items and folders" />
+		<text name="ad_color_hudTextDefault"							text="22 HUD: Text-Farbe der Einträge" />
+		<text name="ad_color_hudTextHover"								text="23 HUD: Text-Farbe überstrichener Einträge" />
+		<text name="ad_color_hudTextSpecial"							text="24 HUD: Text-Farbe ausgewählter Einträge und Ordner" />
+		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD: Text-Farbe überstrichener ausgewählter Einträge und Ordner" />
+		<text name="ad_color_header"									text="26 HUD: Hintergrundfarbe der Titelzeile" />
+		<text name="ad_color_background"								text="27 HUD: Hintergrundfarbe" />
+		<text name="ad_color_markerText"								text="28 Text-Farbe der Zielpunkte" />
 		<text name="button_delete_all"									text="Alle löschen" />
 		<text name="button_reset_selected"								text="Ausgewählten zurücksetzen" />
 		<text name="AD_task_pathfinding"								text="Berechne Pfad" />
