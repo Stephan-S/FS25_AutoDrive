@@ -701,7 +701,7 @@ function AutoDriveHud:mouseEventCreateWaypoint(vehicle, isUp, button)
         local reverseDirection = AutoDrive.rightSHIFTmodifierKeyPressed
         local subPrio = AutoDrive.leftLSHIFTmodifierKeyPressed and not reverseDirection
         local dualConnection = AutoDrive.leftALTmodifierKeyPressed and not reverseDirection
-            
+
         --For rough depth assertion, we use the closest nodes location as this is roughly in the screen's center
         local closest = vehicle:getClosestWayPoint()
         closest = ADGraphManager:getWayPointById(closest)
@@ -743,23 +743,22 @@ function AutoDriveHud:mouseEventCreateWaypoint(vehicle, isUp, button)
                 -- only allowed in single player game to create the color selection
                 AutoDrive.createColorSelectionWayPoints(vehicle)
             else
-                ADGraphManager:createWayPoint(minX, minY, minZ)
-            end
-            -- auto connect to previous created point not working proper in MP, so deactivated at all
-            if g_server ~= nil and g_client ~= nil then -- this will be true on dedi servers !!!
-                -- auto connect only working in single player properly !
-                local createdId = ADGraphManager:getWayPointsCount()
-                
+                local flags = AutoDrive.FLAG_NONE
                 if subPrio then
-                    ADGraphManager:toggleWayPointAsSubPrio(createdId)
-                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleWayPointAsSubPrio 3 createdId %d", createdId)
+                    flags = AutoDrive.FLAG_SUBPRIO
+                end
+                local createdId = ADGraphManager:getWayPointsCount() + 1 -- forward calculation for MP and SP
+                local out = {}
+                local incoming = {}
+                local connect = false
+                if vehicle.ad.newcreated ~= nil and vehicle.ad.selectedNodeId == vehicle.ad.newcreated then
+                    out = {createdId}
+                    incoming = {vehicle.ad.selectedNodeId}
+                    connect = true
                 end
 
-                if vehicle.ad.newcreated ~= nil and vehicle.ad.selectedNodeId == vehicle.ad.newcreated then
-                    -- connect only if previous created point is selected and newcreated ~= nil
-                    AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 2 vehicle.ad.selectedNodeId %d to %d", vehicle.ad.selectedNodeId, createdId)
-                    ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(createdId), reverseDirection, dualConnection)
-                end
+                ADGraphManager:createWayPointWithConnections(minX, minY, minZ, out, incoming, flags, connect, reverseDirection, dualConnection)
+
                 vehicle.ad.newcreated = createdId
                 vehicle.ad.selectedNodeId = vehicle.ad.newcreated
                 AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent auto connection 2 selectedNodeId %d", vehicle.ad.selectedNodeId)

@@ -392,10 +392,10 @@ function AutoDrivePlaceableData:createPlaceable(wayPoints, mapMarkers, sendEvent
         CreatePlaceableEvent.sendEvent(wayPoints, mapMarkers)
     else
         for _, wp in pairs(wayPoints) do
-            ADGraphManager:createWayPointWithConnections(wp.x, wp.y, wp.z, wp.out, wp.incoming, wp.flags, false)
+            ADGraphManager:createWayPointWithConnections(wp.x, wp.y, wp.z, wp.out, wp.incoming, wp.flags, false, false, false, sendEvent)
         end
         for _, mapMarker in pairs(mapMarkers) do
-            ADGraphManager:createMapMarker(mapMarker.id, mapMarker.name, false)
+            ADGraphManager:createMapMarker(mapMarker.id, mapMarker.name, sendEvent)
         end
 
         AutoDrive:notifyDestinationListeners()
