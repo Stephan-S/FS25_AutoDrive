@@ -123,6 +123,7 @@ function PathFinderModule:reset()
     self.chasingVehicle = false
     self.isSecondChasingVehicle = false
     self.max_pathfinder_steps = 0
+    self.vehicleMinHeight = math.max(self.vehicle.size and self.vehicle.size.height and self.vehicle.size.height, 5) -- min height for collision detection 5m
 
     if AutoDrive.getSetting("Pathfinder") == 1 then
         self.PP_UP = 0
@@ -168,8 +169,8 @@ function PathFinderModule:reset()
             "PP_UP_LEFT",
             "unknown"
         }
-    self.minTurnRadius = AutoDrive.getDriverRadius(self.vehicle) * 2 / 3
-    self.isNewPF = false
+        self.minTurnRadius = AutoDrive.getDriverRadius(self.vehicle) * 2 / 3
+        self.isNewPF = false
     end
 end
 
@@ -635,7 +636,6 @@ function PathFinderModule:addDelayTimer(delayTime)      -- used in: ExitFieldTas
 end
 
 function PathFinderModule:update(dt)
-
     --stop if called without prior 'start' method calls
     if self.startCell == nil then
         self:abort()
@@ -915,7 +915,6 @@ function PathFinderModule:update(dt)
                         , diffNetTime
                         , self.diffOverallNetTime
                     )
-
                     return -- shedule
                 end
             end
@@ -1217,7 +1216,7 @@ function PathFinderModule:checkGridCell(cell)
 
     if not cell.isRestricted and not cell.hasCollision then
         -- check for obstacles
-        local shapeDefinition = self:getShapeDefByDirectionType(cell)   --> return shape for the cell according to direction, on ground level, 2.65m height
+        local shapeDefinition = self:getShapeDefByDirectionType(cell)   --> return shape for the cell according to direction, on ground level, self.vehicleMinHeight
         local ignoreObstaclesUpToHeight = 0.5
         local shapes = overlapBox(shapeDefinition.x, shapeDefinition.y + ignoreObstaclesUpToHeight, shapeDefinition.z, 0, shapeDefinition.angleRad, 0, shapeDefinition.widthX, shapeDefinition.height - ignoreObstaclesUpToHeight, shapeDefinition.widthZ, "collisionTestCallbackIgnore", nil, self.mask, true, true, true, true)
         cell.hasCollision = cell.hasCollision or (shapes > 0)
@@ -1494,7 +1493,7 @@ function PathFinderModule:drawDebugForPF()
 
         local worldPos = self:gridLocationToWorldLocation(cell)
 
-        local shapeDefinition = self:getShapeDefByDirectionType(cell, true)   --> return shape for the cell according to direction, on ground level, 2.65m height
+        local shapeDefinition = self:getShapeDefByDirectionType(cell, true)   --> return shape for the cell according to direction, on ground level, self.vehicleMinHeight
         local corners = self:getCornersFromShapeDefinition(shapeDefinition)
         local baseY = shapeDefinition.y + 3
 
@@ -1648,7 +1647,7 @@ function PathFinderModule:getShapeDefByDirectionType_New(cell)
     shapeDefinition.angleRad = AutoDrive.normalizeAngle(shapeDefinition.angleRad)
     local worldPos = self:gridLocationToWorldLocation(cell)
     shapeDefinition.y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, worldPos.x, 1, worldPos.z)
-    shapeDefinition.height = self.vehicle.size.height --2.65
+    shapeDefinition.height = self.vehicleMinHeight
 
     shapeDefinition.x = worldPos.x
     shapeDefinition.z = worldPos.z
@@ -1672,7 +1671,7 @@ function PathFinderModule:getShapeDefByDirectionType(cell, getDefault)
     shapeDefinition.angleRad = AutoDrive.normalizeAngle(shapeDefinition.angleRad)
     local worldPos = self:gridLocationToWorldLocation(cell)
     shapeDefinition.y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, worldPos.x, 1, worldPos.z)
-    shapeDefinition.height = self.vehicle.size.height --2.65
+    shapeDefinition.height = self.vehicleMinHeight
 
     if cell.direction == self.PP_UP or cell.direction == self.PP_DOWN or cell.direction == self.PP_RIGHT or cell.direction == self.PP_LEFT or cell.direction == -1 or getDefault ~= nil then
         --default size:
@@ -2472,7 +2471,7 @@ function PathFinderModule:isDriveableAstar(cell)
     cell.isRestricted = false
     cell.incoming = cell.from_node
     cell.hasCollision = false
-    cell.shapeDefinition = self:getShapeDefByDirectionType_New(cell)   --> return shape for the cell according to direction, on ground level, 2.65m height
+    cell.shapeDefinition = self:getShapeDefByDirectionType_New(cell)   --> return shape for the cell according to direction, on ground level, self.vehicleMinHeight
 
     local worldPos = self:gridLocationToWorldLocation(cell)
     --Try going through the checks in a way that fast checks happen before slower ones which might then be skipped
@@ -3031,7 +3030,7 @@ function PathFinderModule:collisionTestCallback(transformId)
         if (collisionObject == nil) or (collisionObject ~= nil and not (collisionObject.rootVehicle == self.vehicle)) then
             self.collisionhits = self.collisionhits + 1
             if PathFinderModule.debug == true then
-                local currentCollMask = getCollisionFilterMask(transformId)
+                local currentCollMask = getCollisionFilterGroup(transformId)
                 if currentCollMask then
                     local x, _, z = getWorldTranslation(transformId)
                     x = x + g_currentMission.mapWidth/2
