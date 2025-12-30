@@ -15,8 +15,24 @@ end
 
 function ADCollisionDetectionModule:hasDetectedObstable(dt)
     local reverseSectionBlocked = self:detectTrafficOnUpcomingReverseSection()
+
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+        AutoDrive.debugMsg(self.vehicle, "CDM: hasDetectedObstable reverseSectionBlocked %s", tostring(reverseSectionBlocked))
+    end
+
     self.reverseSectionClear:timer(not reverseSectionBlocked, 10000, dt)
-    self.detectedObstable = self:detectObstacle() or self:detectAdTrafficOnRoute() or not self.reverseSectionClear:done()
+    local detectObstacle = self:detectObstacle()
+    local detectAdTrafficOnRoute = self:detectAdTrafficOnRoute()
+
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+        AutoDrive.debugMsg(self.vehicle, "CDM: hasDetectedObstable detectObstacle %s detectAdTrafficOnRoute %s not reverseSectionClear:done %s"
+        , tostring(detectObstacle)
+        , tostring(detectAdTrafficOnRoute)
+        , tostring(not self.reverseSectionClear:done())
+        )
+    end
+
+    self.detectedObstable = detectObstacle or detectAdTrafficOnRoute or not self.reverseSectionClear:done()
     return self.detectedObstable
 end
 
@@ -42,6 +58,9 @@ function ADCollisionDetectionModule:detectObstacle()
                 end
             end
             if (not frontSensorDynamicInBunkerArea) then
+                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                    AutoDrive.debugMsg(self.vehicle, "CDM: detectObstacle frontSensorDynamicShort:pollInfo -> return true")
+                end
                 return true
             end
         end
@@ -59,6 +78,10 @@ function ADCollisionDetectionModule:detectObstacle()
         boundingBox[1].y = box.y
 
         self.detectedCollision = AutoDrive:checkForVehicleCollision(self.vehicle, boundingBox, excludedList)
+
+        if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+            AutoDrive.debugMsg(self.vehicle, "CDM: detectObstacle self.detectedCollision %s", tostring(self.detectedCollision))
+        end
     end
     return self.detectedCollision
 end
@@ -96,6 +119,11 @@ function ADCollisionDetectionModule:detectAdTrafficOnRoute()
                     end
                     idToCheck = idToCheck + 1
                 end
+
+                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                    AutoDrive.debugMsg(self.vehicle, "CDM: detectAdTrafficOnRoute #routePoints %d", #routePoints)
+                end
+
                 if #routePoints >= 2 then
                     for _, other in pairs(AutoDrive.getAllVehicles()) do
                         if other ~= self.vehicle and other.ad ~= nil and other.ad.stateModule ~= nil and other.ad.stateModule:isActive() and other.ad.drivePathModule:isOnRoadNetwork() then
@@ -109,10 +137,26 @@ function ADCollisionDetectionModule:detectAdTrafficOnRoute()
                                     for j, point in pairs(routePoints) do
                                         if point == otherWayPoints[otherCurrentWayPoint + i].id then
                                             onSameRoute = true
+
+                                            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                                                AutoDrive.debugMsg(self.vehicle, "CDM: detectAdTrafficOnRoute onSameRoute other %s i %d j %d point ID %d"
+                                                , tostring(other and other.getName and other:getName() or "unknown")
+                                                , i
+                                                , j
+                                                , point
+                                                )
+                                            end
+
                                             if routePoints[j - 1] ~= nil and otherWayPoints[otherCurrentWayPoint + i - 1] ~= nil then
                                                 if routePoints[j - 1] ~= otherWayPoints[otherCurrentWayPoint + i - 1].id then
                                                     -- Y right-of-way
                                                     foundY = true
+
+                                                    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                                                        AutoDrive.debugMsg(self.vehicle, "CDM: detectAdTrafficOnRoute Y right-of-way point ID %d"
+                                                        , point
+                                                        )
+                                                    end
                                                     break
                                                 end
                                             end
@@ -123,6 +167,13 @@ function ADCollisionDetectionModule:detectAdTrafficOnRoute()
                             end
 
                             if onSameRoute and other.ad.collisionDetectionModule:getDetectedVehicle() == nil and foundY then
+
+                                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                                    AutoDrive.debugMsg(self.vehicle, "CDM: detectAdTrafficOnRoute onSameRoute and foundY other %s"
+                                    , tostring(other and other.getName and other:getName() or "unknown")
+                                    )
+                                end
+
                                 self.trafficVehicle = other
                                 return true
                             end
@@ -131,6 +182,11 @@ function ADCollisionDetectionModule:detectAdTrafficOnRoute()
                 end
             end
         else
+            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                AutoDrive.debugMsg(self.vehicle, "CDM: detectAdTrafficOnRoute self.trafficVehicle ~= nil -> %s"
+                , tostring(self.trafficVehicle and self.trafficVehicle.getName and self.trafficVehicle:getName() or "unknown")
+                )
+            end
             return self.trafficVehicle ~= nil
         end
     end
@@ -146,6 +202,17 @@ function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
 
             if wayPoints[currentWayPoint + idToCheck] ~= nil and wayPoints[currentWayPoint + idToCheck + 1] ~= nil then
                 local reverseSection = ADGraphManager:isReverseRoad(wayPoints[currentWayPoint + idToCheck], wayPoints[currentWayPoint + idToCheck + 1])
+
+                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                    if reverseSection then
+                        AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection reverseSection ID %d"
+                        , wayPoints[currentWayPoint + idToCheck].id
+                        )
+                    else
+                        AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection not reverseSection")
+                    end
+                end
+
                 local reverseSectionPoints = {}
                 idToCheck = 0
                 while (reverseSection == true) or (idToCheck < 20) do
@@ -153,6 +220,15 @@ function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
                     local targetNode = wayPoints[currentWayPoint + idToCheck + 1]
                     if (startNode ~= nil) and (targetNode ~= nil) then
                         if ADGraphManager:isReverseRoad(startNode, targetNode) == true then
+
+                            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                                AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection isReverseRoad -> insert(reverseSectionPoints idToCheck %d startNode.id %d targetNode.id %d"
+                                , idToCheck
+                                , startNode.id
+                                , targetNode.id
+                                )
+                            end
+
                             table.insert(reverseSectionPoints, startNode.id)
                             reverseSection = true
                         else
@@ -163,6 +239,13 @@ function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
                     end
                     idToCheck = idToCheck + 1
                 end
+
+                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                    AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection #reverseSectionPoints %d"
+                    , #reverseSectionPoints
+                    )
+                end
+
                 if #reverseSectionPoints > 0 then
                     --print(self.vehicle.ad.stateModule:getName() .. " - detected reverse section ahead")
                     for _, other in pairs(AutoDrive.getAllVehicles()) do
@@ -176,6 +259,14 @@ function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
                                 if otherWayPoints ~= nil and otherWayPoints[otherCurrentWayPoint + i] ~= nil then
                                     for _, point in pairs(reverseSectionPoints) do
                                         if point == otherWayPoints[otherCurrentWayPoint + i].id then
+
+                                            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                                                AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection point %d otherCurrentWayPoint ID %d onSameRoute = true"
+                                                , point
+                                                , otherWayPoints[otherCurrentWayPoint + i].id
+                                                )
+                                            end
+
                                             onSameRoute = true
                                             break
                                         end
@@ -185,6 +276,13 @@ function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
                             end
 
                             if onSameRoute == true then
+
+                                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                                    AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection onSameRoute trafficVehicle = other lastReverseCheck = true other %s"
+                                    , tostring(other.getName and other:getName() or "unknown")
+                                    )
+                                end
+
                                 --print(self.vehicle.ad.stateModule:getName() .. " - detected reverse section ahead - another vehicle on it")
                                 self.trafficVehicle = other
                                 self.lastReverseCheck = true
@@ -194,15 +292,28 @@ function ADCollisionDetectionModule:detectTrafficOnUpcomingReverseSection()
                 end
             end
         else
+
+            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+                AutoDrive.debugMsg(self.vehicle, "CDM: detectTrafficOnUpcomingReverseSection self.lastReverseCheck %s"
+                , tostring(self.lastReverseCheck)
+                )
+            end
+
             return self.lastReverseCheck
         end
     end
 
-    --print(self.vehicle.ad.stateModule:getName() .. " - all clear")
     return false
 end
 
 function ADCollisionDetectionModule:getDetectedVehicle()
+
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+        AutoDrive.debugMsg(self.vehicle, "CDM: getDetectedVehicle self.trafficVehicle %s"
+        , tostring(self.trafficVehicle and self.trafficVehicle.getName and self.trafficVehicle:getName() or "nil")
+        )
+    end
+
     return self.trafficVehicle
 end
 
@@ -217,7 +328,15 @@ function ADCollisionDetectionModule:checkReverseCollision()
     elseif mostBackImplement ~= nil then
         trailer = mostBackImplement
     else
-        return self.vehicle.ad.sensors.rearSensor:pollInfo()
+        local ret = self.vehicle.ad.sensors.rearSensor:pollInfo()
+
+        if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+            AutoDrive.debugMsg(self.vehicle, "CDM: checkReverseCollision 1 rearSensor:pollInfo %s"
+            , tostring(ret)
+            )
+        end
+
+        return ret
     end
     if trailer ~= nil then
         if trailer.ad == nil then
@@ -226,6 +345,14 @@ function ADCollisionDetectionModule:checkReverseCollision()
         ADSensor:handleSensors(trailer, 0)
         --trailer.ad.sensors.rearSensor.drawDebug = true
         trailer.ad.sensors.rearSensor.enabled = true
-        return trailer.ad.sensors.rearSensor:pollInfo()
+        local ret = trailer.ad.sensors.rearSensor:pollInfo()
+
+        if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+            AutoDrive.debugMsg(self.vehicle, "CDM: checkReverseCollision 2 rearSensor:pollInfo %s"
+            , tostring(ret)
+            )
+        end
+
+        return ret
     end
 end
