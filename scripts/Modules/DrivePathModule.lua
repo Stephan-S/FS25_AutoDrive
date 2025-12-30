@@ -753,6 +753,7 @@ end
 function ADDrivePathModule:handleBeingStuck()
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "handleBeingStuck")
     if self.vehicle.isServer then
+        AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_got_stuck;", 5000, self.vehicle.ad.stateModule:getName())
         self.vehicle.ad.taskModule:stopAndRestartAD()
     end
 end
