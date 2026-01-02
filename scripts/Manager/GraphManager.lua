@@ -637,22 +637,27 @@ function ADGraphManager:setConnectionBetween(startNode, endNode, direction, send
     end
 end
 
-function ADGraphManager:createWayPoint(x, y, z, sendEvent)
-    self:createWayPointWithConnections(x, y, z, {}, {}, 0, sendEvent)
-end
-
-function ADGraphManager:createWayPointWithConnections(x, y, z, out, incoming, flags, sendEvent)
+function ADGraphManager:createWayPointWithConnections(x, y, z, out, incoming, flags, connect, reverseDirection, dualConnection, sendEvent)
     if sendEvent == nil or sendEvent == true then
         -- Propagating waypoint creation all over the network
-        AutoDriveCreateWayPointEvent.sendEvent(x, y, z, out, incoming, flags)
+        AutoDriveCreateWayPointEvent.sendEvent(x, y, z, out, incoming, flags, connect, reverseDirection, dualConnection)
     else
-
-        local prevId = self:getWayPointsCount()
-        local newId = prevId + 1
-        local newWp = self:createNode(newId, x, y, z, out, incoming, flags)
+        local newId = self:getWayPointsCount() + 1
+        local incomingConnect = incoming
+        local outConnect = out
+        if connect then
+            newId = out[1]
+            incomingConnect = {}
+            outConnect = {}
+        end
+        local newWp = self:createNode(newId, x, y, z, outConnect, incomingConnect, flags)
         self:setWayPoint(newWp)
-        self:markChanges()
 
+        if connect then
+            self:toggleConnectionBetween(self:getWayPointById(incoming[1]), newWp, reverseDirection, dualConnection, sendEvent)
+        end
+
+        self:markChanges()
         return newWp
     end
 end
@@ -1105,9 +1110,7 @@ function ADGraphManager:checkResetVehicleDestinations(destination)
             end
             if destination == vehicle.ad.stateModule:getCurrentDestinationId() then
                 local marker = ADGraphManager:getMapMarkerById(1)
-                if marker ~= nil then
-                    vehicle.ad.stateModule:setCurrentDestination(1)
-                end
+                vehicle.ad.stateModule:setCurrentDestination(marker)
             end
         end
     end
@@ -1803,12 +1806,12 @@ function ADGraphManager:createSplineConnection(start, waypoints, target, dualCon
             if math.abs(wp.y - lastHeight) > 1 then -- prevent point dropping into the ground in case of bridges etc
                 wp.y = lastHeight
             end
-            self:createWayPoint(wp.x, wp.y, wp.z, sendEvent)
-            local createdId = self:getWayPointsCount()
+            local flags = AutoDrive.FLAG_NONE
             if subPrio then
-                ADGraphManager:toggleWayPointAsSubPrio(createdId)
+                flags = AutoDrive.FLAG_SUBPRIO
             end
-
+            self:createWayPointWithConnections(wp.x, wp.y, wp.z, {}, {}, flags, false, false, false, sendEvent)
+            local createdId = self:getWayPointsCount()
             self:toggleConnectionBetween(
                 ADGraphManager:getWayPointById(lastId),
                 ADGraphManager:getWayPointById(createdId),

@@ -212,13 +212,22 @@ function ADDrivePathModule:isCloseToWaypoint()
         maxSkipWayPoints = 0
     end
 
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint - start, wpIdx=%d, maxSkip=%d", self:getCurrentWayPointIndex(), maxSkipWayPoints)
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint - start, wpIdx=%d, maxSkip=%d"
+        , self:getCurrentWayPointIndex(), maxSkipWayPoints)
+    end
 
     for i = 0, maxSkipWayPoints do
         if self.wayPoints[self:getCurrentWayPointIndex() + i] ~= nil then
             local distanceToCurrentWp = MathUtil.vector2Length(x - self.wayPoints[self:getCurrentWayPointIndex() + i].x, z - self.wayPoints[self:getCurrentWayPointIndex() + i].z)
+            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint(%d/%d) distanceToCurrentWp=%.1f min_distance=%.1f"
+                , i, maxSkipWayPoints, distanceToCurrentWp, self.min_distance)
+            end
             if distanceToCurrentWp < self.min_distance then --and i == 0
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint(%d/%d) - true distanceToCurrentWp=%f min_distance=%f", i+1, maxSkipWayPoints+1, distanceToCurrentWp, self.min_distance)
+                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint return true")
+                end
                 return true
             end
             -- Check if the angle between vehicle and current wp and current wp to next wp is over 90° - then we should already make the switch
@@ -227,13 +236,32 @@ function ADDrivePathModule:isCloseToWaypoint()
                 angle = math.abs(angle)
 
                 if angle >= 135 then
-                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint(%d/%d) - true angle=%f", i+1, maxSkipWayPoints+1, angle)
+                    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint(%d/%d) - true angle=%.1f"
+                        , i, maxSkipWayPoints+1, angle)
+                    end
                     return true
+                else
+                    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint angle < 135")
+                    end
                 end
+            else
+                if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint i %d  wp_ahead %s wp_ahead %s"
+                    , i, tostring(wp_ahead), tostring(wp_current))
+                end
+            end
+        else
+            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint self.wayPoints[self:getCurrentWayPointIndex() + i] %s"
+                , tostring(self.wayPoints[self:getCurrentWayPointIndex() + i]))
             end
         end
     end
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint - false")
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint end - false")
+    end
     return false
 end
 
@@ -316,6 +344,9 @@ function ADDrivePathModule:followWaypoints(dt)
     end
 
     if self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) then
+        if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:followWaypoints - stopVehicle")
+        end
         self.vehicle.ad.specialDrivingModule:stopVehicle((not self:isOnRoadNetwork()), lx, lz)
         self.vehicle.ad.specialDrivingModule:update(dt)
     else
@@ -353,7 +384,10 @@ function ADDrivePathModule:followWaypoints(dt)
     end
 end
 
-function ADDrivePathModule:handleReachedWayPoint()    
+function ADDrivePathModule:handleReachedWayPoint()
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:handleReachedWayPoint")
+    end
     self.lastUsedWayPoint = self:getCurrentWayPoint()
     if self:getNextWayPoint() ~= nil then
         self:switchToNextWayPoint()
@@ -363,6 +397,9 @@ function ADDrivePathModule:handleReachedWayPoint()
 end
 
 function ADDrivePathModule:reachedTarget()
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:reachedTarget")
+    end
     self.atTarget = true
     self.wayPoints = nil
     self.currentWayPoint = 0
@@ -413,7 +450,9 @@ end
 function ADDrivePathModule:getHighestApproachingAngle()
     self.turnAngle = 0
     self.distanceToLookAhead = self:getCurrentLookAheadDistance()
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> Lookahead distance: " .. self.distanceToLookAhead)
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> Lookahead distance: " .. self.distanceToLookAhead)
+    end
     local pointsToLookAhead = ADDrivePathModule.MAXLOOKAHEADPOINTS
     local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
 
@@ -431,14 +470,16 @@ function ADDrivePathModule:getHighestApproachingAngle()
             local wp_ahead = self.wayPoints[self:getCurrentWayPointIndex() + currentLookAheadPoint]
             local wp_current = self.wayPoints[self:getCurrentWayPointIndex() + currentLookAheadPoint - 1]
             local wp_ref = self.wayPoints[self:getCurrentWayPointIndex() + currentLookAheadPoint - 2]
-            
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> wp_ahead: " .. wp_ahead.x .. " / " .. wp_ahead.z)
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> wp_current: " .. wp_current.x .. " / " .. wp_current.z)
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> wp_ref: " .. wp_ref.x .. " / " .. wp_ref.z)
-
+            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> wp_ahead: " .. wp_ahead.x .. " / " .. wp_ahead.z)
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> wp_current: " .. wp_current.x .. " / " .. wp_current.z)
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> wp_ref: " .. wp_ref.x .. " / " .. wp_ref.z)
+            end
             local angle = AutoDrive.angleBetween({x = wp_ahead.x - wp_current.x, z = wp_ahead.z - wp_current.z}, {x = wp_current.x - wp_ref.x, z = wp_current.z - wp_ref.z})
-            
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> angle: " .. angle)
+
+            if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_DEVINFO, "ADDrivePathModule:getHighestApproachingAngle -> angle: " .. angle)
+            end
 
             self.turnAngle = self.turnAngle + math.clamp(angle, -90, 90)
 
@@ -635,6 +676,9 @@ function ADDrivePathModule:getNextWayPointIndex()
 end
 
 function ADDrivePathModule:switchToNextWayPoint()
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:switchToNextWayPoint")
+    end
     self:setCurrentWayPointIndex(self:getNextWayPointIndex())
     self.minDistanceToNextWp = math.huge
 
@@ -751,17 +795,26 @@ function ADDrivePathModule:checkIfStuck(dt)
 end
 
 function ADDrivePathModule:handleBeingStuck()
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "handleBeingStuck")
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "handleBeingStuck")
+    end
     if self.vehicle.isServer then
+        AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_got_stuck;", 5000, self.vehicle.ad.stateModule:getName())
         self.vehicle.ad.taskModule:stopAndRestartAD()
     end
 end
 
 function ADDrivePathModule:checkForReverseSection()
     -- returns [current segment is reversed], [current segment is the last forward segment], [current segment is the last reverse segment]
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "checkForReverseSection start")
+    end
 
     if self.wayPoints == nil or self:getCurrentWayPointIndex() < 1 or #self.wayPoints <= self:getCurrentWayPointIndex() + 1 then
-        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:checkForReverseSection wpIdx=%d - first or last segment", self:getCurrentWayPointIndex())
+        if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:checkForReverseSection wpIdx=%d - first or last segment"
+            , self:getCurrentWayPointIndex())
+        end
         return self.isReversing, false, false
     end
 
@@ -791,6 +844,9 @@ function ADDrivePathModule:checkForReverseSection()
     local isLastForwardSection = not isReverse and aheadIsReverse and isSteepTurn
     local isLastReverseSection = isReverse and not aheadIsReverse and isSteepTurn
 
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:checkForReverseSection wpIdx=%d - isReverse: %s, last fwd: %s, last rev: %s", self:getCurrentWayPointIndex(), tostring(isReverse), tostring(isLastForwardSection), tostring(isLastReverseSection))
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "checkForReverseSection end - isReverse %s isLastForwardSection %s isLastReverseSection %s"
+        , tostring(isReverse), tostring(isLastForwardSection), tostring(isLastReverseSection))
+    end
     return isReverse, isLastForwardSection, isLastReverseSection
 end

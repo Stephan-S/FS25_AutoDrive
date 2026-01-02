@@ -342,6 +342,9 @@
 		<text name="ad_color_hudTextHover"								text="23 Text HUD, při najetí na běžné položky" />
 		<text name="ad_color_hudTextSpecial"							text="24 Text HUD, aktivní položky a složky" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 Text HUD, najetí na aktivní položky a složky" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
 		<text name="button_delete_all"									text="Smazat všechny" />
 		<text name="button_reset_selected"								text="Resetovat vybrané" />
 		<text name="AD_task_pathfinding"								text="Plánování trasy" />

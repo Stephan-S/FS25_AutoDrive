@@ -8,8 +8,8 @@ function ADHudIcon:new(posX, posY, width, height, image, layer, name)
     o.image = image
     o.isVisible = true
     o.lastLineCount = 1
-    
-    o.ov = g_overlayManager:createOverlay(o.image, o.position.x, o.position.y, o.size.width, o.size.height)
+    o.ov = Overlay.new(g_baseUIFilename, o.position.x, o.position.y, width, height)
+    o.ov:setUVs(g_colorBgUVs)
     return o
 end
 
@@ -19,6 +19,11 @@ function ADHudIcon:onDraw(vehicle, uiScale)
     end
 
     if self.isVisible and self.ov ~= nil then
+        if self.name == "header" then
+            self.ov:setColor(unpack(AutoDrive.currentColors.ad_color_header))
+        elseif self.name == "background" then
+            self.ov:setColor(unpack(AutoDrive.currentColors.ad_color_background))
+        end
         self.ov:render()
     end
 end
@@ -34,7 +39,7 @@ function ADHudIcon:onDrawHeader(vehicle, uiScale)
     end
 
     setTextBold(true)
-    setTextColor(table.unpack(AutoDrive.currentColors.ad_color_hudTextDefault))
+    setTextColor(unpack(AutoDrive.currentColors.ad_color_hudTextDefault))
     setTextAlignment(RenderText.ALIGN_LEFT)
     self:renderDefaultText(vehicle, adFontSize, adPosX, adPosY)
     if AutoDrive.Hud.isShowingTips then
@@ -78,7 +83,7 @@ function ADHudIcon:renderDefaultText(vehicle, fontSize, posX, posY)
             table.insert(lines, string.sub(toolTipText, 4))
         end
     end
-    
+
     if #lines ~= self.lastLineCount and self.ov ~= nil then
         self.ov:setDimension(nil, self.size.height + (textHeight + AutoDrive.Hud.gapHeight) * (#lines - 1))        
     end
@@ -192,6 +197,7 @@ function ADHudIcon:splitTextByLength(text, fontSize, maxLength)
     return lines
 end
 
+    
 function ADHudIcon:act(vehicle, posX, posY, isDown, isUp, button)
     if self.name == "header" then
         if button == 1 and isDown and AutoDrive.pullDownListExpanded == 0 then

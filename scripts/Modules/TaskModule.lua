@@ -50,6 +50,7 @@ function ADTaskModule:setCurrentTaskFinished(stoppedFlag)
 
     if not self.vehicle.spec_locomotive then
         self:RefuelIfNeeded()
+        self:RepairIfNeeded()
     end
 
     -- No refuel needed or no refuel trigger available

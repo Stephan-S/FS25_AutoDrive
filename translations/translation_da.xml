@@ -342,6 +342,9 @@
 		<text name="ad_color_hudTextHover"								text="23 HUD tekst, svæver over normale emner" />
 		<text name="ad_color_hudTextSpecial"							text="24 HUD tekst, aktiv emner og mapper" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD tekst, svæver ved aktive emner og mapper" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
 		<text name="button_delete_all"									text="Slet Alle" />
 		<text name="button_reset_selected"								text="Nulstil valgte" />
 		<text name="AD_task_pathfinding"								text="Planlægger rute" />

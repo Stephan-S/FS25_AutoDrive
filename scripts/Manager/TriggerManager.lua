@@ -75,6 +75,12 @@ function ADTriggerManager.addItems(items)
                 ADTriggerManager.addBunkerSilo(item.spec_bunkerSilo.bunkerSilo)
             end
 
+            if item.spec_multiBunkerSilo then
+                for _, bunkerSilo in pairs(item.spec_multiBunkerSilo.bunkerSilos) do
+                    ADTriggerManager.addBunkerSilo(bunkerSilo)
+                end
+            end
+
 -- Repair
             if item.spec_workshop and item.spec_workshop.sellingPoint then
                 if item.spec_workshop.sellingPoint.sellTriggerNode then
@@ -539,24 +545,28 @@ function ADTriggerManager.getBunkerSiloAreasConnectionType(bunkerSilo1, bunkerSi
             math.abs(bunkerSilo1.bunkerSiloArea.sz - bunkerSilo2.bunkerSiloArea.hz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.wx - bunkerSilo2.bunkerSiloArea.vx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.wz - bunkerSilo2.bunkerSiloArea.vz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+                -- bunkerSilo2 end to bunkerSilo1 start
             return 1
         end
         if math.abs(bunkerSilo1.bunkerSiloArea.sx - bunkerSilo2.bunkerSiloArea.wx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.sz - bunkerSilo2.bunkerSiloArea.wz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.wx - bunkerSilo2.bunkerSiloArea.sx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.wz - bunkerSilo2.bunkerSiloArea.sz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+                -- bunkerSilo2 start to bunkerSilo1 start
             return 2
         end
         if math.abs(bunkerSilo1.bunkerSiloArea.vx - bunkerSilo2.bunkerSiloArea.hx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.vz - bunkerSilo2.bunkerSiloArea.hz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.hx - bunkerSilo2.bunkerSiloArea.vx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.hz - bunkerSilo2.bunkerSiloArea.vz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+                -- bunkerSilo2 end to bunkerSilo1 end
             return 3
         end
         if math.abs(bunkerSilo1.bunkerSiloArea.vx - bunkerSilo2.bunkerSiloArea.wx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.vz - bunkerSilo2.bunkerSiloArea.wz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.hx - bunkerSilo2.bunkerSiloArea.sx) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE and
             math.abs(bunkerSilo1.bunkerSiloArea.hz - bunkerSilo2.bunkerSiloArea.sz) < AutoDrive.BUNKERSILO_CONNECTED_DISTANCE then
+                -- bunkerSilo2 start to bunkerSilo1 end
             return 4
         end
     end

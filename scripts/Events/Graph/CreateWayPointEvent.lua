@@ -8,7 +8,7 @@ function AutoDriveCreateWayPointEvent.emptyNew()
 	return self
 end
 
-function AutoDriveCreateWayPointEvent.new(x, y, z, out, incoming, flags)
+function AutoDriveCreateWayPointEvent.new(x, y, z, out, incoming, flags, connect, reverseDirection, dualConnection)
 	local self = AutoDriveCreateWayPointEvent.emptyNew()
 	self.x = x
 	self.y = y
@@ -16,6 +16,9 @@ function AutoDriveCreateWayPointEvent.new(x, y, z, out, incoming, flags)
 	self.out = out
 	self.incoming = incoming
 	self.flags = flags
+	self.connect = connect
+	self.reverseDirection = reverseDirection
+	self.dualConnection = dualConnection
 	return self
 end
 
@@ -41,6 +44,9 @@ function AutoDriveCreateWayPointEvent:writeStream(streamId, connection)
 	end
 
 	streamWriteUInt16(streamId, self.flags)
+	streamWriteBool(streamId, self.connect)
+	streamWriteBool(streamId, self.reverseDirection)
+	streamWriteBool(streamId, self.dualConnection)
 end
 
 function AutoDriveCreateWayPointEvent:readStream(streamId, connection)
@@ -65,21 +71,24 @@ function AutoDriveCreateWayPointEvent:readStream(streamId, connection)
 	end
 
 	self.flags = streamReadUInt16(streamId)
+	self.connect = streamReadBool(streamId)
+	self.reverseDirection = streamReadBool(streamId)
+	self.dualConnection = streamReadBool(streamId)
 	self:run(connection)
 end
 
 function AutoDriveCreateWayPointEvent:run(connection)
 	if g_server ~= nil and connection:getIsServer() == false then
 		-- If the event is coming from a client, server have only to broadcast
-		AutoDriveCreateWayPointEvent.sendEvent(self.x, self.y, self.z, self.out, self.incoming, self.flags)
+		AutoDriveCreateWayPointEvent.sendEvent(self.x, self.y, self.z, self.out, self.incoming, self.flags, self.connect, self.reverseDirection, self.dualConnection)
 	else
 		-- If the event is coming from the server, both clients and server have to create the way point
-		ADGraphManager:createWayPointWithConnections(self.x, self.y, self.z, self.out, self.incoming, self.flags, false)
+		ADGraphManager:createWayPointWithConnections(self.x, self.y, self.z, self.out, self.incoming, self.flags, self.connect, self.reverseDirection, self.dualConnection, false)
 	end
 end
 
-function AutoDriveCreateWayPointEvent.sendEvent(x, y, z, out, incoming, flags)
-	local event = AutoDriveCreateWayPointEvent.new(x, y, z, out, incoming, flags)
+function AutoDriveCreateWayPointEvent.sendEvent(x, y, z, out, incoming, flags, connect, reverseDirection, dualConnection)
+	local event = AutoDriveCreateWayPointEvent.new(x, y, z, out, incoming, flags, connect, reverseDirection, dualConnection)
 	if g_server ~= nil then
 		-- Server have to broadcast to all clients and himself
 		g_server:broadcastEvent(event, true)

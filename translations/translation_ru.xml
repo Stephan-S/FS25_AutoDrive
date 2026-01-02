@@ -342,6 +342,9 @@
 		<text name="ad_color_hudTextHover"								text="23 HUD текст, наведённый на обычный элемент" />
 		<text name="ad_color_hudTextSpecial"							text="24 HUD текст, активные элементы и папки" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD текст, наведённый на активный элемента и папку" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
 		<text name="button_delete_all"									text="Удалить все" />
 		<text name="button_reset_selected"								text="Сбросить выбранное" />
 		<text name="AD_task_pathfinding"								text="Планирование пути" />

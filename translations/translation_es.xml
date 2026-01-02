@@ -342,6 +342,9 @@
 		<text name="ad_color_hudTextHover"								text="23 Texto del HUD, al pasar el cursor sobre elementos normales" />
 		<text name="ad_color_hudTextSpecial"							text="24 Texto del HUD, elementos activos y carpetas" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 Texto de HUD al pasar el cursor sobre elementos y carpetas activos" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
 		<text name="button_delete_all"									text="Eliminar todas" />
 		<text name="button_reset_selected"								text="Resetear seleccionados" />
 		<text name="AD_task_pathfinding"								text="Calculando ruta" />

@@ -342,6 +342,9 @@
 		<text name="ad_color_hudTextHover"								text="23 Testo HUD, passando il mouse sugli oggetti normali" />
 		<text name="ad_color_hudTextSpecial"							text="24 Testo HUD, elementi attivi e cartelle" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 Testo HUD, passando il mouse su elementi e cartelle attivi" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
 		<text name="button_delete_all"									text="Cancella Tutto" />
 		<text name="button_reset_selected"								text="Ripristina selezionato" />
 		<text name="AD_task_pathfinding"								text="Pianificazione" />
