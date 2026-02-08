@@ -808,7 +808,7 @@ function AutoDriveHud:mouseEvent(vehicle, posX, posY, isDown, isUp, button)
         vehicle.ad.sectionWayPoints = {}
         
         local adjustedPaths = false
-        if not mouseEventHandled and AutoDrive.isInExtendedEditorMode() then
+        if not mouseEventHandled and AutoDrive.isInExtendedEditorMode() and AutoDrive.isMouseActiveForEditor() then
             self:mouseEventHandleSelection(vehicle, isUp, button)
             self:mouseEventResetSelectedNode(vehicle)
             self:mouseEventFindHoveredNode(vehicle)
