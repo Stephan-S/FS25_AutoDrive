@@ -349,6 +349,7 @@
 		<text name="ad_color_header"									text="26 HUD: Hintergrundfarbe der Titelzeile" />
 		<text name="ad_color_background"								text="27 HUD: Hintergrundfarbe" />
 		<text name="ad_color_markerText"								text="28 Text-Farbe der Zielpunkte" />
+		<text name="ad_color_rightOfWayCenter"							text="29 Verbindungspunkt der Vorfahrt" />
 		<text name="button_delete_all"									text="Alle löschen" />
 		<text name="button_reset_selected"								text="Ausgewählten zurücksetzen" />
 		<text name="AD_task_pathfinding"								text="Berechne Pfad" />

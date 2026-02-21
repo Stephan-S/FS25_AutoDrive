@@ -349,6 +349,7 @@
 		<text name="ad_color_header"									text="26 HUD: color of header" />
 		<text name="ad_color_background"								text="27 HUD: background color" />
 		<text name="ad_color_markerText"								text="28 color of destination text" />
+		<text name="ad_color_rightOfWayCenter"							text="29 Right of way Center waypoint" />
 		<text name="button_delete_all"									text="Effacer tout" />
 		<text name="button_reset_selected"								text="Effacer la sélection" />
 		<text name="AD_task_pathfinding"								text="Planifier le parcours" />
