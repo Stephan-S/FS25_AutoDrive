@@ -933,7 +933,7 @@ function AutoDrive:onDrawEditorMode()
                             DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_selectedNode))
                         else
                             if point.isRightOfWayCenter then
-                                DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_rightOfWayCenter))
+                                DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_rightOfWayCenter))
                             else
                                 if isSubPrio then
                                     DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_subPrioNode))
