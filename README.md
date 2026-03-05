@@ -1,8 +1,7 @@
 # FS25_AutoDrive
 FS25 version of the AutoDrive mod
 
-### Latest Release: 3.0.0.6
-![GitHub all releases](https://img.shields.io/github/downloads/Stephan-S/FS25_AutoDrive/total?label=Downloads&style=plastic)  
+### Latest Release: 3.0.1.0
 Direct Download: https://github.com/Stephan-S/FS25_AutoDrive/releases/latest/download/FS25_AutoDrive.zip
 
 ## Discord Server:
