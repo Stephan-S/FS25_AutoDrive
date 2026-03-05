@@ -124,7 +124,10 @@ AutoDrive.colors = {
 	ad_color_hudTextHover = { 0.51, 0.67, 0.05, 1 },
 	ad_color_hudTextSpecial = { 0.66, 0.83, 0.34, 1 },
 	ad_color_hudTextHoverSpecial = { 0.45, 0.73, 0.05, 1 },
-
+	ad_color_header = { 0.171, 0.323, 0.000, 1 },           -- 115 154 0 255
+	ad_color_background = { 0, 0, 0, 0.67 },                -- 0 0 0 173
+	ad_color_markerText = { 0.5, 1, 0.5, 1 },         -- 188 255 188 255
+	ad_color_rightOfWayCenter = { 0, 0.65, 0.7, 1 },
 }
 
 AutoDrive.currentColors = {} -- this will hold the current colors, derived from default colors above, overwritten by local settings
@@ -253,7 +256,7 @@ function AutoDrive:loadMap(name)
 
 	ConstructionScreen.draw = Utils.appendedFunction(ConstructionScreen.draw, AutoDrive.constructionScreenDraw)
 
-	ADRoutesManager:load()
+    ADRoutesManager:load()
 
 	ADDrawingManager:load()
 

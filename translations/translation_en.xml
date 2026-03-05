@@ -342,10 +342,14 @@
 		<text name="ad_color_previewOk"								text="19 curve preview OK, no collision" />
 		<text name="ad_color_previewNotOk"								text="20 curve preview NotOK, has collision" />
 		<text name="ad_color_textInputBackground"						text="21 Background for inputs of text, targets etc." />
-		<text name="ad_color_hudTextDefault"							text="22 HUD text, normal items" />
-		<text name="ad_color_hudTextHover"								text="23 HUD text, hovering on normal items" />
-		<text name="ad_color_hudTextSpecial"							text="24 HUD text, active items and folders" />
-		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD text, hovering on active items and folders" />
+		<text name="ad_color_hudTextDefault"							text="22 HUD: text color, normal items" />
+		<text name="ad_color_hudTextHover"								text="23 HUD: text color, hovering on normal items" />
+		<text name="ad_color_hudTextSpecial"							text="24 HUD: text color, active items and folders" />
+		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD: text color, hovering on active items and folders" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
+		<text name="ad_color_rightOfWayCenter"							text="29 Right of way Center waypoint" />
 		<text name="button_delete_all"									text="Delete All" />
 		<text name="button_reset_selected"								text="Reset selected" />
 		<text name="AD_task_pathfinding"								text="Planning path" />

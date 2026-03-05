@@ -214,7 +214,7 @@ function AutoDrive.combineIsTurning(combine)
     local combineIsTurning = cpIsTurning or aiIsTurning
 
     --Check if we are close to the field borders and about to turn
-    local fieldLengthInFront = AutoDrive.getLengthOfFieldInFront(combine, true, 50, 5)
+    local fieldLengthInFront = AutoDrive.getLengthOfFieldInFront(combine, false, 50, 5)
     local fieldLengthBehind = math.abs(AutoDrive.getLengthOfFieldInFront(combine, false, 50, -5))
 
     if (fieldLengthInFront <= 20 or fieldLengthBehind <= 20) and combine.ad.noMovementTimer.elapsedTime < 5000 and not combine.ad.isChopper then

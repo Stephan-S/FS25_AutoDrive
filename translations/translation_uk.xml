@@ -346,6 +346,10 @@
 		<text name="ad_color_hudTextHover"								text="23 HUD текст, наведений на звичайні елементи" />
 		<text name="ad_color_hudTextSpecial"							text="24 HUD текст, активні елементи і папки" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD текст, наведений на активні елементи і папки" />
+		<text name="ad_color_header"									text="26 HUD: color of header" />
+		<text name="ad_color_background"								text="27 HUD: background color" />
+		<text name="ad_color_markerText"								text="28 color of destination text" />
+		<text name="ad_color_rightOfWayCenter"							text="29 Right of way Center waypoint" />
 		<text name="button_delete_all"									text="Видалити все" />
 		<text name="button_reset_selected"								text="Скинути обране" />
 		<text name="AD_task_pathfinding"								text="Планування шляху" />

@@ -8,8 +8,8 @@ function ADHudIcon:new(posX, posY, width, height, image, layer, name)
     o.image = image
     o.isVisible = true
     o.lastLineCount = 1
-    
-    o.ov = g_overlayManager:createOverlay(o.image, o.position.x, o.position.y, o.size.width, o.size.height)
+    o.ov = Overlay.new(g_baseUIFilename, o.position.x, o.position.y, width, height)
+    o.ov:setUVs(g_colorBgUVs)
     return o
 end
 
@@ -23,6 +23,11 @@ function ADHudIcon:onDraw(vehicle, uiScale)
     end
 
     if self.isVisible and self.ov ~= nil then
+        if self.name == "header" then
+            self.ov:setColor(unpack(AutoDrive.currentColors.ad_color_header))
+        elseif self.name == "background" then
+            self.ov:setColor(unpack(AutoDrive.currentColors.ad_color_background))
+        end
         self.ov:render()
     end
 end
@@ -38,7 +43,7 @@ function ADHudIcon:onDrawHeader(vehicle, uiScale)
     end
 
     setTextBold(true)
-    setTextColor(table.unpack(AutoDrive.currentColors.ad_color_hudTextDefault))
+    setTextColor(unpack(AutoDrive.currentColors.ad_color_hudTextDefault))
     setTextAlignment(RenderText.ALIGN_LEFT)
     self:renderDefaultText(vehicle, adFontSize, adPosX, adPosY)
     if AutoDrive.Hud.isShowingTips then
@@ -68,7 +73,7 @@ function ADHudIcon:renderDefaultText(vehicle, fontSize, posX, posY)
     end
 
     local lines = self:splitTextByLength(textToShow, fontSize, self.size.width - 4 * AutoDrive.Hud.gapWidth - 3 * AutoDrive.Hud.headerIconWidth)
-    
+
     if #lines ~= self.lastLineCount and self.ov ~= nil then
         self.ov:setDimension(nil, self.size.height + (textHeight + AutoDrive.Hud.gapHeight) * (#lines - 1))        
     end
@@ -163,7 +168,7 @@ function ADHudIcon:updateVisibility(vehicle)
             newVisibility = false
         end
     end
-    
+
     if self.name == "fruitOverlay" then
         if (vehicle.ad.stateModule:getMode() == AutoDrive.MODE_PICKUPANDDELIVER or vehicle.ad.stateModule:getMode() == AutoDrive.MODE_LOAD) then
             newVisibility = true
@@ -209,6 +214,6 @@ function ADHudIcon:updateIcon(vehicle)
 
     self.image = newIcon
     if self.ov ~= nil then
-        self.ov:setSliceId(self.image)
+        -- self.ov:setSliceId(self.image)
     end
 end

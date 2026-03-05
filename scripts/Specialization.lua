@@ -530,7 +530,6 @@ function AutoDrive:onDrawUIInfo()
     if AutoDrive.getSetting("showHUD") then
         AutoDrive.Hud:drawHud(self)
     end
-
     if AutoDrive.getSetting("showNextPath") == true then
         local sWP = self.ad.stateModule:getCurrentWayPoint()
         local eWP = self.ad.stateModule:getNextWayPoint()
@@ -864,7 +863,7 @@ function AutoDrive:onDrawEditorMode()
             if wp then
                 if MathUtil.vector2Length(wp.x - x, wp.z - z) < maxDistance then
                     local scale = AutoDrive.getSetting("scaleMarkerText") or 1
-                    Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013) * scale, 0)
+                    Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013) * scale, 0, unpack(AutoDrive.currentColors.ad_color_markerText))
                     DrawingManager:addMarkerTask(wp.x, wp.y + 0.45, wp.z)
                 end
             end
@@ -906,13 +905,17 @@ function AutoDrive:onDrawEditorMode()
                     if point.id == self.ad.selectedNodeId then
                         DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_selectedNode))
                     else
-                        if isSubPrio then
-                            DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_subPrioNode))
+                        if point.isRightOfWayCenter then
+                            DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_rightOfWayCenter))
                         else
-                            if point.colors ~= nil then
-                                DrawingManager:addSphereTask(x, y, z, 3, unpack(point.colors))
+                            if isSubPrio then
+                                DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_subPrioNode))
                             else
-                                DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_default))
+                                if point.colors ~= nil then
+                                    DrawingManager:addSphereTask(x, y, z, 3, unpack(point.colors))
+                                else
+                                    DrawingManager:addSphereTask(x, y, z, 3, unpack(AutoDrive.currentColors.ad_color_default))
+                                end
                             end
                         end
                     end
@@ -929,10 +932,14 @@ function AutoDrive:onDrawEditorMode()
                         if point.id == self.ad.selectedNodeId then
                             DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_selectedNode))
                         else
-                            if isSubPrio then
-                                DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_subPrioNode))
+                            if point.isRightOfWayCenter then
+                                DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_rightOfWayCenter))
                             else
-                                DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_default))
+                                if isSubPrio then
+                                    DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_subPrioNode))
+                                else
+                                    DrawingManager:addSphereTask(x, gy, z, 3, unpack(AutoDrive.currentColors.ad_color_default))
+                                end
                             end
                         end
                     end
@@ -1521,6 +1528,7 @@ function AutoDrive:updateWayPointsDistance(x, z)
     self.ad.distances.closest.distance = math.huge
     self.ad.distances.closestNotReverse.wayPoint = nil
     self.ad.distances.closestNotReverse.distance = math.huge
+    self.ad.wayPointsInRange = nil
 
     if x == nil or z == nil then
         x, _, z = getWorldTranslation(self.components[1].node)
@@ -1621,13 +1629,53 @@ function AutoDrive:getWayPointsInRange(minDistance, maxDistance)
     if self.ad.distances.wayPoints == nil then
         self:updateWayPointsDistance()
     end
-    local inRange = {}
+    if self.ad.wayPointsInRange then
+        return self.ad.wayPointsInRange
+    end
+    self.ad.wayPointsInRange = {}
     for _, elem in pairs(self.ad.distances.wayPoints) do
         if elem.distance >= minDistance and elem.distance <= maxDistance and elem.wayPoint.id > 0 then
-            table.insert(inRange, elem.wayPoint)
+            table.insert(self.ad.wayPointsInRange, elem.wayPoint)
         end
     end
-    return inRange
+    -- find RightOfWayCenter wayPoints
+    if #self.ad.wayPointsInRange > 3 then
+        for _, point in ipairs(self.ad.wayPointsInRange) do
+            local countSingleIncoming = 0
+            local countSingleOut = 0
+            local countDual = 0
+            point.isRightOfWayCenter = false
+            for _, incoming in pairs(point.incoming) do
+                if not table.contains(point.out, incoming) then
+                    countSingleIncoming = countSingleIncoming + 1
+                end
+            end
+            for _, out in pairs(point.out) do
+                if not table.contains(point.incoming, out) then
+                    countSingleOut = countSingleOut + 1
+                end
+            end
+            for _, incoming in pairs(point.incoming) do
+                if table.contains(point.out, incoming) then
+                    countDual = countDual + 1
+                end
+            end
+            if #point.out >= 1 and #point.incoming >= 2 then
+                point.isRightOfWayCenter = true
+                if countDual == 1 and countSingleIncoming == 1 and countSingleOut == 0 then
+                    -- single to dual
+                    point.isRightOfWayCenter = false
+                elseif countDual == 1 and countSingleIncoming == 0 and countSingleOut == 1 then
+                    -- dual to single
+                    point.isRightOfWayCenter = false
+                elseif countDual == 2 and countSingleIncoming == 0 and countSingleOut == 0 then
+                    -- straight dual
+                    point.isRightOfWayCenter = false
+                end
+            end
+        end
+    end
+    return self.ad.wayPointsInRange
 end
 
 function AutoDrive:getWayPointIdsInRange(minDistance, maxDistance)
