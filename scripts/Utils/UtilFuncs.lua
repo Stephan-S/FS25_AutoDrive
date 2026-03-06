@@ -803,7 +803,7 @@ function ADVectorUtils.linterp(inMin, inMax, inValue, outMin, outMax)
 end
 
 function AutoDrive.getDebugChannelIsSet(debugChannel)
-	return bit32.band(AutoDrive.currentDebugChannelMask, debugChannel) > 0
+    return bit32.band(AutoDrive.currentDebugChannelMask, debugChannel) > 0
 end
 
 function AutoDrive.debugPrint(vehicle, debugChannel, debugText, ...)
@@ -952,20 +952,9 @@ function AutoDrive.renderColoredTextAtWorldPosition(x, y, z, text, textSize, col
 	end
 end
 
-function AutoDrive.checkIsOnField(worldX, worldY, worldZ)	-- kept only for reference in case the new detection causes issues
-	local densityBits = 0
-
-	if worldY == 0 then
-		worldY = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, worldX, 1, worldZ)
-	end
-
-	local bits = getDensityAtWorldPos(g_currentMission.terrainDetailId, worldX, worldY, worldZ)
-	densityBits = bit32.bor(densityBits, bits)
-	if densityBits ~= 0 then
-		return true
-	end
-
-	return false
+function AutoDrive.checkIsOnField(worldX, worldY, worldZ)
+    local isOnField, densityBits, groundType = FSDensityMapUtil.getFieldDataAtWorldPosition(worldX, worldY, worldZ)
+	return isOnField
 end
 
 function AutoDrive.checkIsOnField_notFS22(startWorldX, worldY, startWorldZ)
