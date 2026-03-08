@@ -394,10 +394,8 @@ end
 function AutoDriveHud:toggleHud(vehicle)
     if not AutoDrive.getSetting("showHUD") then
         AutoDrive.setSettingState("showHUD", 2)
-        g_inputBinding:setShowMouseCursor(true)
     else
         AutoDrive.setSettingState("showHUD", 1)
-        g_inputBinding:setShowMouseCursor(false)
     end
 end
 
