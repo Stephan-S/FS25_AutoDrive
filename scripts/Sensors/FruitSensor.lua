@@ -75,7 +75,7 @@ function AutoDrive.getFruitValue(fruitTypeIndex, corner1X, corner1Z, corner2X, c
 
     -- we need to check the growth state for these fruit types
     local fruit = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
-    if fruit ~= nil and (fruit:getIsCut(growthState) or fruit:getIsWithered(growthState)) then
+    if fruit ~= nil and growthState ~= nil and (fruit:getIsCut(growthState) or fruit:getIsWithered(growthState)) then
         fruitValue = 0
     end
     return fruitValue
