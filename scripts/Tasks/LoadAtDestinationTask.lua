@@ -97,9 +97,10 @@ function LoadAtDestinationTask:update(dt)
                         self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
                     end
                 else
-                    if self.vehicle.ad.trailerModule:wasAtSuitableTrigger() or ((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYPICKUP or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders")) then
-                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update wasAtSuitableTrigger -> self:finished")
+                    if AutoDrive.checkForContinueOnEmptyLoadTrigger(self.vehicle) or ((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYPICKUP or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders")) then
+                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update checkForContinueOnEmptyLoadTrigger -> self:finished")
                         self:finished()
+                        return
                     end
                     self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
                 end
@@ -133,10 +134,12 @@ function LoadAtDestinationTask:update(dt)
                                         self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
                                     elseif self.filledToUnload then
                                         self:finished()
+                                        return
                                     end
                                 end
                             elseif self.filledToUnload then
                                 self:finished()
+                                return
                             end
                         else
                             self.vehicle.ad.trailerModule:update(dt)
@@ -145,6 +148,7 @@ function LoadAtDestinationTask:update(dt)
                                 if self.filledToUnload then
                                     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update leftCapacity <= -> self:finished")
                                     self:finished()
+                                    return
                                 end
                             end
                         end
@@ -164,8 +168,8 @@ function LoadAtDestinationTask:update(dt)
                 self.vehicle.ad.specialDrivingModule:stopVehicle()
                 self.vehicle.ad.specialDrivingModule:update(dt)
             else
-                if self.vehicle.ad.trailerModule:wasAtSuitableTrigger() and AutoDrive.checkForContinueOnEmptyLoadTrigger(self.vehicle) then
-                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger + wasAtSuitableTrigger + should continue -> finished")
+                if AutoDrive.checkForContinueOnEmptyLoadTrigger(self.vehicle) and self.vehicle.ad.trailerModule:wasAtSuitableTrigger() then
+                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger + should continue + wasAtSuitableTrigger -> finished")
                     self:finished()
                     return
                 end
