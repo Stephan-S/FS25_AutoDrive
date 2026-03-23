@@ -97,7 +97,9 @@ function LoadAtDestinationTask:update(dt)
                         self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
                     end
                 else
-                    if AutoDrive.checkForContinueOnEmptyLoadTrigger(self.vehicle) or ((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYPICKUP or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders")) then
+                    if (AutoDrive.checkForContinueOnEmptyLoadTrigger(self.vehicle) and self.vehicle.ad.trailerModule:wasAtSuitableTrigger())
+                        or ((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYPICKUP or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders"))
+                    then
                         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update checkForContinueOnEmptyLoadTrigger -> self:finished")
                         self:finished()
                         return
