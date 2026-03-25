@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Repostar vehículo" />
 		<text name="input_ADRepairVehicle"								text="AD: Reparar vehículo" />
 		<text name="input_ADSwapTargets"								text="AD: Intercambiar destinos" />
-		<text name="input_ADStartHelper"								text="AD: Iniciar AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Cambiar a AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Iniciar AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Cambiar a AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Funciones DEV" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Cambiar a carga automática en destino" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Cambiar a descarga automática en destino" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Alternar carga por nivel de llenado" />
 		<text name="hud_avoidFruit"									text="AD: Evitar destruir cosechas" />
-		<text name="hud_startHelper"									text="AD: Iniciar AI/CP/AIVE en destino" />
+		<text name="hud_startHelper"									text="AD: Iniciar AI/CP en destino" />
 		<text name="AD_parkVehicle_noPosSet"							text="No se ha asignado ningún destino de estacionamiento. Asigna el destino seleccionado actualmente haciendo clic derecho." />
 		<text name="AD_parkVehicle_selected"							text="Destino de estacionamiento elegido: " />
 		<text name="AD_parkVehicle_deleted"							text="Destino de estacionamiento eliminado!" />

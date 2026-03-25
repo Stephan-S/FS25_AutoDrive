@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Optank maskine" />
 		<text name="input_ADRepairVehicle"								text="AD: Reparer maskine" />
 		<text name="input_ADSwapTargets"								text="AD: Skift destination" />
-		<text name="input_ADStartHelper"								text="AD: Skift til AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Skift AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Skift til AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Skift AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Udvikler Action" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Skift automatisk pålæsningsmål" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Skift automatisk aflæsningsmål" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Skift pålæsning efter fyldnings niveau" />
 		<text name="hud_avoidFruit"									text="AD: Undgå afgrøder" />
-		<text name="hud_startHelper"									text="AD: Start AI/CP/AIVE ved destinationen" />
+		<text name="hud_startHelper"									text="AD: Start AI/CP ved destinationen" />
 		<text name="AD_parkVehicle_noPosSet"							text="Ingen parkerings destination tildelt. Tildel det aktuelt valgte mål med højre museknap." />
 		<text name="AD_parkVehicle_selected"							text="Vælg parkering destination: " />
 		<text name="AD_parkVehicle_deleted"							text="Parkering destination slettet!" />

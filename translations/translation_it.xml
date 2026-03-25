@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Rifornire il veicolo" />
 		<text name="input_ADRepairVehicle"								text="AD: Ripara il veicolo" />
 		<text name="input_ADSwapTargets"								text="AD: Scambia Destinazione" />
-		<text name="input_ADStartHelper"								text="AD: Passa a IA/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Attiva/Disattiva IA/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Passa a IA/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Attiva/Disattiva IA/CP" />
 		<text name="input_AD_devAction"								text="AD: Azione dello sviluppatore" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Attiva/Disattiva il target di ritiro automatico" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Attiva/Disattiva obiettivo di scaricamento automatico" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Attiva/disattiva il caricamento in base al livello di riempimento" />
 		<text name="hud_avoidFruit"									text="AD: Evita raccolto" />
-		<text name="hud_startHelper"									text="AD: Avvia IA/CP/AIVE a destinazione" />
+		<text name="hud_startHelper"									text="AD: Avvia IA/CP a destinazione" />
 		<text name="AD_parkVehicle_noPosSet"							text="Nessuna destinazione di parcheggio assegnata." />
 		<text name="AD_parkVehicle_selected"							text="Parcheggio veicolo selezionato: " />
 		<text name="AD_parkVehicle_deleted"							text="Parcheggio cancellato!" />

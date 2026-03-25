@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Заправити техніку" />
 		<text name="input_ADRepairVehicle"								text="AD: Ремонтувати техніку" />
 		<text name="input_ADSwapTargets"								text="AD: Змінити локації" />
-		<text name="input_ADStartHelper"								text="AD: Передати керування AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Перемикання AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Передати керування AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Перемикання AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Дії розробника" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Переключати автоматично цілі завантаження" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Переключати автоматично цілі розвантаження" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Перемикання завантаження по рівня заповнення" />
 		<text name="hud_avoidFruit"									text="AD: Уникати посівів" />
-		<text name="hud_startHelper"									text="AD: Запустити AI/CP/AIVE в пункті призначення" />
+		<text name="hud_startHelper"									text="AD: Запустити AI/CP в пункті призначення" />
 		<text name="AD_parkVehicle_noPosSet"							text="Місце для паркування не назначено. Щоб назначити вибрану локацію, як місце паркування, нажміть правою кнопкою миші на цій же кнопці." />
 		<text name="AD_parkVehicle_selected"							text="Вибране місце для паркування: " />
 		<text name="AD_parkVehicle_deleted"							text="місце для паркування видалено!" />

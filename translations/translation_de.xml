@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Fahrzeug tanken" />
 		<text name="input_ADRepairVehicle"								text="AD: Fahrzeug reparieren" />
 		<text name="input_ADSwapTargets"								text="AD: Ziele tauschen" />
-		<text name="input_ADStartHelper"								text="AD: Übergabe an AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: AI/CP/AIVE umschalten" />
+		<text name="input_ADStartHelper"								text="AD: Übergabe an AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: AI/CP umschalten" />
 		<text name="input_AD_devAction"								text="AD: Entwickler-Aktion" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Automatisches Ladeziel umschalten" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Automatisches Entladeziel umschalten" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Beladung nach Füllstand umschalten" />
 		<text name="hud_avoidFruit"									text="AD: Fruchtumfahrung" />
-		<text name="hud_startHelper"									text="AD: Starte AI/CP/AIVE Fahrer am Zielpunkt" />
+		<text name="hud_startHelper"									text="AD: Starte AI/CP Fahrer am Zielpunkt" />
 		<text name="AD_parkVehicle_noPosSet"							text="Kein Parkplatz zugewiesen." />
 		<text name="AD_parkVehicle_selected"							text="Als Parkplatz zugewiesen: " />
 		<text name="AD_parkVehicle_deleted"							text="Parkplatz gelöscht!" />

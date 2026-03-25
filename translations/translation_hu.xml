@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Jármű tankolása" />
 		<text name="input_ADRepairVehicle"								text="AD: Jármű javítása" />
 		<text name="input_ADSwapTargets"								text="AD: Cél csere" />
-		<text name="input_ADStartHelper"								text="AD: Átadás AI/CP/AIVE-nek" />
-		<text name="input_ADToggleUsedHelper"							text="AD: AI/CP/AIVE váltása" />
+		<text name="input_ADStartHelper"								text="AD: Átadás AI/CP-nek" />
+		<text name="input_ADToggleUsedHelper"							text="AD: AI/CP váltása" />
 		<text name="input_AD_devAction"								text="AD: Fejlesztői művelet" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Automatikus felvételi cél váltása" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Automatikus lerakási cél váltása" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Töltés váltása töltöttség alapján" />
 		<text name="hud_avoidFruit"									text="AD: Termény kikerülése" />
-		<text name="hud_startHelper"									text="AD: AI/CP/AIVE indítása az úticélnál" />
+		<text name="hud_startHelper"									text="AD: AI/CP indítása az úticélnál" />
 		<text name="AD_parkVehicle_noPosSet"							text="Járműnek nincs parkolója. Jobb egérgombbal rendeljen hozzá parkolási helyet." />
 		<text name="AD_parkVehicle_selected"							text="Kiválasztott parkolóhely: " />
 		<text name="AD_parkVehicle_deleted"							text="parking destination deleted!" />
