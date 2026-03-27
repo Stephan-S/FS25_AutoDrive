@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Dotankovat vozidlo" />
 		<text name="input_ADRepairVehicle"								text="AD: Opravit vozidlo" />
 		<text name="input_ADSwapTargets"								text="AD: Zaměnit cíle" />
-		<text name="input_ADStartHelper"								text="AD: Použít AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Přepnout AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Použít AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Přepnout AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Vývojářské Akce" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Přepnout cíl automatického vyzvednutí" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Přepnout cíl automatického vyložení" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Přepnout načítání podle úrovně naplnění" />
 		<text name="hud_avoidFruit"									text="AD: Nevjíždět do porostu" />
-		<text name="hud_startHelper"									text="AD: Start AI/CP/AIVE v místě určení" />
+		<text name="hud_startHelper"									text="AD: Start AI/CP v místě určení" />
 		<text name="AD_parkVehicle_noPosSet"							text="Vozidlo nemá parkoviště. Vyberte cíl a stiskněte pravé tlačítko myši." />
 		<text name="AD_parkVehicle_selected"							text="Zvolená parkovací zóna: " />
 		<text name="AD_parkVehicle_deleted"							text="cíl parkování smazán!" />

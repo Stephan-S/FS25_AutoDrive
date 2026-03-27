@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Reabastecer veículo" />
 		<text name="input_ADRepairVehicle"								text="AD: Reparar veículo" />
 		<text name="input_ADSwapTargets"								text="AD: Trocar destinos" />
-		<text name="input_ADStartHelper"								text="AD: Ativar AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Alternar AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Ativar AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Alternar AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Ação Developer" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Alternar para coleta automática" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Alternar para descarga automática" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: alternar para nível de preenchimento" />
 		<text name="hud_avoidFruit"									text="AD: Evitar plantações" />
-		<text name="hud_startHelper"									text="AD: Iniciar AI/CP/AIVE no destino" />
+		<text name="hud_startHelper"									text="AD: Iniciar AI/CP no destino" />
 		<text name="AD_parkVehicle_noPosSet"							text="Nenhum destino de estacionamento atribuído." />
 		<text name="AD_parkVehicle_selected"							text="Destino de estacionamento escolhido: " />
 		<text name="AD_parkVehicle_deleted"							text="destino de estacionamento excluído!" />

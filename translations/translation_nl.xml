@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Voertuig tanken" />
 		<text name="input_ADRepairVehicle"								text="AD: Voertuig repareren" />
 		<text name="input_ADSwapTargets"								text="AD: Bestemmingen verwisselen" />
-		<text name="input_ADStartHelper"								text="AD: Overdracht aan AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Wissel tussen AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Overdracht aan AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Wissel tussen AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Ontwikkelaars actie" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Automatische laad bestemming aan/uit" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Automatische los bestemming aan/uit" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Toggle loading by fill level" />
 		<text name="hud_avoidFruit"									text="AD: Fruit vermijden" />
-		<text name="hud_startHelper"									text="AD: Start AI/CP/AIVE op bestemming" />
+		<text name="hud_startHelper"									text="AD: Start AI/CP op bestemming" />
 		<text name="AD_parkVehicle_noPosSet"							text="Geen parkeerbestemming toegewezen. Wijzig het momenteel geselecteerde bestemming toe met de rechtermuisknop." />
 		<text name="AD_parkVehicle_selected"							text="Toegewezen als parkeerplaats: " />
 		<text name="AD_parkVehicle_deleted"							text="Parkeerplaats verwijderd" />

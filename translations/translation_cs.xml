@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: 车辆加油" />
 		<text name="input_ADRepairVehicle"								text="AD: 修理车辆" />
 		<text name="input_ADSwapTargets"								text="AD: 交换目标" />
-		<text name="input_ADStartHelper"								text="AD: 交接给 AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: 切换 AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: 交接给 AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: 切换 AI/CP" />
 		<text name="input_AD_devAction"								text="AD: 开发人员操作" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: 切换自动拾取目标" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: 切换自动卸载目标" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: 按填充级别切换装载" />
 		<text name="hud_avoidFruit"									text="AD: 规避作物" />
-		<text name="hud_startHelper"									text="AD: 在目的地开始 AI/CP/AIVE" />
+		<text name="hud_startHelper"									text="AD: 在目的地开始 AI/CP" />
 		<text name="AD_parkVehicle_noPosSet"							text="未指定停车目的地。" />
 		<text name="AD_parkVehicle_selected"							text="选择的停车地点：" />
 		<text name="AD_parkVehicle_deleted"							text="停车目的地已删除！" />

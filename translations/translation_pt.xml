@@ -55,14 +55,14 @@
 		<text name="input_ADRefuelVehicle"								text="AD: Refuel vehicle" />
 		<text name="input_ADRepairVehicle"								text="AD: Repair vehicle" />
 		<text name="input_ADSwapTargets"								text="AD: Trocar targets" />
-		<text name="input_ADStartHelper"								text="AD: Pass to AI/CP/AIVE" />
-		<text name="input_ADToggleUsedHelper"							text="AD: Toggle AI/CP/AIVE" />
+		<text name="input_ADStartHelper"								text="AD: Pass to AI/CP" />
+		<text name="input_ADToggleUsedHelper"							text="AD: Toggle AI/CP" />
 		<text name="input_AD_devAction"								text="AD: Developer Action" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Toggle automatic pickup target" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Toggle automatic unload target" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Toggle loading by fill level" />
 		<text name="hud_avoidFruit"									text="AD: Evitar cultura" />
-		<text name="hud_startHelper"									text="AD: Iniciar o AI/CP/AIVE no destino" />
+		<text name="hud_startHelper"									text="AD: Iniciar o AI/CP no destino" />
 		<text name="AD_parkVehicle_noPosSet"							text="Nenhum destino de estacionamento atribuído. Atribua o destino atualmente selecionado com o botão direito do mouse." />
 		<text name="AD_parkVehicle_selected"							text="Escolher destino de estacionamento: " />
 		<text name="AD_parkVehicle_deleted"							text="parking destination deleted!" />

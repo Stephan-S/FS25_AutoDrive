@@ -62,7 +62,7 @@
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Choix automatique du point de déchargement" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Toggle loading by fill level" />
 		<text name="hud_avoidFruit"									text="AD: Éviter les cultures" />
-		<text name="hud_startHelper"									text="AD: Démarrer AI/CP/AIVE à la destination" />
+		<text name="hud_startHelper"									text="AD: Démarrer AI/CP à la destination" />
 		<text name="AD_parkVehicle_noPosSet"							text="Pas de parking attribué. Veuillez sélectionner la (Destination actuelle) et corriger avec le clic droit de souris sur le 'P' HUD." />
 		<text name="AD_parkVehicle_selected"							text="Parking assigné: " />
 		<text name="AD_parkVehicle_deleted"							text="Le parking en destination a été supprimé !" />
