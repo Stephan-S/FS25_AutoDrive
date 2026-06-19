@@ -99,6 +99,8 @@ function PathFinderModule:new(vehicle)
 end
 
 function PathFinderModule:reset()
+    self.dubinsDone = false
+    self.dubinsCount = 0
     PathFinderModule.debugMsg(self.vehicle, "PFM:reset start")
     self.mask = AutoDrive.collisionMaskTerrain
     self.steps = 0
@@ -171,6 +173,7 @@ function PathFinderModule:reset()
         }
         self.minTurnRadius = AutoDrive.getDriverRadius(self.vehicle) * 2 / 3
         self.isNewPF = false
+        self.dubinsDone = false
     end
 end
 
