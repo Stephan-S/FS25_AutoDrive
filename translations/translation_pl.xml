@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="Powyżej ciągnika" />
 		<text name="gui_ad_enableTrafficDetection"						text="Wykrywanie kolizji" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Zaawansowane wykrywanie kolizji, które wykrywa również ruch AI, znaki, ogrodzenia itp Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="Cofanie przy zablokowaniu" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Jeśli kierowca jest zablokowany przez przeszkodę przez wybrany czas, cofa się i próbuje kontynuować. Po 3 nieudanych próbach w tym samym miejscu zatrzymuje się z komunikatem o błędzie. '-' wyłącza tę funkcję." />
 		<text name="gui_ad_shovelWidth"								text="Szerokość łychy (dodatek)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Jeżeli automatycznie wykryta szerokość łychy jest zbyt mała, można ją zwiększyć o tą wartość" />
 		<text name="gui_ad_preCallLevel"								text="Wezwij kierowcę przy" />

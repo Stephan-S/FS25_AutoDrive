@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="Boven de tractor" />
 		<text name="gui_ad_enableTrafficDetection"						text="Botsingdetectie" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Geavanceerde botsingsdetectie, die ook AI-verkeer, borden, hekken enz. detecteert Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="Achteruit bij blokkade" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Als de bestuurder gedurende de gekozen tijd door een obstakel wordt geblokkeerd, rijdt hij achteruit en probeert verder te gaan. Na 3 mislukte pogingen op dezelfde plek stopt hij met een foutmelding. '-' schakelt dit uit." />
 		<text name="gui_ad_shovelWidth"								text="Shovel breedte (Toevoeging)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Als de automatisch gedetecteerde shovel te klein is, kan dat met deze waarde worden verhoogd" />
 		<text name="gui_ad_preCallLevel"								text="Vulniveau eerder oproepen" />

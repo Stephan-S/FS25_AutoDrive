@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="над техникой" />
 		<text name="gui_ad_enableTrafficDetection"						text="Обнаружение преград" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Продвинутое определение преград/коллизий, которое также обнаруживает AI-трафик, знаки, заборы и т.д. Отключено, обнаружение FS 22 или FS 19 столкновение" />
+		<text name="gui_ad_reverseOnStuck"								text="Сдавать назад при блокировке" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Если водитель заблокирован препятствием дольше выбранного времени, он сдаёт назад и пытается продолжить. После 3 неудачных попыток на одном месте он останавливается с сообщением об ошибке. «-» отключает функцию." />
 		<text name="gui_ad_shovelWidth"								text="Добавочная ширина ковша" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Если автоматически определенная ширина ковша слишком мала, ее можно увеличить с помощью этого значения." />
 		<text name="gui_ad_preCallLevel"								text="Уровень предварительного вызова" />

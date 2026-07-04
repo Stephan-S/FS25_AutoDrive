@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="Over køretøj" />
 		<text name="gui_ad_enableTrafficDetection"						text="Kollistion detektering" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Advanceret kollition detektering, Finder AI-trafik, skilte, hegn osv." />
+		<text name="gui_ad_reverseOnStuck"								text="Bak ved blokering" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Hvis føreren er blokeret af en forhindring i den valgte tid, bakker han og forsøger at fortsætte. Efter 3 mislykkede forsøg samme sted stopper han med en fejlmeddelelse. '-' deaktiverer funktionen." />
 		<text name="gui_ad_shovelWidth"								text="Skovel brede (Tillæg)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Hvis automatisk detekteret og skovl breden er for lille, kan den øges med denne værdi" />
 		<text name="gui_ad_preCallLevel"								text="Tilkald påfyldningsniveau" />

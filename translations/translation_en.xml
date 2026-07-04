@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="Above tractor" />
 		<text name="gui_ad_enableTrafficDetection"						text="Collision detection" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Advanced collision detection, which also detects AI-traffic, signs, fences etc. Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="Reverse when blocked" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="If the driver is blocked by an obstacle or stuck for the selected time, he reverses and tries to continue. After 3 failed attempts in the same spot he stops with an error message. '-' disables this." />
 		<text name="gui_ad_shovelWidth"								text="Shovel width (Addition)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="If automatically detected shovel width is too small, it can be increased with this value" />
 		<text name="gui_ad_preCallLevel"								text="Pre call level" />

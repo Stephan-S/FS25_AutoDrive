@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="Traktörün üstünde" />
 		<text name="gui_ad_enableTrafficDetection"						text="Çarpışma algılama" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Yapay zeka trafiğini, işaretleri, çitleri vb. Algılayan gelişmiş çarpışma algılama Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="Engellenince geri git" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Sürücü seçilen süre boyunca bir engel tarafından engellenirse geri gider ve devam etmeyi dener. Aynı yerde 3 başarısız denemeden sonra hata mesajıyla durur. '-' bu özelliği kapatır." />
 		<text name="gui_ad_shovelWidth"								text="Kürek genişliği (Ekleme)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Otomatik olarak algılanan kepçe genişliği çok küçükse bu değer ile artırılabilir." />
 		<text name="gui_ad_preCallLevel"								text="Çağrı öncesi seviyesi" />

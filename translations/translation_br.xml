@@ -165,6 +165,8 @@
 		<text name="gui_ad_aboveDriver"								text="Acima do trator" />
 		<text name="gui_ad_enableTrafficDetection"						text="Detecção de colisão" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Detecção de colisão FS 22 ou FS 19 desativado" />
+		<text name="gui_ad_reverseOnStuck"								text="Dar ré quando bloqueado" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Se o motorista ficar bloqueado por um obstáculo durante o tempo selecionado, ele dá ré e tenta continuar. Após 3 tentativas falhas no mesmo local, ele para com uma mensagem de erro. '-' desativa esta função." />
 		<text name="gui_ad_shovelWidth"								text="Largura da pá-carregadeira (Adição)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Se a largura da pá-carregadeirae detectada automaticamente for muito pequena, ela pode ser aumentada com esse valor" />
 		<text name="gui_ad_preCallLevel"								text="Chamar o motorista" />
