@@ -167,6 +167,8 @@
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="高级碰撞检测，还可以检测 AI 交通、标志、围栏等。 Off, detect FS 22 or FS 19 collision" />
 		<text name="gui_ad_reverseOnStuck"								text="被阻挡时倒车" />
 		<text name="gui_ad_reverseOnStuck_tooltip"						text="如果驾驶员被障碍物阻挡超过所选时间，他会倒车并尝试继续行驶。在同一位置尝试3次失败后，将停车并显示错误信息。'-'表示禁用此功能。" />
+		<text name="gui_ad_stuckHandoverDistance"						text="卡住时的到达容差" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="如果驾驶员卡在离路线终点比该值更近的地方，则目标视为已到达（'驾驶到'模式或移交给CP/AIVE/AI时）——例如目标点上停着另一辆车。" />
 		<text name="gui_ad_shovelWidth"								text="工具宽度（加法）" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="如果自动检测到的工具宽度太小，可以增加这个值" />
 		<text name="gui_ad_preCallLevel"								text="预呼叫级别" />

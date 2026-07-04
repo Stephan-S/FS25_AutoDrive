@@ -167,6 +167,8 @@
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Permet la détection de collision avancée, qui réagit également au trafic des PNJ, aux panneaux, aux clôtures, etc... Off, detect FS 22 or FS 19 collision" />
 		<text name="gui_ad_reverseOnStuck"								text="Reculer en cas de blocage" />
 		<text name="gui_ad_reverseOnStuck_tooltip"						text="Si le conducteur est bloqué par un obstacle pendant la durée choisie, il recule et essaie de continuer. Après 3 tentatives infructueuses au même endroit, il s'arrête avec un message d'erreur. '-' désactive cette fonction." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Tolérance d'arrivée en cas de blocage" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Si le conducteur est bloqué plus près de la fin du trajet que cette valeur, la destination est considérée comme atteinte (mode 'Conduire vers' ou transfert CP/AIVE/IA) - p. ex. si un autre véhicule est garé sur le point cible." />
 		<text name="gui_ad_shovelWidth"								text="Largeur du godet (augmentation)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Si la largeur détectée est trop petite, elle peut être augmentée." />
 		<text name="gui_ad_preCallLevel"								text="Appel anticipé pour décharger" />

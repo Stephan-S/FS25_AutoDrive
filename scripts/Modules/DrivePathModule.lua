@@ -14,8 +14,9 @@ ADDrivePathModule.AVOIDANCE_REVERSE_DISTANCE = 12
 ADDrivePathModule.AVOIDANCE_SKIP_DISTANCE = 20
 ADDrivePathModule.AVOIDANCE_FORWARD_SPEED = 8
 ADDrivePathModule.AVOIDANCE_REVERSE_SPEED = 6
--- if stuck closer to the end of the route than this, declare the target reached instead of maneuvering
-ADDrivePathModule.STUCK_HANDOVER_DISTANCE = 20
+-- if stuck closer to the end of the route than this, declare the target reached instead of
+-- maneuvering (fallback, configurable via the stuckHandoverDistance setting)
+ADDrivePathModule.STUCK_HANDOVER_DISTANCE = 30
 
 function ADDrivePathModule:new(vehicle)
     local o = {}
@@ -898,8 +899,9 @@ end
 --- at the destination, it is better to declare the target reached than to maneuver around or
 --- give up right next to it.
 function ADDrivePathModule:isStuckCloseToTarget()
-    local distance = self:getDistanceToLastWaypoint(40)
-    if distance == nil or distance > ADDrivePathModule.STUCK_HANDOVER_DISTANCE then
+    local maxDistance = AutoDrive.getSetting("stuckHandoverDistance") or ADDrivePathModule.STUCK_HANDOVER_DISTANCE
+    local distance = self:getDistanceToLastWaypoint(60)
+    if distance == nil or distance > maxDistance then
         return false
     end
     local usesHelper = self.vehicle.ad.stateModule.usedHelper ~= nil and

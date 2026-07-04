@@ -617,6 +617,17 @@ AutoDrive.settings.reverseOnStuck = {
     isVehicleSpecific = false
 }
 
+AutoDrive.settings.stuckHandoverDistance = {
+    values = {10, 15, 20, 25, 30, 40, 50},
+    texts = {"10m", "15m", "20m", "25m", "30m", "40m", "50m"},
+    default = 5,
+    current = 5,
+    text = "gui_ad_stuckHandoverDistance",
+    tooltip = "gui_ad_stuckHandoverDistance_tooltip",
+    translate = false,
+    isVehicleSpecific = false
+}
+
 AutoDrive.settings.shovelWidth = {
     values = {0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0},
     texts = {"0m", "0.2m", "0.4m", "0.6m", "0.8m", "1.0m", "1.2m", "1.4m", "1.6m", "1.8m", "2.0m", "2.2m", "2.4m", "2.6m", "2.8m", "3.0m", "3.2m", "3.4m", "3.6m", "3.8m", "4.0m"},
