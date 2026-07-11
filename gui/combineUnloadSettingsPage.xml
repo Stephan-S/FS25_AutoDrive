@@ -10,6 +10,12 @@
 
 		<ScrollingLayout profile="fs25_settingsLayout" id="boxLayout">
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
+				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="unloaderSelection" id="unloaderSelection">
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_unloaderSelection_tooltip"/>
+				</MultiTextOption>
+				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_unloaderSelection"/>
+			</Bitmap>
+			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="preCallLevel" id="preCallLevel">
 					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_preCallLevel_tooltip"/>
 				</MultiTextOption>

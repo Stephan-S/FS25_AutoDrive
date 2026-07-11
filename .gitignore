@@ -3,3 +3,4 @@
 /venv
 *.zip
 *.gsp* # Giants Software Project
+baseGameScripts

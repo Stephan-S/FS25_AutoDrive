@@ -60,6 +60,7 @@
 		<text name="input_AD_devAction"								text="AD: Entwickler-Aktion" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Automatisches Ladeziel umschalten" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Automatisches Entladeziel umschalten" />
+		<text name="input_ADSendDriverToUnload"						text="AD: Abfahrer zum Abladen schicken" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Beladung nach Füllstand umschalten" />
 		<text name="hud_avoidFruit"									text="AD: Fruchtumfahrung" />
 		<text name="hud_startHelper"									text="AD: Starte AI/CP Fahrer am Zielpunkt" />
@@ -222,6 +223,10 @@
 		<text name="gui_ad_cornerSpeed_tooltip"						text="Passe die Kurvengeschwindigkeit pro Fahrzeug an. Masse und Geschwindigkeit beeinflussen weiterhin den Bremspunkt." />
 		<text name="gui_ad_callSecondUnloader"							text="2. Ablader rufen" />
 		<text name="gui_ad_callSecondUnloader_tooltip"					text="Rufe 2. Ablader, wenn der aktuelle Abfahrer das eingestellte Fülllevel erreicht hat." />
+		<text name="gui_ad_unloaderSelection"						text="Abfahrer-Auswahl" />
+		<text name="gui_ad_unloaderSelection_tooltip"				text="Wählt den nächsten Abfahrer nach kürzester Entfernung oder höchstem Füllstand." />
+		<text name="gui_ad_distance"								text="Entfernung" />
+		<text name="gui_ad_fillLevel"								text="Füllstand" />
 		<text name="gui_ad_followOnlyOnField"							text="Abfahrer aufs Feld begrenzen" />
 		<text name="gui_ad_followOnlyOnField_tooltip"					text="Während dem aktiven Abladen/Häckseln darf nicht über Feldgrenzen hinausgefahren werden." />
 		<text name="gui_ad_addSettingsToHUD"							text="Mehr Einstellungen im HUD" />
@@ -396,5 +401,6 @@
 		<text name="gui_ad_editorTip_9"								text="Erster Punkt ist Kreuzungspunkt, zweiter Nachbar:" />
 		<text name="gui_ad_editorTip_10"								text="LSTRG: Streckentyp wechseln" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Nebenstrecke wechseln" />
+		<text name="gui_ad_selectUnloaderTitle" text="Abfahrer zum Abladen schicken" />
 	</texts>
 </l10n>

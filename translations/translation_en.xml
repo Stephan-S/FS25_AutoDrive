@@ -60,6 +60,7 @@
 		<text name="input_AD_devAction"								text="AD: Developer Action" />
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Toggle automatic pickup target" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Toggle automatic unload target" />
+		<text name="input_ADSendDriverToUnload"						text="AD: Send unloader to unload" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Toggle loading by fill level" />
 		<text name="hud_avoidFruit"									text="AD: Avoid fruit" />
 		<text name="hud_startHelper"									text="AD: Start AI/CP at destination" />
@@ -222,6 +223,10 @@
 		<text name="gui_ad_cornerSpeed_tooltip"						text="Adjust corner speed for individual vehicle. Mass and current speed will still impact brake point" />
 		<text name="gui_ad_callSecondUnloader"							text="Call 2. Unloader" />
 		<text name="gui_ad_callSecondUnloader_tooltip"					text="Call 2. Unloader when the current unloader reaches the precall fill level" />
+		<text name="gui_ad_unloaderSelection"						text="Unloader selection" />
+		<text name="gui_ad_unloaderSelection_tooltip"				text="Selects the next unloader by shortest distance or highest fill level." />
+		<text name="gui_ad_distance"								text="Distance" />
+		<text name="gui_ad_fillLevel"								text="Fill level" />
 		<text name="gui_ad_followOnlyOnField"							text="Restrict unloader to field" />
 		<text name="gui_ad_followOnlyOnField_tooltip"					text="Restrict unloader to field while actively unloading" />
 		<text name="gui_ad_addSettingsToHUD"							text="Add settings to HUD" />
@@ -396,5 +401,6 @@
 		<text name="gui_ad_editorTip_9"								text="1. node is intersection, second it's neighbor:" />
 		<text name="gui_ad_editorTip_10"								text="LCTRL: Toggle segment type (normal/dual)" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Toggle side road" />
+		<text name="gui_ad_selectUnloaderTitle" text="Send unloader to unload" />
 	</texts>
 </l10n>

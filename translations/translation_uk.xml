@@ -396,5 +396,11 @@
 		<text name="gui_ad_editorTip_9"								text="1-й вузол це перетин, 2-й це сусідній:" />
 		<text name="gui_ad_editorTip_10"								text="з L-Ctrl = Зміна типу сегменту (одно/двостороння)" />
 		<text name="gui_ad_editorTip_11"								text="з L-Shift = Зміна типу на 'бічна дорога'" />
+		<text name="input_ADSendDriverToUnload" text="AD: Send unloader to unload" />
+		<text name="gui_ad_unloaderSelection" text="Unloader selection" />
+		<text name="gui_ad_unloaderSelection_tooltip" text="Selects the next unloader by shortest distance or highest fill level." />
+		<text name="gui_ad_distance" text="Distance" />
+		<text name="gui_ad_fillLevel" text="Fill level" />
+		<text name="gui_ad_selectUnloaderTitle" text="Send unloader to unload" />
 	</texts>
 </l10n>

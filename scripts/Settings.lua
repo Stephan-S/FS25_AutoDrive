@@ -755,6 +755,17 @@ AutoDrive.settings.preCallLevel = {
     isVehicleSpecific = true
 }
 
+AutoDrive.settings.unloaderSelection = {
+    values = {1, 2},
+    texts = {"gui_ad_distance", "gui_ad_fillLevel"},
+    default = 1,
+    current = 1,
+    text = "gui_ad_unloaderSelection",
+    tooltip = "gui_ad_unloaderSelection_tooltip",
+    translate = true,
+    isVehicleSpecific = true
+}
+
 AutoDrive.settings.chaseSide = {
     values = {AutoDrive.CHASEPOS_AUTO, AutoDrive.CHASEPOS_LEFT, AutoDrive.CHASEPOS_REAR, AutoDrive.CHASEPOS_RIGHT},
     texts = {"Auto", "AD_task_chase_side_left", "AD_task_chase_side_rear", "AD_task_chase_side_right"},

@@ -11,6 +11,7 @@ function AutoDrive:loadGUI()
 	AutoDrive.gui.ADNotificationsHistoryGui = ADNotificationsHistoryGui.new()
 	AutoDrive.gui.ADColorSettingsGui = ADColorSettingsGui.new()
 	AutoDrive.gui.ADScanConfirmationGui = ADScanConfirmationGui.new()
+	AutoDrive.gui.ADSelectUnloaderGui = ADSelectUnloaderGui.new()
 
     local count = 1
     local result = nil
@@ -58,6 +59,12 @@ function AutoDrive:loadGUI()
     end
 
 	result = g_gui:loadGui(AutoDrive.directory .. "gui/scanConfirmationGUI.xml", "ADScanConfirmationGui", AutoDrive.gui.ADScanConfirmationGui)
+    count = count + 1
+    if result == nil then
+        AutoDrive.debugMsg(nil, "AutoDrive:loadGUI failed count %d", count)
+    end
+
+	result = g_gui:loadGui(AutoDrive.directory .. "gui/selectUnloaderGUI.xml", "ADSelectUnloaderGui", AutoDrive.gui.ADSelectUnloaderGui)
     count = count + 1
     if result == nil then
         AutoDrive.debugMsg(nil, "AutoDrive:loadGUI failed count %d", count)
@@ -168,6 +175,13 @@ end
 function AutoDrive.onOpenScanConfirmation()
 	if not AutoDrive.gui.ADScanConfirmationGui.isOpen then
 		g_gui:showDialog("ADScanConfirmationGui")
+	end
+end
+
+function AutoDrive.onOpenSelectUnloader(harvester)
+	if not AutoDrive.gui.ADSelectUnloaderGui.isOpen then
+		AutoDrive.gui.ADSelectUnloaderGui:setHarvester(harvester)
+		g_gui:showDialog("ADSelectUnloaderGui")
 	end
 end
 

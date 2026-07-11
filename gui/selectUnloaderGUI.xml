@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
+    <GuiElement profile="newLayer"/>
+    <Bitmap profile="dialogFullscreenBg"/>
+    <GuiElement profile="fs25_dialogBg" size="740px 540px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddleSmall"/>
+        <ThreePartBitmap profile="fs25_dialogBgTopSmall"/>
+        <ThreePartBitmap profile="fs25_dialogBgBottom"/>
+
+        <BoxLayout profile="ad_common_dialogContentContainer">
+            <Text profile="ad_common_dialogTitle" text="$l10n_gui_ad_selectUnloaderTitle"/>
+            <ThreePartBitmap profile="ad_common_dialogTitleLineSeparator"/>
+
+            <BoxLayout absoluteSizeOffset="40px 130px" margin="0 0 0 10px">
+                <SmoothList id="unloaderList" profile="ad_common_list" onDoubleClick="onDoubleClick">
+                    <ListItem profile="ad_common_listItem">
+                        <Text name="listItemText" profile="ad_common_listItemText" width="100%"/>
+                    </ListItem>
+                </SmoothList>
+                <ThreePartBitmap profile="ad_common_listSliderBox">
+                    <Slider profile="ad_common_listSlider" dataElementId="unloaderList"/>
+                </ThreePartBitmap>
+            </BoxLayout>
+
+            <BoxLayout profile="ad_common_dialogButtonBox">
+                <Button profile="buttonOK" text="$l10n_button_ok" onClick="onClickSelect"/>
+                <Bitmap profile="fs25_dialogButtonBoxSeparator"/>
+                <Button profile="buttonBack" text="$l10n_button_back" onClick="onClickBack"/>
+            </BoxLayout>
+        </BoxLayout>
+    </GuiElement>
+</GUI>
+

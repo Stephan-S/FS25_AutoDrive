@@ -90,6 +90,7 @@ Changelog: Необходимые корректировки для FS25, нас
 		<action name="ADSelectPreviousFillType"/>
 		<action name="ADOpenGUI"/>
 		<action name="ADCallDriver"/>
+		<action name="ADSendDriverToUnload"/>
 		<action name="ADGoToVehicle"/>
 		<action name="ADIncLoopCounter"/>
 		<action name="ADDecLoopCounter"/>
@@ -113,6 +114,9 @@ Changelog: Необходимые корректировки для FS25, нас
 		<actionBinding action="ADToggleHud">
 			<binding device="KB_MOUSE_DEFAULT" input="KEY_lalt KEY_KP_0" />
 			<binding device="0_XINPUT_GAMEPAD" input="BUTTON_5 BUTTON_17" />
+		</actionBinding>
+		<actionBinding action="ADSendDriverToUnload">
+			<binding device="KB_MOUSE_DEFAULT" input="KEY_lctrl KEY_lalt KEY_u" />
 		</actionBinding>
 		<actionBinding action="ADOpenGUI">
 			<binding device="KB_MOUSE_DEFAULT" input="KEY_lctrl KEY_lalt KEY_KP_0" />

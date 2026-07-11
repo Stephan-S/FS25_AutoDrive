@@ -43,6 +43,7 @@ ADInputManager.actionsToInputs = {
     {"ADSelectPreviousFillType", "input_previousFillType", true, true},
     {"ADOpenGUI", "input_openGUI", true, false, true, 2},
     {"ADCallDriver", "input_callDriver", false, true},
+    {"ADSendDriverToUnload", "input_sendDriverToUnload", false, false},
     {"ADGoToVehicle", "input_goToVehicle", false, false},
     {"ADIncLoopCounter", "input_incLoopCounter", true, true},
     {"ADDecLoopCounter", "input_decLoopCounter", true, true},
@@ -570,5 +571,15 @@ function ADInputManager:input_repairVehicle(vehicle, farmId)
         self:input_start_stop(vehicle, farmId)
     else
         AutoDriveMessageEvent.sendMessageOrNotification(vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_No_Repair_Station;", 5000, vehicle.ad.stateModule:getName())
+    end
+end
+
+function ADInputManager:input_sendDriverToUnload(vehicle)
+    local harvester = vehicle.ad.attachableCombine or vehicle
+    local unloader = ADHarvestManager:getAssignedUnloader(harvester)
+    if unloader ~= nil then
+        AutoDriveSendUnloaderToUnloadEvent.sendEvent(harvester, unloader)
+    else
+        AutoDrive.onOpenSelectUnloader(harvester)
     end
 end

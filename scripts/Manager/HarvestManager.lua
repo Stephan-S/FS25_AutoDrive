@@ -101,7 +101,8 @@ function ADHarvestManager:update(dt)
         if vehicle.isTrailedHarvester then
             vehicle = vehicle.trailingVehicle
         end
-        if (vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)) then
+        local manuallyActive = AutoDrive:getIsEntered(vehicle:getRootVehicle()) and (not idleHarvester.ad.isChopper or AutoDrive.isPipeOut(idleHarvester))
+        if (vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or manuallyActive then
             -- ADHarvestManager.debugMsg(idleHarvester, "ADHarvestManager:update add to harvesters")
             table.insert(self.harvesters, idleHarvester)
             table.removeValue(self.idleHarvesters, idleHarvester)
@@ -113,7 +114,8 @@ function ADHarvestManager:update(dt)
             vehicle = vehicle.trailingVehicle
         end
         local unloader = self:getAssignedUnloader(harvester)
-        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
+        local manuallyActive = AutoDrive:getIsEntered(vehicle:getRootVehicle()) and (not harvester.ad.isChopper or AutoDrive.isPipeOut(harvester))
+        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or manuallyActive)
             or (vehicle.ad.onRouteToRefuel or vehicle.ad.onRouteToRepair) -- harvester is going to refuel or park
             or (unloader ~= nil and unloader.ad.stateModule:getFirstMarker() ~= vehicle.ad.stateModule:getFirstMarker()) -- harvester - unloader targets do not match
         then
@@ -237,22 +239,21 @@ function ADHarvestManager:update(dt)
 end
 
 function ADHarvestManager.doesHarvesterNeedUnloading(harvester, ignorePipe)
-    local ret = false
-
     local pipeOut = AutoDrive.isPipeOut(harvester)
-    ret = (
-            (
-                (pipeOut)
-            )
-            and 
-            harvester.ad.noMovementTimer.elapsedTime > 5000
-        )
+    local stoppedForUnloading = harvester.ad.noMovementTimer.elapsedTime > 5000
+    if harvester.ad.isChopper then
+        return pipeOut and stoppedForUnloading
+    end
+
+    local fillLevel, fillCapacity = AutoDrive.getObjectFillLevels(harvester)
+    local fillPercent = fillCapacity > 0 and (fillLevel / fillCapacity) or 0
+    local reachedPreCallLevel = fillPercent >= AutoDrive.getSetting("preCallLevel", harvester)
     -- ADHarvestManager.debugMsg(harvester, "ADHarvestManager.doesHarvesterNeedUnloading cpIsCalling %s pipeOut %s noMovementTimer %s"
     -- , tostring(cpIsCalling)
     -- , tostring(pipeOut)
     -- , tostring(harvester.ad.noMovementTimer.elapsedTime > 5000)
     -- )
-    return ret
+    return pipeOut and stoppedForUnloading and reachedPreCallLevel
 end
 
 function ADHarvestManager.isHarvesterActive(harvester)
@@ -288,7 +289,7 @@ function ADHarvestManager.isHarvesterActive(harvester)
         local manuallyControlled = AutoDrive:getIsEntered(harvester:getRootVehicle()) and (not (harvester.getIsAIActive ~= nil and harvester:getIsAIActive()))
 
         if manuallyControlled then
-            return  AutoDrive.isPipeOut(harvester)
+            return reachedPreCallLevel
         end
         -- ADHarvestManager.debugMsg(harvester, "ADHarvestManager.isHarvesterActive reachedPreCallLevel %s isAlmostFull %s allowedToChase %s", reachedPreCallLevel, isAlmostFull, allowedToChase)
 
@@ -329,19 +330,65 @@ end
 function ADHarvestManager:getClosestIdleUnloader(harvester)
     local closestUnloader = nil
     local closestDistance = math.huge
+    local highestFillRatio = -1
+    local selectByFillLevel = AutoDrive.getSetting("unloaderSelection", harvester) == 2
     for _, unloader in pairs(self.idleUnloaders) do
-        -- sort by distance to combine first
         local distance = AutoDrive.getDistanceBetween(unloader, harvester)
-        --local distanceMatch = distance <= ADHarvestManager.MAX_SEARCH_RANGE and AutoDrive.getSetting("findDriver")
         local targetsMatch = unloader.ad.stateModule:getFirstMarker() == harvester.ad.stateModule:getFirstMarker()
-        if targetsMatch then --if distanceMatch or targetsMatch then
-            if closestUnloader == nil or distance < closestDistance then
+        if targetsMatch then
+            local isBetterMatch = closestUnloader == nil or distance < closestDistance
+            local fillRatio = 0
+            if selectByFillLevel then
+                local trailers = AutoDrive.getAllUnits(unloader)
+                local fillLevel, _, _, fillFreeCapacity = AutoDrive.getAllFillLevels(trailers)
+                local capacity = fillLevel + fillFreeCapacity
+                fillRatio = capacity > 0 and fillLevel / capacity or 0
+                isBetterMatch = closestUnloader == nil or fillRatio > highestFillRatio or (fillRatio == highestFillRatio and distance < closestDistance)
+            end
+            if isBetterMatch then
                 closestUnloader = unloader
                 closestDistance = distance
+                highestFillRatio = fillRatio
             end
         end
     end
     return closestUnloader
+end
+
+function ADHarvestManager:getIdleUnloadersForHarvester(harvester)
+    local unloaders = {}
+    if harvester == nil or harvester.ad == nil or harvester.ad.stateModule == nil then
+        return unloaders
+    end
+
+    for _, unloader in pairs(self.idleUnloaders) do
+        if unloader.ad ~= nil and unloader.ad.stateModule ~= nil and unloader.ad.stateModule:getFirstMarker() == harvester.ad.stateModule:getFirstMarker() then
+            table.insert(unloaders, unloader)
+        end
+    end
+    return unloaders
+end
+
+function ADHarvestManager:sendUnloaderToUnload(harvester, unloader)
+    if unloader == nil or unloader.ad == nil or unloader.ad.stateModule == nil then
+        return false
+    end
+
+    local assignedUnloader = self:getAssignedUnloader(harvester)
+    if assignedUnloader ~= unloader then
+        local isAvailable = table.contains(self:getIdleUnloadersForHarvester(harvester), unloader)
+        if not isAvailable then
+            return false
+        end
+    end
+
+    local mode = unloader.ad.modes and unloader.ad.modes[AutoDrive.MODE_UNLOAD]
+    if mode == nil or not unloader.ad.stateModule:isActive() then
+        return false
+    end
+
+    mode:continue()
+    return true
 end
 
 function ADHarvestManager:hasHarvesterAvailableUnloader(harvester)

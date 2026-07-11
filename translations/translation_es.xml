@@ -396,5 +396,11 @@
 		<text name="gui_ad_editorTip_9"								text="1. nodo es intersección, segundo es vecino:" />
 		<text name="gui_ad_editorTip_10"								text="Alternar tipo de segmento (normal/dual)" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Alternar a carretera secundaria" />
+		<text name="input_ADSendDriverToUnload" text="AD: Send unloader to unload" />
+		<text name="gui_ad_unloaderSelection" text="Unloader selection" />
+		<text name="gui_ad_unloaderSelection_tooltip" text="Selects the next unloader by shortest distance or highest fill level." />
+		<text name="gui_ad_distance" text="Distance" />
+		<text name="gui_ad_fillLevel" text="Fill level" />
+		<text name="gui_ad_selectUnloaderTitle" text="Send unloader to unload" />
 	</texts>
 </l10n>
