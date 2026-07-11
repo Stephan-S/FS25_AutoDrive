@@ -236,7 +236,7 @@ function UnloadAtDestinationTask:isBaleUnloadFinished(dt)
             local distance = MathUtil.vector2Length(x - self.baleUnloadForwardsTarget.x, z - self.baleUnloadForwardsTarget.z)
             if distance >= 1 then
                 -- move some meters
-                self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.baleUnloadForwardsTarget, 1, false, 0.5, 1)
+                self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.baleUnloadForwardsTarget, 1, true, 0.5, 1)
                 return false
             end
         end

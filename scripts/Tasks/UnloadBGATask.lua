@@ -1195,7 +1195,7 @@ function UnloadBGATask:reverseFromBGALoad(dt)
 
     local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
     local lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.targetPoint.x, y, self.targetPoint.z)
-    AutoDrive.driveInDirection(self.vehicle, dt, 30, acc, 0.2, 20, allowedToDrive, false, -lx, -lz, finalSpeed, 1)
+    self:driveInDirection(dt, 30, acc, 0.2, 20, allowedToDrive, false, -lx, -lz, finalSpeed, 1)
 
     if math.sqrt(math.pow(x - self.targetPointClose.x, 2) + math.pow(z - self.targetPointClose.z, 2)) < 5 then
         self.action = self.ACTION_DRIVETOUNLOAD_INIT
@@ -1320,7 +1320,7 @@ function UnloadBGATask:reverseFromBGAUnload(dt)
     x = x + rx
     z = z + rz
     --local lx, lz = AutoDrive.getDriveDirection(self.vehicle, x, y, z)
-    AutoDrive.driveInDirection(self.vehicle, dt, 30, acc, 0.2, 20, allowedToDrive, false, nil, nil, finalSpeed, 1)
+    self:driveInDirection(dt, 30, acc, 0.2, 20, allowedToDrive, false, nil, nil, finalSpeed, 1)
 
     if self.shovelUnloadPosition ~= nil then
         if MathUtil.vector2Length(x - self.shovelUnloadPosition.x, z - self.shovelUnloadPosition.z) >= 6 then
@@ -1437,7 +1437,21 @@ function UnloadBGATask:setShovelOffsetToNonEmptyRow()
 end
 
 function UnloadBGATask:driveInDirection(dt, steeringAngleLimit, acceleration, slowAcceleration, slowAngleLimit, allowedToDrive, moveForwards, lx, lz, maxSpeed, slowDownFactor)
+    local collisionDetected
+    if moveForwards then
+        collisionDetected = self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) or self.vehicle.ad.sensors.frontSensor:pollInfo()
+    else
+        collisionDetected = self.vehicle.ad.collisionDetectionModule:checkReverseCollision()
+    end
+    if AutoDrive.getSetting("enableTrafficDetection") >= 1 and collisionDetected then
+        self.vehicle.ad.specialDrivingModule:stopVehicle(true, lx, lz)
+        self.vehicle.ad.specialDrivingModule:update(dt)
+        return
+    end
+
+    self.vehicle.ad.specialDrivingModule:releaseVehicle()
     if lx ~= nil and lz ~= nil then
+
         local dot = lz
         local angle = math.deg(math.acos(dot))
         if angle < 0 then
@@ -1461,6 +1475,8 @@ function UnloadBGATask:driveInDirection(dt, steeringAngleLimit, acceleration, sl
         end
 
         AutoDrive.driveInDirection(self.vehicle, dt, steeringAngleLimit, acceleration, slowAcceleration, slowAngleLimit, allowedToDrive, moveForwards, lx, lz, maxSpeed, slowDownFactor)
+    else
+        AutoDrive.driveInDirection(self.vehicle, dt, steeringAngleLimit, acceleration, slowAcceleration, slowAngleLimit, allowedToDrive, moveForwards, nil, nil, maxSpeed, slowDownFactor)
     end
 end
 

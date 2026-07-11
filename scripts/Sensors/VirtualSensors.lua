@@ -22,6 +22,16 @@ ADSensor.POS_CENTER = 10
 ADSensor.WIDTH_FACTOR = 0.7
 
 ADSensor.EXECUTION_DELAY = 10
+ADSensor.MAX_LIGHT_PUSHABLE_OBJECT_MASS = 100
+ADSensor.PHYSICAL_COLLISION_GROUPS = bit32.bor(
+    CollisionFlag.DEFAULT,
+    CollisionFlag.STATIC_OBJECT,
+    CollisionFlag.DYNAMIC_OBJECT,
+    CollisionFlag.TREE,
+    CollisionFlag.BUILDING,
+    CollisionFlag.VEHICLE,
+    CollisionFlag.TRAFFIC_VEHICLE
+)
 
 --
 --          <x>
@@ -46,6 +56,7 @@ function ADSensor:addSensorsToVehicle(vehicle)
     sensorParameters.dynamicLength = true
     sensorParameters.minDynamicLength = 0.2
     sensorParameters.minDynamicLengthForVehicles = 2
+    sensorParameters.executionDelay = 1
     sensorParameters.position = ADSensor.POS_FRONT
     sensorParameters.width = vehicle.size.width * 0.75
     local frontSensorDynamicShort = ADCollSensorSplit:new(vehicle, sensorParameters)
@@ -55,6 +66,7 @@ function ADSensor:addSensorsToVehicle(vehicle)
 
     sensorParameters = {}
     sensorParameters.minDynamicLength = 2
+    sensorParameters.width = math.max(vehicle.size.width, AutoDrive.getFrontToolWidth(vehicle) or 0) + AutoDrive.DIMENSION_ADDITION
     local frontSensorDynamicLong = ADCollSensor:new(vehicle, sensorParameters)
     vehicle.ad.sensors["frontSensorDynamicLong"] = frontSensorDynamicLong
 
@@ -167,6 +179,7 @@ function ADSensor:init(vehicle, sensorType, sensorParameters)
     self.initialized = false
     self.drawDebug = false
     self.executionDelay = 0
+    self.executionInterval = ADSensor.EXECUTION_DELAY
 
     self:loadBaseParameters()
     self:loadDynamicParameters(sensorParameters)
@@ -211,6 +224,9 @@ function ADSensor:loadDynamicParameters(sensorParameters)
     end
     if sensorParameters.collisionMask ~= nil then
         self.collisionMask = sensorParameters.collisionMask
+    end
+    if sensorParameters.executionDelay ~= nil then
+        self.executionInterval = math.max(1, sensorParameters.executionDelay)
     end
     if sensorParameters.position ~= nil then
         if sensorParameters.position >= ADSensor.POS_FRONT and sensorParameters.position <= ADSensor.POS_CENTER then
@@ -289,7 +305,9 @@ function ADSensor:getBoxShape()
     self.location = self:getLocationByPosition()
     local lookAheadDistance = self.length
     if self.dynamicLength then
-        lookAheadDistance = math.clamp(vehicle.lastSpeedReal * 3600 * 15.5 / 40, self.minDynamicLength, 50)
+        local speedMetersPerSecond = math.abs(vehicle.lastSpeedReal) * 1000
+        local stoppingDistance = speedMetersPerSecond * 0.8 + speedMetersPerSecond * speedMetersPerSecond / 7
+        lookAheadDistance = math.clamp(stoppingDistance, self.minDynamicLength, 60)
     end
 
     local vecZ = {x = 0, z = 1}
@@ -389,25 +407,88 @@ function ADSensor:getCorners(box)
 end
 
 function ADSensor:isElementBlockingVehicle(nodeId)
-    -- we want to ignore some elements and keep driving instead.
-    if nodeId == nil then
-        return false  -- no an element
-    end
-    if g_currentMission:getNodeObject(nodeId) ~= nil then
-        return true  -- not handled here
+    if nodeId == nil or nodeId == 0 or not getHasClassId(nodeId, ClassIds.SHAPE) or not getHasCollision(nodeId) then
+        return false
     end
 
-    local isShapeClass = getHasClassId(nodeId, ClassIds.SHAPE)
-    local isRigidBodyTypeDynamic = getRigidBodyType(nodeId) == RigidBodyType.DYNAMIC
-    local isDynamicCollision = CollisionFlag.getHasMaskFlagSet(nodeId, CollisionFlag.DYNAMIC_OBJECT)
+    local collisionGroup = getCollisionFilterGroup(nodeId)
+    local collisionMask = getCollisionFilterMask(nodeId)
+    local vehicleGroup = CollisionPreset.VEHICLE.group
+    local vehicleMask = CollisionPreset.VEHICLE.mask
 
-    -- traffic signs return true for all three checks above, this might require tweaking
-    if isShapeClass and isRigidBodyTypeDynamic and isDynamicCollision then
-        return false  -- probably a traffic sign
+    local hasPhysicalGroup = bit32.band(collisionGroup, ADSensor.PHYSICAL_COLLISION_GROUPS) ~= 0
+    local vehicleAcceptsShape = bit32.band(collisionGroup, vehicleMask) ~= 0
+    local shapeAcceptsVehicle = bit32.band(collisionMask, vehicleGroup) ~= 0
+    local physicallyCompatible = hasPhysicalGroup and vehicleAcceptsShape and shapeAcceptsVehicle
+    return physicallyCompatible and not self:isLightPushableObject(nodeId, collisionGroup)
+end
+
+function ADSensor:isLightPushableObject(nodeId, collisionGroup)
+    if getRigidBodyType(nodeId) ~= RigidBodyType.DYNAMIC then
+        return false
+    end
+    if getHasClassId(nodeId, ClassIds.MESH_SPLIT_SHAPE) then
+        return false
     end
 
-    -- unknown element
-    return true
+    local protectedGroups = bit32.bor(
+        CollisionFlag.STATIC_OBJECT,
+        CollisionFlag.TREE,
+        CollisionFlag.BUILDING,
+        CollisionFlag.VEHICLE,
+        CollisionFlag.TRAFFIC_VEHICLE
+    )
+    if bit32.band(collisionGroup, protectedGroups) ~= 0 then
+        return false
+    end
+
+    local mass = getMass(nodeId)
+    local isPushable = mass > 0 and mass <= ADSensor.MAX_LIGHT_PUSHABLE_OBJECT_MASS
+    if isPushable and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+        AutoDrive.debugMsg(self.vehicle, "Ignoring light pushable object node=%s mass=%.1f", I3DUtil.getNodePath(nodeId), mass)
+    end
+    return isPushable
+end
+
+function ADSensor:debugCollisionNode(nodeId)
+    if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+        AutoDrive.debugMsg(
+            self.vehicle,
+            "Sensor collision node=%s group=%s mask=%s rigidBody=%s",
+            I3DUtil.getNodePath(nodeId),
+            CollisionFlag.getFlagsStringFromMask(getCollisionFilterGroup(nodeId), false),
+            CollisionFlag.getFlagsStringFromMask(getCollisionFilterMask(nodeId), false),
+            tostring(getRigidBodyType(nodeId))
+        )
+    end
+end
+
+function ADSensor:getCollisionObject(nodeId)
+    local currentNode = nodeId
+    while currentNode ~= nil and currentNode ~= 0 do
+        local object = g_currentMission.nodeToObject[currentNode]
+        if object ~= nil then
+            return object
+        end
+        currentNode = getParent(currentNode)
+    end
+    return nil
+end
+
+function ADSensor:isCollisionObjectExcluded(collisionObject)
+    if collisionObject == nil then
+        return false
+    end
+
+    local taskModule = self.vehicle.ad and self.vehicle.ad.taskModule
+    local activeTask = taskModule and taskModule:getActiveTask()
+    local excludedVehicles = activeTask and activeTask:getExcludedVehiclesForCollisionCheck() or {}
+    for _, excludedVehicle in pairs(excludedVehicles) do
+        if collisionObject == excludedVehicle or AutoDrive:checkIsConnected(excludedVehicle, collisionObject) then
+            return true
+        end
+    end
+    return false
 end
 
 function ADSensor:updateSensor(dt)
@@ -496,7 +577,7 @@ function ADSensor:pollInfo(forced, widthFactor, lengthFactor)
             self:setEnabled(false)
         end
         self.lastTriggered = self:isTriggered()
-        self.executionDelay = ADSensor.EXECUTION_DELAY
+        self.executionDelay = self.executionInterval
         self.width = storedWidth
         self.length = storedLength
     end

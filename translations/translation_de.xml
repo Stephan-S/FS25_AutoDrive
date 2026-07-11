@@ -94,7 +94,7 @@
 		<text name="AD_lshift_for_reverse"								text="RUMSCH rückwärts fahren" />
 		<text name="gui_ad_Setting"									text="AutoDrive - Einstellungen" />
 		<text name="gui_ad_collisionHeigth"							text="Kollisionshöhe über Boden" />
-		<text name="gui_ad_collisionHeigth_tooltip"					text="Einstellung der Kollisionserkennung vor dem Fahrzeug. Wenn andere Fahrzeuge während des Fahrens nicht erkannt werden, verringern. (Standard: 2m)" />
+		<text name="gui_ad_collisionHeigth_tooltip"					text="Höhe des Kollisionssensors über dem Boden. Wenn Fahrzeuge nicht erkannt werden, schrittweise verringern. (Standard: 0,5 m)" />
 		<text name="gui_ad_blinkValue"									text="Lenkwinkel Blinker-Automatik" />
 		<text name="gui_ad_blinkValue_tooltip"							text="Lenkwinkel, ab dem beim Abbiegen automatisch geblinkt wird. (0 = Blinker deaktiviert)" />
 		<text name="gui_ad_pipe_offset"								text="Abstand Rohr" />

@@ -35,8 +35,6 @@ function ADCollSensorSplit:onUpdate(dt)
     --               \/
 
 
-    self.hit = self.newHit
-    self:setTriggered(self.hit)
     self.newHit = false
     self.boxes = nil
 
@@ -60,29 +58,26 @@ function ADCollSensorSplit:onUpdate(dt)
             end
         end
     end
+    self.hit = self.newHit
+    self:setTriggered(self.hit)
     self:onDrawDebug(self.boxes)
 end
 
 function ADCollSensorSplit:collisionTestCallbackSplit(transformId)
     local unloadDriver = ADHarvestManager:getAssignedUnloader(self.vehicle)
-    local collisionObject = g_currentMission.nodeToObject[transformId]
-
-    if collisionObject == nil then
-        -- let try if parent is a object
-        local parent = getParent(transformId)
-        if parent then
-            collisionObject = g_currentMission.nodeToObject[parent]
-        end
-    end
+    local collisionObject = self:getCollisionObject(transformId)
+    local isBlocking = self:isElementBlockingVehicle(transformId)
 
     if collisionObject ~= nil then
-        if collisionObject ~= self and collisionObject ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle:getRootVehicle(), collisionObject) then
+        if isBlocking and not self:isCollisionObjectExcluded(collisionObject) and collisionObject ~= self and collisionObject ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle:getRootVehicle(), collisionObject) then
             if unloadDriver == nil or (collisionObject ~= unloadDriver and (not AutoDrive:checkIsConnected(unloadDriver:getRootVehicle(), collisionObject))) then
                 self.newHit = true
+                self:debugCollisionNode(transformId)
             end
         end
-    elseif self:isElementBlockingVehicle(transformId) then
+    elseif isBlocking then
         self.newHit = true
+        self:debugCollisionNode(transformId)
     end
 end
 
@@ -149,10 +144,13 @@ end
 
 function ADCollSensorSplit:getBoxShapes(minLength)
     local width, length = AutoDrive.getVehicleDimensions(self.vehicle, false)
+    if self.position == ADSensor.POS_FRONT then
+        width = math.max(width, AutoDrive.getFrontToolWidth(self.vehicle) or 0) + AutoDrive.DIMENSION_ADDITION
+    end
 
-    local lookAheadDistance = math.clamp(self.vehicle.lastSpeedReal * 3600 * 15.5 / 40, minLength, 50)
-    local steeringAngle = math.deg(math.abs(self.vehicle.rotatedTime))
-
+    local speedMetersPerSecond = math.abs(self.vehicle.lastSpeedReal) * 1000
+    local stoppingDistance = speedMetersPerSecond * 0.8 + speedMetersPerSecond * speedMetersPerSecond / 7
+    local lookAheadDistance = math.clamp(stoppingDistance, minLength, 60)
     local vecZ = {x = math.sin(self.vehicle.rotatedTime), z = math.cos(self.vehicle.rotatedTime)}
     local vecX = {x = vecZ.z, z = -vecZ.x}
 
@@ -169,10 +167,6 @@ function ADCollSensorSplit:getBoxShapes(minLength)
         end
     end
     local firstBox = 1
-    if steeringAngle > 30 then
-        firstBox = 2
-        numberOfBoxes = numberOfBoxes - 1
-    end
     for i=firstBox, numberOfBoxes do
         local xOffset = (-width / 2) + (i - 0.5) * boxWidth
         boxes[i] = self:buildBoxShape(

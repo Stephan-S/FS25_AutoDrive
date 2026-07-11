@@ -379,7 +379,13 @@ function HandleHarvesterTurnTask:doCollisionCheck(waypoints)
     --print("HandleHarvesterTurnTask:doCollisionCheck: index: " .. self.lastCollisionCheckIndex .. " / " .. #waypoints)
 
     --- Coll check:
-    local widthX = self.vehicle.size.width / 1.75
+    local maxVehicleWidth = self.vehicle.size.width
+    local units = AutoDrive.getAllUnits(self.vehicle)
+    for _, unit in pairs(units) do
+        local unitWidth = AutoDrive.getVehicleDimensions(unit, false)
+        maxVehicleWidth = math.max(maxVehicleWidth, unitWidth)
+    end
+    local widthX = maxVehicleWidth / 1.75
     local height = 2.3
     local mask = AutoDrive.collisionMaskTerrain
 
@@ -418,9 +424,11 @@ end
 function HandleHarvesterTurnTask:collisionTestCallback(transformId, x, y, z, distance)
     self.expectedColliCallbacks = math.max(-1, self.expectedColliCallbacks - 1)
     --print("Received collisionTestCallback. Outstanding: " .. self.expectedColliCallbacks)
-    if transformId ~= 0 and transformId ~= g_currentMission.terrainRootNode then
-        if g_currentMission.nodeToObject[transformId] ~= nil then
-            if g_currentMission.nodeToObject[transformId] ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle, g_currentMission.nodeToObject[transformId]) then
+    local sensor = self.vehicle.ad.sensors.frontSensorDynamicShort
+    if transformId ~= 0 and transformId ~= g_currentMission.terrainRootNode and sensor:isElementBlockingVehicle(transformId) then
+        local collisionObject = sensor:getCollisionObject(transformId)
+        if collisionObject ~= nil then
+            if collisionObject ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle, collisionObject) then
                 self.colliFound = true
             end
         else

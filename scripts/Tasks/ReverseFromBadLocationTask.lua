@@ -56,7 +56,7 @@ function ReverseFromBadLocationTask:update(dt)
         end
         local x, y, z = AutoDrive.localToWorld(self.vehicle, xOffset, 0 , 30)
         self.forwardsTarget = {x=x, y=y, z=z}
-        self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.forwardsTarget, 8, false, 0.5, 8)
+        self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.forwardsTarget, 8, true, 0.5, 8)
     else
         self:finished()
     end

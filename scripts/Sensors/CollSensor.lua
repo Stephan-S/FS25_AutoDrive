@@ -51,35 +51,30 @@ end
 function ADCollSensor:onUpdate(dt)
     self.mask = self:getMask()
     local box = self:getBoxShape()
-    self.hit = self.newHit
-    self:setTriggered(self.hit)
     self.newHit = false
 
     local offsetCompensation = math.max(-math.tan(box.rx) * box.size[3], 0)
     box.y = math.max(getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, box.x, 300, box.z), box.y) + offsetCompensation
     overlapBox(box.x, box.y, box.z, box.rx, box.ry, 0, box.size[1], box.size[2], box.size[3], "collisionTestCallback", self, self.mask, true, true, true, true)
+    self.hit = self.newHit
+    self:setTriggered(self.hit)
     self:onDrawDebug(box)
 end
 
 function ADCollSensor:collisionTestCallback(transformId)
     local unloadDriver = ADHarvestManager:getAssignedUnloader(self.vehicle.ad.attachableCombine or self.vehicle)
-    local collisionObject = g_currentMission.nodeToObject[transformId]
-
-    if collisionObject == nil then
-        -- let try if parent is a object
-        local parent = getParent(transformId)
-        if parent then
-            collisionObject = g_currentMission.nodeToObject[parent]
-        end
-    end
+    local collisionObject = self:getCollisionObject(transformId)
+    local isBlocking = self:isElementBlockingVehicle(transformId)
 
     if collisionObject ~= nil then
-        if collisionObject ~= self and collisionObject ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle:getRootVehicle(), collisionObject) then
+        if isBlocking and not self:isCollisionObjectExcluded(collisionObject) and collisionObject ~= self and collisionObject ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle:getRootVehicle(), collisionObject) then
             if unloadDriver == nil or (collisionObject ~= unloadDriver and (not AutoDrive:checkIsConnected(unloadDriver:getRootVehicle(), collisionObject))) then
                 self.newHit = true
+                self:debugCollisionNode(transformId)
             end
         end
-    elseif self:isElementBlockingVehicle(transformId) then
+    elseif isBlocking then
         self.newHit = true
+        self:debugCollisionNode(transformId)
     end
 end

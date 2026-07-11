@@ -94,7 +94,7 @@
 		<text name="AD_lshift_for_reverse"								text="RSHIFT reverse drive" />
 		<text name="gui_ad_Setting"									text="AutoDrive - Settings" />
 		<text name="gui_ad_collisionHeigth"							text="Collisionheigth over ground" />
-		<text name="gui_ad_collisionHeigth_tooltip"					text="Setting for collision detection in front of vehicle. If other vehicles are not detected during driving, reduce step by step. (Default 2m)" />
+		<text name="gui_ad_collisionHeigth_tooltip"					text="Height of the collision sensor above ground. If vehicles are not detected, reduce it step by step. (Default: 0.5 m)" />
 		<text name="gui_ad_blinkValue"									text="Turnlight Automatic" />
 		<text name="gui_ad_blinkValue_tooltip"							text="Steering angle to enable turn lights automatically. (0 = turn light automatic deactivated)" />
 		<text name="gui_ad_pipe_offset"								text="Pipe Offset" />
