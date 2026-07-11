@@ -23,6 +23,7 @@ ADSensor.WIDTH_FACTOR = 0.7
 
 ADSensor.EXECUTION_DELAY = 10
 ADSensor.MAX_LIGHT_PUSHABLE_OBJECT_MASS = 100
+ADSensor.MAX_KNOCK_OVER_OBJECT_MASS = 0.5 -- tons
 ADSensor.PHYSICAL_COLLISION_GROUPS = bit32.bor(
     CollisionFlag.DEFAULT,
     CollisionFlag.STATIC_OBJECT,
@@ -31,6 +32,12 @@ ADSensor.PHYSICAL_COLLISION_GROUPS = bit32.bor(
     CollisionFlag.BUILDING,
     CollisionFlag.VEHICLE,
     CollisionFlag.TRAFFIC_VEHICLE
+)
+ADSensor.NEVER_OVERRUNNABLE_GROUPS = bit32.bor(
+    CollisionFlag.VEHICLE,
+    CollisionFlag.TRAFFIC_VEHICLE,
+    CollisionFlag.TREE,
+    CollisionFlag.BUILDING
 )
 
 --
@@ -420,29 +427,49 @@ function ADSensor:isElementBlockingVehicle(nodeId)
     local vehicleAcceptsShape = bit32.band(collisionGroup, vehicleMask) ~= 0
     local shapeAcceptsVehicle = bit32.band(collisionMask, vehicleGroup) ~= 0
     local physicallyCompatible = hasPhysicalGroup and vehicleAcceptsShape and shapeAcceptsVehicle
-    return physicallyCompatible and not self:isLightPushableObject(nodeId, collisionGroup)
+    return physicallyCompatible and not self:isOverrunnableObject(nodeId, collisionGroup)
 end
 
-function ADSensor:isLightPushableObject(nodeId, collisionGroup)
-    if getRigidBodyType(nodeId) ~= RigidBodyType.DYNAMIC then
-        return false
+-- Compound children report RigidBodyType.NONE, their physics state lives on the compound root
+-- (e.g. the col1 shapes of the mapEU road signs)
+function ADSensor:getRigidBodyNode(nodeId)
+    local node = nodeId
+    while node ~= nil and node ~= 0 and getIsCompoundChild(node) do
+        node = getParent(node)
     end
+    return node
+end
+
+-- Objects the vehicle can push aside or knock over without any risk of getting stuck:
+-- light free-standing dynamic objects and knock-over props like traffic signs
+function ADSensor:isOverrunnableObject(nodeId, collisionGroup)
     if getHasClassId(nodeId, ClassIds.MESH_SPLIT_SHAPE) then
+        -- trees and split wood
+        return false
+    end
+    if bit32.band(collisionGroup, ADSensor.NEVER_OVERRUNNABLE_GROUPS) ~= 0 then
+        return false
+    end
+    local bodyNode = self:getRigidBodyNode(nodeId)
+    if bodyNode == nil or bodyNode == 0 or getRigidBodyType(bodyNode) ~= RigidBodyType.DYNAMIC then
+        -- anything not simulated as a dynamic rigid body is immovable scenery
         return false
     end
 
-    local protectedGroups = bit32.bor(
-        CollisionFlag.STATIC_OBJECT,
-        CollisionFlag.TREE,
-        CollisionFlag.BUILDING,
-        CollisionFlag.VEHICLE,
-        CollisionFlag.TRAFFIC_VEHICLE
-    )
-    if bit32.band(collisionGroup, protectedGroups) ~= 0 then
-        return false
+    local mass = getMass(bodyNode)
+    if bit32.band(collisionGroup, CollisionFlag.STATIC_OBJECT) ~= 0 then
+        -- A dynamic rigid body carrying the STATIC_OBJECT collision flag is the pattern of the
+        -- base game knock-over props: traffic signs are dynamic shapes held upright by a
+        -- breakable joint (jointBreakForce 25) while masquerading as static scenery via their
+        -- collision group. Real immovable obstacles use a static rigid body and are rejected
+        -- above, so only light props may pass here.
+        local isKnockOverProp = mass > 0 and mass <= ADSensor.MAX_KNOCK_OVER_OBJECT_MASS
+        if isKnockOverProp and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+            AutoDrive.debugMsg(self.vehicle, "Ignoring knock-over prop node=%s mass=%.3f", I3DUtil.getNodePath(nodeId), mass)
+        end
+        return isKnockOverProp
     end
 
-    local mass = getMass(nodeId)
     local isPushable = mass > 0 and mass <= ADSensor.MAX_LIGHT_PUSHABLE_OBJECT_MASS
     if isPushable and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
         AutoDrive.debugMsg(self.vehicle, "Ignoring light pushable object node=%s mass=%.1f", I3DUtil.getNodePath(nodeId), mass)

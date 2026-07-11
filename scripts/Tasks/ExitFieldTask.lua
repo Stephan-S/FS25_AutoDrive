@@ -23,6 +23,7 @@ function ExitFieldTask:new(vehicle, combine)
 end
 
 function ExitFieldTask:setUp()
+    self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
     self.nextExitStrategy = AutoDrive.getSetting("exitField", self.vehicle)
     self.exitCandidateIndex = 1
     self.exitCandidates = nil
@@ -30,20 +31,17 @@ function ExitFieldTask:setUp()
     self.trailers, _ = AutoDrive.getAllUnits(self.vehicle)
     AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, false)
 
-    -- Primary exit: local Dijkstra course. It uses fruit, collision and combine-front costs,
-    -- while normal network pathfinding is only needed after we have left the field.
-    self:tryEscapeCourse()
 end
 
--- Primary free-space exit: generate a collision-checked course to the nearest off-field spot
--- without waypoint network, then plan the network approach from that better position. Only
--- tried once per task run. Runs incrementally - polled in STATE_ESCAPE_PLANNING.
+-- Last-resort free-space exit when no reachable network/Fanglinie entry remains. The normal
+-- path must target the network first; otherwise TARGET_OFF_FIELD would always choose the nearest
+-- arbitrary field edge and bypass recorded field exits.
 function ExitFieldTask:tryEscapeCourse()
     if self.escapeCourseTried then
         return false
     end
     self.escapeCourseTried = true
-    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask - starting primary Dijkstra escape course")
+    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask - network entries failed, starting Dijkstra fallback")
     self.escapeJob = ADEscapeCourseGenerator.begin(self.vehicle, ADEscapeCourseGenerator.TARGET_OFF_FIELD, {
         exclusionZone = AutoDrive.getCombineExclusionZone(self.combine),
         combine = self.combine

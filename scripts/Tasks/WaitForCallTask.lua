@@ -1,10 +1,16 @@
 WaitForCallTask = ADInheritsFrom(AbstractTask)
-WaitForCallTask.HELPER_ZONE_CHECK_TIME = 5000
+WaitForCallTask.HELPER_ZONE_CHECK_TIME = 1000
+WaitForCallTask.POST_CLEAR_COOLDOWN = 10000
 
-function WaitForCallTask:new(vehicle)
+-- zoneCheckDelay (optional, ms): suppresses the helper-zone check for a settling period. Used
+-- for the follow-up wait task after a ClearHarvesterZoneTask so a parked spot near the zone
+-- edge doesn't re-trigger the next escape the moment the harvester inches forward - without a
+-- cooldown the pair escaped in a loop, chasing the moving zone across the field.
+function WaitForCallTask:new(vehicle, zoneCheckDelay)
     local o = WaitForCallTask:create()
     o.vehicle = vehicle
     o.helperZoneCheckTimer = AutoDriveTON:new()
+    o.zoneCheckDelay = zoneCheckDelay or 0
     return o
 end
 
@@ -15,7 +21,14 @@ end
 
 function WaitForCallTask:findBlockingHarvester()
     local checked = {}
-    local lists = {ADHarvestManager.harvesters or {}}
+    local assignedHarvester = nil
+    local unloadMode = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]
+    if unloadMode ~= nil then
+        assignedHarvester = unloadMode.combine
+    end
+    -- Mode assignment survives some registry transitions. Check it first so helper-zone safety
+    -- cannot disappear merely because HarvestManager currently rebuilt/unregistered its list.
+    local lists = {{assignedHarvester}, ADHarvestManager.harvesters or {}, ADHarvestManager.idleHarvesters or {}}
     for _, harvesters in pairs(lists) do
         for _, harvester in pairs(harvesters) do
             if harvester ~= nil and not checked[harvester] and harvester.components ~= nil and harvester.components[1] ~= nil then
@@ -33,6 +46,10 @@ end
 function WaitForCallTask:update(dt)
     self.vehicle.ad.specialDrivingModule:stopVehicle()
     self.vehicle.ad.specialDrivingModule:update(dt)
+    if self.zoneCheckDelay > 0 then
+        self.zoneCheckDelay = self.zoneCheckDelay - dt
+        return
+    end
     if self.helperZoneCheckTimer:timer(true, WaitForCallTask.HELPER_ZONE_CHECK_TIME, dt) then
         self.helperZoneCheckTimer:timer(false)
         local harvester, helperZone = self:findBlockingHarvester()
@@ -40,7 +57,7 @@ function WaitForCallTask:update(dt)
             -- Isolated task chain: clear helper zone, then resume waiting without advancing mode.
             ADHarvestManager:unregisterAsUnloader(self.vehicle)
             self.vehicle.ad.taskModule:addTask(ClearHarvesterZoneTask:new(self.vehicle, harvester, helperZone))
-            self.vehicle.ad.taskModule:addTask(WaitForCallTask:new(self.vehicle))
+            self.vehicle.ad.taskModule:addTask(WaitForCallTask:new(self.vehicle, WaitForCallTask.POST_CLEAR_COOLDOWN))
             self.vehicle.ad.taskModule:setCurrentTaskFinished(ADTaskModule.DONT_PROPAGATE)
         end
     end

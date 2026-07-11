@@ -94,7 +94,7 @@ function AutoDrive.isPointInHelperZone(zone, worldX, worldZ, margin)
     return math.abs(localX) <= zone.halfWidth + margin and math.abs(localZ) <= zone.halfLength + margin
 end
 
-function AutoDrive.isVehicleTrainInHelperZone(vehicle, zone)
+function AutoDrive.isVehicleTrainInHelperZone(vehicle, zone, extraMargin)
     if zone == nil then
         return false
     end
@@ -103,7 +103,7 @@ function AutoDrive.isVehicleTrainInHelperZone(vehicle, zone)
         if unit.components ~= nil and unit.components[1] ~= nil then
             local x, _, z = getWorldTranslation(unit.components[1].node)
             local margin = unit.size ~= nil and math.max(unit.size.width, unit.size.length) / 2 or 0
-            if AutoDrive.isPointInHelperZone(zone, x, z, margin) then
+            if AutoDrive.isPointInHelperZone(zone, x, z, margin + (extraMargin or 0)) then
                 return true
             end
         end
@@ -112,12 +112,29 @@ function AutoDrive.isVehicleTrainInHelperZone(vehicle, zone)
 end
 
 function AutoDrive.isVehicleOrTrailerInCrop(vehicle, enlargeDetectionArea)
+    return AutoDrive.isVehicleTrainInCrop(vehicle, enlargeDetectionArea)
+end
+
+-- Checks every physical unit in the train. The old vehicle-or-trailer helper only sampled the
+-- tractor and the last trailer, so intermediate trailers could remain in crop unnoticed.
+function AutoDrive.isVehicleTrainInCrop(vehicle, enlargeDetectionArea)
     local widthFactor = 1
     if enlargeDetectionArea then
         widthFactor = 1.5
     end
 
-    return AutoDrive.isTrailerInCrop(vehicle, enlargeDetectionArea) or vehicle.ad.sensors.centerSensorFruit:pollInfo(true, widthFactor)
+    local units = AutoDrive.getAllUnits(vehicle)
+    for _, unit in pairs(units or {}) do
+        if unit.ad == nil then
+            unit.ad = {}
+        end
+        ADSensor:handleSensors(unit, 0)
+        if unit.ad.sensors ~= nil and unit.ad.sensors.centerSensorFruit ~= nil
+            and unit.ad.sensors.centerSensorFruit:pollInfo(true, widthFactor) then
+            return true
+        end
+    end
+    return false
 end
 
 function AutoDrive:checkIsConnected(toCheck, other)
