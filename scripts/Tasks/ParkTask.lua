@@ -36,7 +36,7 @@ function ParkTask:setUp()
     if self.vehicle.spec_locomotive and self.vehicle.ad and self.vehicle.ad.trainModule then
         self.state = ParkTask.STATE_DRIVING
         self.vehicle.ad.trainModule:setPathTo(targetParkParkDestination)
-    elseif ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
+    elseif ADGraphManager:requiresPathFinderToNetwork(self.vehicle) then
         self.state = ParkTask.STATE_PATHPLANNING
         self.vehicle.ad.pathFinderModule:reset()
         self.vehicle.ad.pathFinderModule:startPathPlanningToNetwork(targetParkParkDestination)

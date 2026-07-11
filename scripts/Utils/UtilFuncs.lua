@@ -957,6 +957,70 @@ function AutoDrive.checkIsOnField(worldX, worldY, worldZ)
 	return isOnField
 end
 
+AutoDrive.FIELD_STATUS_TOLERANCE = 2 -- m, sample points this far beyond each unit's own extents
+AutoDrive.FIELD_STATUS_CONFIRM_TIME = 1500 -- ms the whole train must be continuously off-field before status flips
+
+-- Checks the whole vehicle train (root vehicle + all trailers), not just the root vehicle's
+-- origin point, so a single sensor corner crossing the field border at the "Fanglinie" doesn't
+-- flip the result while most of the rig is still on the field.
+function AutoDrive.checkVehicleTrainIsOnField(vehicle, toleranceMargin)
+    toleranceMargin = toleranceMargin or 0
+    local units, unitCount = AutoDrive.getAllUnits(vehicle)
+    if units == nil or unitCount == 0 then
+        return false
+    end
+
+    for _, unit in pairs(units) do
+        if unit.components ~= nil and unit.components[1] ~= nil and unit.size ~= nil then
+            local halfLength = unit.size.length / 2 + toleranceMargin
+            local halfWidth = unit.size.width / 2 + toleranceMargin
+            local samples = {
+                {0, 0},
+                {0, halfLength},
+                {0, -halfLength},
+                {halfWidth, 0},
+                {-halfWidth, 0}
+            }
+            for _, sample in pairs(samples) do
+                local sampleX, sampleY, sampleZ = AutoDrive.localToWorld(unit, sample[1], 0, sample[2])
+                if AutoDrive.checkIsOnField(sampleX, sampleY, sampleZ) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- Must be called once per frame (e.g. from a mode's monitorTasks(dt)) to advance the hysteresis.
+-- Confirms "left the field" only after the whole train has been off-field for
+-- FIELD_STATUS_CONFIRM_TIME ms in a row; a single bad frame doesn't flip the status.
+function AutoDrive.updateVehicleTrainFieldStatus(vehicle, dt)
+    if vehicle.ad.fieldStatusOffFieldTimer == nil then
+        vehicle.ad.fieldStatusOnField = true
+        vehicle.ad.fieldStatusOffFieldTimer = AutoDriveTON:new()
+    end
+
+    if AutoDrive.checkVehicleTrainIsOnField(vehicle, AutoDrive.FIELD_STATUS_TOLERANCE) then
+        vehicle.ad.fieldStatusOnField = true
+        vehicle.ad.fieldStatusOffFieldTimer:timer(false)
+    elseif vehicle.ad.fieldStatusOffFieldTimer:timer(true, AutoDrive.FIELD_STATUS_CONFIRM_TIME, dt) then
+        vehicle.ad.fieldStatusOnField = false
+    end
+
+    return vehicle.ad.fieldStatusOnField
+end
+
+-- Stabilized, whole-train field status. Falls back to an immediate raw check if the hysteresis
+-- was never advanced (e.g. mode without a per-frame monitorTasks hook calling it).
+function AutoDrive.isVehicleTrainOnOrNearField(vehicle)
+    if vehicle.ad == nil or vehicle.ad.fieldStatusOffFieldTimer == nil then
+        return AutoDrive.checkVehicleTrainIsOnField(vehicle, AutoDrive.FIELD_STATUS_TOLERANCE)
+    end
+    return vehicle.ad.fieldStatusOnField
+end
+
 function AutoDrive.checkIsOnField_notFS22(startWorldX, worldY, startWorldZ)
     local data = g_currentMission.densityMapModifiers.getAIDensityHeightArea
     local modifier = data.modifier

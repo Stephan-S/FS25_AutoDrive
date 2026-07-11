@@ -365,6 +365,7 @@
 		<text name="AD_task_drive_to_combine_pipe"						text="Drive to combine pipe" />
 		<text name="AD_task_unloading_combine"							text="Unloading combine" />
 		<text name="AD_task_reversing_from_combine"					text="Reversing from combine" />
+		<text name="AD_task_leaving_combine"							text="Leaving combine" />
 		<text name="AD_task_waiting_for_space"							text="Waiting for maneuver room" />
 		<text name="AD_task_wait_for_combine_turn"						text="Wait for combine's turn" />
 		<text name="AD_task_drive_to_load_point"						text="Drive to loading point" />

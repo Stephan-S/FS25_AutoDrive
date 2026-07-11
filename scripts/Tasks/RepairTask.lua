@@ -15,7 +15,7 @@ end
 function RepairTask:setUp()
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "RepairTask:setUp ")
     self.repairTrigger = nil
-    if ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
+    if ADGraphManager:requiresPathFinderToNetwork(self.vehicle) then
         self.state = RepairTask.STATE_PATHPLANNING
         self.vehicle.ad.pathFinderModule:reset()
         self.vehicle.ad.pathFinderModule:startPathPlanningToNetwork(self.destinationID)

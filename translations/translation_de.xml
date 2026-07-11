@@ -365,6 +365,7 @@
 		<text name="AD_task_drive_to_combine_pipe"						text="Fahre Drescher abladen" />
 		<text name="AD_task_unloading_combine"							text="Drescher abtanken" />
 		<text name="AD_task_reversing_from_combine"					text="Zurücksetzen von Drescher" />
+		<text name="AD_task_leaving_combine"							text="Entferne mich vom Ernter" />
 		<text name="AD_task_waiting_for_space"							text="Warten auf Freiraum" />
 		<text name="AD_task_wait_for_combine_turn"						text="Drescher wenden lassen" />
 		<text name="AD_task_drive_to_load_point"						text="Fahre zu Aufladepunkt" />

@@ -16,7 +16,7 @@ function RefuelTask:setUp()
     self.refuelTrigger = nil
     self.wasRefuelling = false
     self.matchingFillTypes = {}
-    if ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
+    if ADGraphManager:requiresPathFinderToNetwork(self.vehicle) then
         self.state = RefuelTask.STATE_PATHPLANNING
         self.vehicle.ad.pathFinderModule:reset()
         self.vehicle.ad.pathFinderModule:startPathPlanningToNetwork(self.destinationID)

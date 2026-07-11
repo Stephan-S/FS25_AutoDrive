@@ -5,6 +5,7 @@ EmptyHarvesterTask.STATE_PATHPLANNING = {}
 EmptyHarvesterTask.STATE_DRIVING = {}
 EmptyHarvesterTask.STATE_UNLOADING = {}
 EmptyHarvesterTask.STATE_REVERSING = {}
+EmptyHarvesterTask.STATE_LEAVING_FORWARD = {}
 EmptyHarvesterTask.STATE_WAITING = {}
 EmptyHarvesterTask.STATE_UNLOADING_FINISHED = {}
 
@@ -20,8 +21,10 @@ function EmptyHarvesterTask:new(vehicle, combine)
     o.state = EmptyHarvesterTask.STATE_PATHPLANNING
     o.wayPoints = nil
     o.reverseStartLocation = nil
+    o.leaveForwardStartLocation = nil
     o.stuckTimer = AutoDriveTON:new()
     o.reverseTimer = AutoDriveTON:new()
+    o.leaveForwardTimer = AutoDriveTON:new()
     o.waitTimer = AutoDriveTON:new()
     o.holdCPCombineTimer = AutoDriveTON:new()
     o.trailers = nil
@@ -164,16 +167,51 @@ function EmptyHarvesterTask:update(dt)
         end
     elseif self.state == EmptyHarvesterTask.STATE_UNLOADING_FINISHED then
         EmptyHarvesterTask.debugMsg(self.vehicle, "EmptyHarvesterTask:update - STATE_UNLOADING_FINISHED getIsCPCombineInPocket %s", tostring(AutoDrive:getIsCPCombineInPocket(self.combine)))
-        if AutoDrive:getIsCPCombineInPocket(self.combine) or AutoDrive.combineIsTurning(self.combine) then
-            -- reverse if CP unload in a pocket or pullback position
-            -- reverse if combine is turning
+        -- Always compare a forward and a reverse escape candidate here, instead of only reversing
+        -- when Courseplay reports a pocket/turn - that left the normal case with no safe-distance
+        -- maneuver at all and dropped the driver straight into the next mode task.
+        local reverseAllowed = self.vehicle.ad.trailerModule:canBeHandledInReverse()
+        local forwardBlocked = self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() or self.vehicle.ad.sensors.frontSensor:pollInfo()
+        local reverseBlocked = self.vehicle.ad.sensors.rearSensor:pollInfo()
+        local preferReverse = AutoDrive:getIsCPCombineInPocket(self.combine) or AutoDrive.combineIsTurning(self.combine)
+
+        if (preferReverse or forwardBlocked) and reverseAllowed and not reverseBlocked then
+            -- reverse if CP unload in a pocket or pullback position, if the combine is turning,
+            -- or if the forward path away from the combine is currently blocked
             local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
             self.reverseStartLocation = {x = x, y = y, z = z}
             self.state = EmptyHarvesterTask.STATE_REVERSING
             return
+        elseif not forwardBlocked then
+            local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+            self.leaveForwardStartLocation = {x = x, y = y, z = z}
+            self.state = EmptyHarvesterTask.STATE_LEAVING_FORWARD
+            return
         else
+            -- both directions currently blocked (or reverse unsupported for this train) -> hold and wait it out
             self.state = EmptyHarvesterTask.STATE_WAITING
             return
+        end
+    elseif self.state == EmptyHarvesterTask.STATE_LEAVING_FORWARD then
+        self.vehicle.ad.specialDrivingModule.motorShouldNotBeStopped = false
+        local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+        local distanceToStart = MathUtil.vector2Length(x - self.leaveForwardStartLocation.x, z - self.leaveForwardStartLocation.z)
+        local overallLength
+        if self.trailerCount <= 1 then
+            overallLength = math.max(self.vehicle.size.length * 2, 15) -- 2x tractor length, min. 15m
+        else
+            overallLength = self.tractorTrainLength -- complete train length
+        end
+        self.leaveForwardTimer:timer(true, EmptyHarvesterTask.REVERSE_TIME, dt)
+        if (distanceToStart > overallLength) or self.leaveForwardTimer:done() then
+            self.state = EmptyHarvesterTask.STATE_WAITING
+            return
+        elseif self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() or self.vehicle.ad.sensors.frontSensor:pollInfo() then
+            -- forward path became blocked while leaving -> hold, the timeout above decides the next step
+            self.vehicle.ad.specialDrivingModule:stopVehicle()
+            self.vehicle.ad.specialDrivingModule:update(dt)
+        else
+            self.vehicle.ad.specialDrivingModule:driveForward(dt)
         end
     elseif self.state == EmptyHarvesterTask.STATE_REVERSING then
         self.vehicle.ad.specialDrivingModule.motorShouldNotBeStopped = false
@@ -265,6 +303,7 @@ end
 function EmptyHarvesterTask:resetAllTimers()
     -- self.stuckTimer:timer(false) -- stuckTimer reset by speed changes
     self.reverseTimer:timer(false)
+    self.leaveForwardTimer:timer(false)
     self.waitTimer:timer(false)
     self.holdCPCombineTimer:timer(false)
 end
@@ -280,6 +319,8 @@ function EmptyHarvesterTask:getI18nInfo()
         text = text .. " - " .. "$l10n_AD_task_unloading_combine;"
     elseif self.state == EmptyHarvesterTask.STATE_REVERSING then
         text = text .. " - " .. "$l10n_AD_task_reversing_from_combine;"
+    elseif self.state == EmptyHarvesterTask.STATE_LEAVING_FORWARD then
+        text = text .. " - " .. "$l10n_AD_task_leaving_combine;"
     elseif self.state == EmptyHarvesterTask.STATE_WAITING then
         text = text .. " - " .. "$l10n_AD_task_waiting_for_room;"
     end

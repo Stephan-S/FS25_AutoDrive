@@ -12,6 +12,7 @@ CombineUnloaderMode.STATE_FOLLOW_COMBINE = {}
 CombineUnloaderMode.STATE_ACTIVE_UNLOAD_COMBINE = {}
 CombineUnloaderMode.STATE_FOLLOW_CURRENT_UNLOADER = {}
 CombineUnloaderMode.STATE_EXIT_FIELD = {}
+CombineUnloaderMode.STATE_EXIT_FIELD_TO_START = {}
 CombineUnloaderMode.STATE_REVERSE_FROM_BAD_LOCATION = {}
 
 CombineUnloaderMode.MAX_COMBINE_FILLLEVEL_CHASING = 101
@@ -63,7 +64,9 @@ function CombineUnloaderMode:start(user)
 end
 
 function CombineUnloaderMode:monitorTasks(dt)
-    if self.combine ~= nil and (self.state == self.STATE_DRIVE_TO_START or self.state == self.STATE_DRIVE_TO_UNLOAD or self.state == self.STATE_EXIT_FIELD) then
+    AutoDrive.updateVehicleTrainFieldStatus(self.vehicle, dt)
+
+    if self.combine ~= nil and (self.state == self.STATE_DRIVE_TO_START or self.state == self.STATE_DRIVE_TO_UNLOAD or self.state == self.STATE_EXIT_FIELD or self.state == self.STATE_EXIT_FIELD_TO_START) then
         if AutoDrive.getDistanceBetween(self.vehicle, self.combine) > 25 then
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:monitorTasks -> unregisterAsUnloader")
             ADHarvestManager:unregisterAsUnloader(self.vehicle)
@@ -170,10 +173,10 @@ function CombineUnloaderMode:continue()
         CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:continue self.state" .. tostring(self:getStateName()))
         self.vehicle.ad.taskModule:abortCurrentTask()
 
-        if AutoDrive.checkIsOnField(x, y, z) and distanceToStart > 30 then
+        if AutoDrive.isVehicleTrainOnOrNearField(self.vehicle) and distanceToStart > 30 then
             -- is activated on a field - use ExitFieldTask to leave field according to setting
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:continue ExitFieldTask...")
-            self.activeTask = ExitFieldTask:new(self.vehicle)
+            self.activeTask = ExitFieldTask:new(self.vehicle, self.combine)
             self.state = self.STATE_EXIT_FIELD
         else
             if (AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYDELIVER or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders") then
@@ -218,7 +221,7 @@ function CombineUnloaderMode:getNextTask()
             self.followingUnloader = nil
             self.combine = nil
         else
-            if not AutoDrive.checkIsOnField(x, y, z) then
+            if not AutoDrive.isVehicleTrainOnOrNearField(self.vehicle) then
                 nextTask = DriveToDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getFirstMarker().id)
                 self.state = self.STATE_DRIVE_TO_START
             else
@@ -278,6 +281,11 @@ function CombineUnloaderMode:getNextTask()
         end
         nextTask = UnloadAtDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getSecondMarker().id)
         self.state = self.STATE_DRIVE_TO_UNLOAD
+    elseif self.state == self.STATE_EXIT_FIELD_TO_START then
+        CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getNextTask - STATE_EXIT_FIELD_TO_START")
+        ADHarvestManager:unregisterAsUnloader(self.vehicle)
+        nextTask = DriveToDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getFirstMarker().id)
+        self.state = self.STATE_DRIVE_TO_START
     end
 
     CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getNextTask end self.state %s", tostring(self:getStateName()))
@@ -302,10 +310,10 @@ function CombineUnloaderMode:setToWaitForCall(keepCombine)
 
     local _, _, filledToUnload, _ = AutoDrive.getAllFillLevels(self.trailers)
     if filledToUnload then
-        if AutoDrive.checkIsOnField(x, y, z) and distanceToStart > 30 then
+        if AutoDrive.isVehicleTrainOnOrNearField(self.vehicle) and distanceToStart > 30 then
             -- is activated on a field - use ExitFieldTask to leave field according to setting
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:setToWaitForCall ExitFieldTask...")
-            self.vehicle.ad.taskModule:addTask(ExitFieldTask:new(self.vehicle))
+            self.vehicle.ad.taskModule:addTask(ExitFieldTask:new(self.vehicle, self.combine))
             self.state = self.STATE_EXIT_FIELD
         else
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:setToWaitForCall UnloadAtDestinationTask...")
@@ -382,14 +390,16 @@ function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
         end
     end
 
+    local isOnOrNearField = AutoDrive.isVehicleTrainOnOrNearField(self.vehicle)
+
     if filledToUnload then
         --ADHarvestManager:unregisterAsUnloader(self.vehicle)
         --self.followingUnloader = nil
         --self.combine = nil
-        if AutoDrive.checkIsOnField(x, y, z) and distanceToStart > 30 then
+        if isOnOrNearField and distanceToStart > 30 then
             -- is activated on a field - use ExitFieldTask to leave field according to setting
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload ExitFieldTask...")
-            nextTask = ExitFieldTask:new(self.vehicle)
+            nextTask = ExitFieldTask:new(self.vehicle, self.combine)
             self.state = self.STATE_EXIT_FIELD
         else
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload UnloadAtDestinationTask...")
@@ -408,6 +418,12 @@ function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
                 CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload setToWaitForCall")
                 self:setToWaitForCall()
             end
+        elseif isOnOrNearField and distanceToStart > 30 then
+            -- Still (or near) on the field with a partially filled load and not parking here:
+            -- leave the field via ExitFieldTask before heading back to the start marker.
+            CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload ExitFieldTask (to start)...")
+            nextTask = ExitFieldTask:new(self.vehicle, self.combine)
+            self.state = self.STATE_EXIT_FIELD_TO_START
         else
             ADHarvestManager:unregisterAsUnloader(self.vehicle)
             nextTask = DriveToDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getFirstMarker().id)

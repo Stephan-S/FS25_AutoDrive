@@ -3,6 +3,8 @@ ADGraphManager = {}
 ADGraphManager.debugGroupName = "AD_Debug"
 ADGraphManager.SUB_PRIO_FACTOR = 20
 ADGraphManager.MIN_START_DISTANCE = 8
+ADGraphManager.MAX_DIRECT_NETWORK_ENTRY_DISTANCE = 3
+ADGraphManager.NETWORK_ENTRY_SEARCH_RADIUS = 400 -- m, must reach beyond a large field's own boundary/headland course
 ADGraphManager.MAX_POINTS_IN_SECTION = 100000
 
 function ADGraphManager:load()
@@ -227,6 +229,65 @@ end
 function ADGraphManager:getDistanceFromNetwork(vehicle)
     local _, distance = vehicle:getClosestWayPoint()
     return distance
+end
+
+function ADGraphManager:requiresPathFinderToNetwork(vehicle)
+    return self:getDistanceFromNetwork(vehicle) > self.MAX_DIRECT_NETWORK_ENTRY_DISTANCE
+end
+
+-- rankByApproachOnly = true: rank purely by physical distance to the entry point ("closest
+-- reachable point" semantics, used when leaving a field - we want the nearest way out, not the
+-- cheapest total route to the destination, since a nearby boundary/headland course is otherwise
+-- always outranked by a farther but more direct road entry with a shorter onward route).
+-- exclusionZone = {x, z, radius}: candidates inside this circle are dropped entirely, e.g. to
+-- keep the exit-field candidate search from picking a network point right next to a harvester.
+function ADGraphManager:getReachableNetworkEntryCandidates(vehicle, destinationId, maxDistance, maxCandidates, rankByApproachOnly, exclusionZone)
+    local vehicleX, _, vehicleZ = getWorldTranslation(vehicle.components[1].node)
+    local closest = vehicle:getClosestWayPoint()
+    local candidates = vehicle:getWayPointIdsInRange(0, maxDistance or 60)
+    if closest ~= nil and closest > 0 and not table.contains(candidates, closest) then
+        table.insert(candidates, closest)
+    end
+    table.sort(candidates, function(a, b)
+        local pointA = self:getWayPointById(a)
+        local pointB = self:getWayPointById(b)
+        local distanceA = pointA and MathUtil.vector2Length(pointA.x - vehicleX, pointA.z - vehicleZ) or math.huge
+        local distanceB = pointB and MathUtil.vector2Length(pointB.x - vehicleX, pointB.z - vehicleZ) or math.huge
+        return distanceA < distanceB
+    end)
+    local reachable = {}
+    local reachableLimit = maxCandidates or 12
+    local candidateLimit = math.min(#candidates, 30)
+    for index = 1, candidateLimit do
+        local entryPoint = self:getWayPointById(candidates[index])
+        local excluded = exclusionZone ~= nil and entryPoint ~= nil
+            and MathUtil.vector2Length(entryPoint.x - exclusionZone.x, entryPoint.z - exclusionZone.z) < exclusionZone.radius
+        local wayPoints = (not excluded) and self:pathFromTo(candidates[index], destinationId) or nil
+        if wayPoints ~= nil and #wayPoints > 0 then
+            local networkDistance = 0
+            for pathIndex = 2, #wayPoints do
+                networkDistance = networkDistance + MathUtil.vector2Length(
+                    wayPoints[pathIndex].x - wayPoints[pathIndex - 1].x,
+                    wayPoints[pathIndex].z - wayPoints[pathIndex - 1].z
+                )
+            end
+            local entry = self:getWayPointById(candidates[index])
+            if entry ~= nil then
+                local approachDistance = MathUtil.vector2Length(entry.x - vehicleX, entry.z - vehicleZ)
+                local cost = rankByApproachOnly and approachDistance or (approachDistance + networkDistance)
+                table.insert(reachable, {id = candidates[index], cost = cost})
+            end
+        end
+    end
+    table.sort(reachable, function(a, b)
+        return a.cost < b.cost
+    end)
+
+    local result = {}
+    for index = 1, math.min(#reachable, reachableLimit) do
+        table.insert(result, reachable[index].id)
+    end
+    return result
 end
 
 function ADGraphManager:checkYPositionIntegrity()

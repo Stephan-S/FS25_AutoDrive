@@ -59,7 +59,7 @@ This is inclusive of the field border cells!
 PathFinderModule = {}
 PathFinderModule.debug = false
 
-PathFinderModule.PATHFINDER_MAX_RETRIES = 3
+PathFinderModule.PATHFINDER_MAX_RETRIES = 11
 PathFinderModule.MAX_PATHFINDER_STEPS_PER_FRAME = 2
 PathFinderModule.MAX_PATHFINDER_STEPS_TOTAL = 400
 PathFinderModule.MAX_PATHFINDER_STEPS_COMBINE_TURN = 100
@@ -108,6 +108,8 @@ function PathFinderModule:reset()
     self.path = {}
     self.diffOverallNetTime = 0
     self.retryCounter = 0
+    self.networkEntryCandidates = nil
+    self.networkEntryCandidateIndex = 0
     self.delayTime = 0
     self.restrictToField = false
     self.avoidFruitSetting = false
@@ -175,9 +177,6 @@ function PathFinderModule:reset()
 end
 
 function PathFinderModule:hasFinished()
-    if AutoDrive.isEditorModeEnabled() and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
-        return false
-    end
     if self.isFinished and self.smoothDone == true then
         return true
     end
@@ -197,9 +196,41 @@ function PathFinderModule:startPathPlanningToNetwork(destinationId)
             tostring(destinationId)
         )
     )
-    local closest = self.vehicle:getClosestWayPoint()
-    self:startPathPlanningToWayPoint(closest, destinationId)
+    local unloadMode = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]
+    local combine = unloadMode ~= nil and unloadMode.combine or nil
+    local candidates = ADGraphManager:getReachableNetworkEntryCandidates(self.vehicle, destinationId, ADGraphManager.NETWORK_ENTRY_SEARCH_RADIUS, 12, true, AutoDrive.getCombineExclusionZone(combine))
+    local entryWayPointId = candidates[1]
+
+    if entryWayPointId ~= nil then
+        self.networkEntryCandidates = candidates
+        self.networkEntryCandidateIndex = 1
+        self:startPathPlanningToWayPoint(entryWayPointId, destinationId)
+        self.networkEntryCandidates = candidates
+        self.networkEntryCandidateIndex = 1
+    else
+        self:abort()
+    end
     self.goingToNetwork = true
+end
+
+function PathFinderModule:getNetworkEntryVector(targetNode, wayPoints)
+    if wayPoints[2] ~= nil then
+        return {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
+    end
+    if targetNode.out ~= nil and targetNode.out[1] ~= nil then
+        local nextNode = ADGraphManager:getWayPointById(targetNode.out[1])
+        if nextNode ~= nil then
+            return {x = nextNode.x - targetNode.x, z = nextNode.z - targetNode.z}
+        end
+    end
+    if targetNode.incoming ~= nil and targetNode.incoming[1] ~= nil then
+        local previousNode = ADGraphManager:getWayPointById(targetNode.incoming[1])
+        if previousNode ~= nil then
+            return {x = targetNode.x - previousNode.x, z = targetNode.z - previousNode.z}
+        end
+    end
+    local rx, _, rz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    return {x = rx, z = rz}
 end
 
 function PathFinderModule:startPathPlanningToWayPoint(wayPointId, destinationId)
@@ -213,8 +244,8 @@ function PathFinderModule:startPathPlanningToWayPoint(wayPointId, destinationId)
     )
     local targetNode = ADGraphManager:getWayPointById(wayPointId)
     local wayPoints = ADGraphManager:pathFromTo(wayPointId, destinationId)
-    if wayPoints ~= nil and #wayPoints > 1 then
-        local vecToNextPoint = {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
+    if targetNode ~= nil and wayPoints ~= nil and #wayPoints > 0 then
+        local vecToNextPoint = self:getNetworkEntryVector(targetNode, wayPoints)
         self:startPathPlanningTo(targetNode, vecToNextPoint)
         self.goingToNetwork = true
         self.destinationId = destinationId
@@ -535,27 +566,21 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     )
 end
 
-function PathFinderModule:restartAtNextWayPoint()
-    self.targetWayPointId = self.appendWayPoints[2].id
-    local targetNode = ADGraphManager:getWayPointById(self.targetWayPointId)
-    local wayPoints = ADGraphManager:pathFromTo(self.targetWayPointId, self.destinationId)
-    if wayPoints ~= nil and #wayPoints > 1 then
-        local vecToNextPoint = {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
-        local storedRetryCounter = self.retryCounter
-        local storedTargetWayPointId = self.targetWayPointId
-        local storedDestinationId = self.destinationId
-        self:startPathPlanningTo(targetNode, vecToNextPoint)
-        self.retryCounter = storedRetryCounter
-        self.destinationId = storedDestinationId
-        self.fallBackMode1 = false  -- disable restrict to field
-        self.fallBackMode2 = false  -- disable restrict to field border
-        self.fallBackMode3 = false  -- disable avoid fruit
-        self.targetWayPointId = storedTargetWayPointId
-        if self.targetWayPointId ~= nil then
-            self.appendWayPoints = ADGraphManager:pathFromTo(self.targetWayPointId, self.destinationId)
-        end
+function PathFinderModule:restartAtNextNetworkEntry()
+    local candidates = self.networkEntryCandidates
+    local nextIndex = self.networkEntryCandidateIndex + 1
+    local nextWayPointId = candidates ~= nil and candidates[nextIndex] or nil
+    if nextWayPointId == nil then
+        return false
     end
-    self:autoRestart()
+
+    local storedRetryCounter = self.retryCounter
+    local storedDestinationId = self.destinationId
+    self:startPathPlanningToWayPoint(nextWayPointId, storedDestinationId)
+    self.retryCounter = storedRetryCounter
+    self.networkEntryCandidates = candidates
+    self.networkEntryCandidateIndex = nextIndex
+    return true
 end
 
 function PathFinderModule:autoRestart()
@@ -608,7 +633,8 @@ function PathFinderModule:getCurrentState()
         maxStates = maxStates + 1
     end
     if self.destinationId ~= nil then
-        maxStates = maxStates + 3
+        local candidateRetries = self.networkEntryCandidates ~= nil and math.min(#self.networkEntryCandidates - 1, self.PATHFINDER_MAX_RETRIES) or 0
+        maxStates = maxStates + candidateRetries
     end
 
     if self.fallBackMode1 then
@@ -621,7 +647,7 @@ function PathFinderModule:getCurrentState()
         actualState = actualState + 1
     end
     if self.destinationId ~= nil and self.retryCounter > 0 then
-        actualState = actualState + 1
+        actualState = actualState + self.retryCounter
     end
 
     return actualState, maxStates, self.steps, self.max_pathfinder_steps
@@ -725,7 +751,8 @@ function PathFinderModule:update(dt)
         local increaseStepsAllowed = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.max_pathfinder_steps < PathFinderModule.MAX_PATHFINDER_STEPS_TOTAL * AutoDrive.getSetting("pathFinderTime"))    -- increase number of steps if possible
 
         -- Only allow auto restart when planning path to network and we can adjust target wayPoint
-        local retryAllowed = self.destinationId ~= nil and self.retryCounter < self.PATHFINDER_MAX_RETRIES
+        local hasNextNetworkEntry = self.networkEntryCandidates ~= nil and self.networkEntryCandidates[self.networkEntryCandidateIndex + 1] ~= nil
+        local retryAllowed = self.destinationId ~= nil and hasNextNetworkEntry and self.retryCounter < self.PATHFINDER_MAX_RETRIES
 
         if fallBackModeAllowed1 then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PathFinderModule:update - error - retryAllowed: no -> fallBackModeAllowed1: yes -> going fallback now -> disable restrict to field #self.grid %d", table.count(self.grid))
@@ -770,27 +797,23 @@ function PathFinderModule:update(dt)
             self:autoRestart()
         elseif retryAllowed then
             self.retryCounter = self.retryCounter + 1
-            --if we are going to the network and can't find a path. Just select the next waypoint for now
-            if self.appendWayPoints ~= nil and #self.appendWayPoints > 2 then
+            -- Try a different reachable network entry, ordered by total route cost.
+            if self:restartAtNextNetworkEntry() then
                 AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PathFinderModule:update - error - retryAllowed: yes -> retry now retryCounter %d", self.retryCounter)
                 PathFinderModule.debugVehicleMsg(self.vehicle,
                     string.format("PFM update - error - retryAllowed: yes -> retry now retryCounter %d",
                         self.retryCounter
                     )
                 )
-                self:restartAtNextWayPoint()
             else
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PathFinderModule:update - error - retryAllowed: yes -> but no appendWayPoints")
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PathFinderModule:update - error - retryAllowed: yes -> but no network entry candidate")
                 PathFinderModule.debugVehicleMsg(self.vehicle,
-                    string.format("PFM update - error - retryAllowed: yes -> but no appendWayPoints"
+                    string.format("PFM update - error - retryAllowed: yes -> but no network entry candidate"
                     )
                 )
                 self:abort()
             end
         else
-            if AutoDrive.isEditorModeEnabled() and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
-                return
-            end
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PathFinderModule:update - error - retryAllowed: no -> fallBackModeAllowed: no -> aborting now")
             PathFinderModule.debugVehicleMsg(self.vehicle,
                 string.format("PFM update - error - retryAllowed: no -> fallBackModeAllowed: no -> aborting now"
@@ -3025,9 +3048,13 @@ function PathFinderModule:getDubinsPath()
 end
 
 function PathFinderModule:collisionTestCallback(transformId)
-    if transformId ~= 0 and transformId ~= g_currentMission.terrainRootNode then
-        local collisionObject = g_currentMission:getNodeObject(transformId)
-        if (collisionObject == nil) or (collisionObject ~= nil and not (collisionObject.rootVehicle == self.vehicle)) then
+    if self.vehicle.ad.sensors == nil then
+        ADSensor:addSensorsToVehicle(self.vehicle)
+    end
+    local sensor = self.vehicle.ad.sensors.frontSensorDynamicShort
+    if transformId ~= 0 and transformId ~= g_currentMission.terrainRootNode and sensor:isElementBlockingVehicle(transformId) then
+        local collisionObject = sensor:getCollisionObject(transformId)
+        if collisionObject == nil or (collisionObject ~= self.vehicle and not AutoDrive:checkIsConnected(self.vehicle, collisionObject)) then
             self.collisionhits = self.collisionhits + 1
             if PathFinderModule.debug == true then
                 local currentCollMask = getCollisionFilterGroup(transformId)

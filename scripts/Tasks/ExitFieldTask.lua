@@ -9,9 +9,10 @@ ExitFieldTask.STRATEGY_START = 0
 ExitFieldTask.STRATEGY_BEHIND_START = 1
 ExitFieldTask.STRATEGY_CLOSEST = 2
 
-function ExitFieldTask:new(vehicle)
+function ExitFieldTask:new(vehicle, combine)
     local o = ExitFieldTask:create()
     o.vehicle = vehicle
+    o.combine = combine
     o.trailers = nil
     o.failedPathFinder = 0
     o.waitForCheckTimer = AutoDriveTON:new()
@@ -21,6 +22,8 @@ end
 function ExitFieldTask:setUp()
     self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
     self.nextExitStrategy = AutoDrive.getSetting("exitField", self.vehicle)
+    self.exitCandidateIndex = 1
+    self.exitCandidates = nil
     self.trailers, _ = AutoDrive.getAllUnits(self.vehicle)
     AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, false)
 end
@@ -31,7 +34,9 @@ function ExitFieldTask:update(dt)
             self.wayPoints = self.vehicle.ad.pathFinderModule:getPath()
             if self.wayPoints == nil or #self.wayPoints == 0 then
                 self.failedPathFinder = self.failedPathFinder + 1
-                if self.failedPathFinder > 5 then
+                if self.nextExitStrategy == ExitFieldTask.STRATEGY_CLOSEST and self:selectNextClosestCandidate() then
+                    self:startPathPlanning()
+                elseif self.failedPathFinder > 5 then
                     self.failedPathFinder = 0
                     self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:notifyAboutFailedPathfinder()
                     self:selectNextStrategy()
@@ -89,11 +94,21 @@ function ExitFieldTask:startPathPlanning()
     ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:startPathPlanning")
     local closest, closestDistance = self.vehicle:getClosestWayPoint()
     if self.nextExitStrategy == ExitFieldTask.STRATEGY_CLOSEST then
+        if self.exitCandidates == nil then
+            self.exitCandidates = ADGraphManager:getReachableNetworkEntryCandidates(self.vehicle, self.vehicle.ad.stateModule:getSecondWayPoint(), ADGraphManager.NETWORK_ENTRY_SEARCH_RADIUS, 12, true, AutoDrive.getCombineExclusionZone(self.combine))
+        end
+        closest = self.exitCandidates[self.exitCandidateIndex]
+        if closest == nil then
+            self:selectNextStrategy()
+            return self:startPathPlanning()
+        end
+        local vehicleX, _, vehicleZ = getWorldTranslation(self.vehicle.components[1].node)
         local closestNode = ADGraphManager:getWayPointById(closest)
+        closestDistance = MathUtil.vector2Length(closestNode.x - vehicleX, closestNode.z - vehicleZ)
         local wayPoints = ADGraphManager:pathFromTo(closest, self.vehicle.ad.stateModule:getSecondWayPoint())
         if wayPoints ~= nil and #wayPoints > 1 then
-            if closestDistance > AutoDrive.getDriverRadius(self.vehicle) then
-                -- initiate pathFinder only if distance to closest wayPoint is enought to find a path
+            if closestDistance > ADGraphManager.MAX_DIRECT_NETWORK_ENTRY_DISTANCE then
+                -- Initiate pathfinder unless the vehicle is already directly on the network.
                 local vecToNextPoint = {x = wayPoints[2].x - closestNode.x, z = wayPoints[2].z - closestNode.z}
                 self.vehicle.ad.pathFinderModule:reset()
                 self.vehicle.ad.pathFinderModule:startPathPlanningTo(closestNode, vecToNextPoint)
@@ -130,6 +145,13 @@ end
 
 function ExitFieldTask:selectNextStrategy()
     self.nextExitStrategy = (self.nextExitStrategy + 1) % (ExitFieldTask.STRATEGY_CLOSEST + 1)
+    self.exitCandidateIndex = 1
+    self.exitCandidates = nil
+end
+
+function ExitFieldTask:selectNextClosestCandidate()
+    self.exitCandidateIndex = self.exitCandidateIndex + 1
+    return self.exitCandidates ~= nil and self.exitCandidates[self.exitCandidateIndex] ~= nil
 end
 
 function ExitFieldTask:continue()

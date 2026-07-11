@@ -41,6 +41,21 @@ function AutoDrive.isTrailerInCrop(vehicle, enlargeDetectionArea)
     return inCrop
 end
 
+AutoDrive.COMBINE_EXCLUSION_MARGIN = 8 -- m, added on top of the combine's own footprint/header
+
+-- Circle around a combine's current position, used to keep "closest reachable network point"
+-- searches from picking a waypoint right next to it (which would send an unloader back at it).
+function AutoDrive.getCombineExclusionZone(combine)
+    if combine == nil or combine.components == nil or combine.components[1] == nil then
+        return nil
+    end
+    local combineX, _, combineZ = getWorldTranslation(combine.components[1].node)
+    local radius = math.max(combine.size.length, combine.size.width) / 2
+        + (AutoDrive.getFrontToolLength(combine) or 0)
+        + AutoDrive.COMBINE_EXCLUSION_MARGIN
+    return {x = combineX, z = combineZ, radius = radius}
+end
+
 function AutoDrive.isVehicleOrTrailerInCrop(vehicle, enlargeDetectionArea)
     local widthFactor = 1
     if enlargeDetectionArea then
