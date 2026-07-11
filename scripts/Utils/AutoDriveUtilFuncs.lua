@@ -42,6 +42,7 @@ function AutoDrive.isTrailerInCrop(vehicle, enlargeDetectionArea)
 end
 
 AutoDrive.COMBINE_EXCLUSION_MARGIN = 8 -- m, added on top of the combine's own footprint/header
+AutoDrive.COMBINE_HELPER_ZONE_FACTOR = 4
 
 -- Circle around a combine's current position, used to keep "closest reachable network point"
 -- searches from picking a waypoint right next to it (which would send an unloader back at it).
@@ -54,6 +55,60 @@ function AutoDrive.getCombineExclusionZone(combine)
         + (AutoDrive.getFrontToolLength(combine) or 0)
         + AutoDrive.COMBINE_EXCLUSION_MARGIN
     return {x = combineX, z = combineZ, radius = radius}
+end
+
+-- Oriented helper-clearance rectangle centered on the harvester. Total dimensions are four
+-- times harvester width and length; vectors are snapshotted for deterministic path planning.
+function AutoDrive.getCombineHelperZone(combine)
+    if combine == nil or combine.components == nil or combine.components[1] == nil or combine.size == nil then
+        return nil
+    end
+    local node = combine.components[1].node
+    local x, _, z = localToWorld(node, combine.size.widthOffset or 0, 0, combine.size.lengthOffset or 0)
+    local rightX, _, rightZ = localDirectionToWorld(node, 1, 0, 0)
+    local forwardX, _, forwardZ = localDirectionToWorld(node, 0, 0, 1)
+    return {
+        x = x,
+        z = z,
+        halfWidth = combine.size.width * AutoDrive.COMBINE_HELPER_ZONE_FACTOR / 2,
+        halfLength = combine.size.length * AutoDrive.COMBINE_HELPER_ZONE_FACTOR / 2,
+        rightX = rightX,
+        rightZ = rightZ,
+        forwardX = forwardX,
+        forwardZ = forwardZ
+    }
+end
+
+function AutoDrive.getHelperZoneLocalPosition(zone, worldX, worldZ)
+    local dx = worldX - zone.x
+    local dz = worldZ - zone.z
+    return dx * zone.rightX + dz * zone.rightZ, dx * zone.forwardX + dz * zone.forwardZ
+end
+
+function AutoDrive.isPointInHelperZone(zone, worldX, worldZ, margin)
+    if zone == nil then
+        return false
+    end
+    local localX, localZ = AutoDrive.getHelperZoneLocalPosition(zone, worldX, worldZ)
+    margin = margin or 0
+    return math.abs(localX) <= zone.halfWidth + margin and math.abs(localZ) <= zone.halfLength + margin
+end
+
+function AutoDrive.isVehicleTrainInHelperZone(vehicle, zone)
+    if zone == nil then
+        return false
+    end
+    local units = AutoDrive.getAllUnits(vehicle)
+    for _, unit in pairs(units or {}) do
+        if unit.components ~= nil and unit.components[1] ~= nil then
+            local x, _, z = getWorldTranslation(unit.components[1].node)
+            local margin = unit.size ~= nil and math.max(unit.size.width, unit.size.length) / 2 or 0
+            if AutoDrive.isPointInHelperZone(zone, x, z, margin) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 function AutoDrive.isVehicleOrTrailerInCrop(vehicle, enlargeDetectionArea)

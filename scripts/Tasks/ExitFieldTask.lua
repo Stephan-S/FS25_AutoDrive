@@ -4,6 +4,9 @@ ExitFieldTask.debug = false
 ExitFieldTask.STATE_PATHPLANNING = 1
 ExitFieldTask.STATE_DRIVING = 2
 ExitFieldTask.STATE_DELAY_PATHPLANNING = 3
+ExitFieldTask.STATE_ESCAPE_DRIVING = 4
+ExitFieldTask.STATE_FINISHED = 5
+ExitFieldTask.STATE_ESCAPE_PLANNING = 6
 
 ExitFieldTask.STRATEGY_START = 0
 ExitFieldTask.STRATEGY_BEHIND_START = 1
@@ -20,12 +23,33 @@ function ExitFieldTask:new(vehicle, combine)
 end
 
 function ExitFieldTask:setUp()
-    self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
     self.nextExitStrategy = AutoDrive.getSetting("exitField", self.vehicle)
     self.exitCandidateIndex = 1
     self.exitCandidates = nil
+    self.escapeCourseTried = false
     self.trailers, _ = AutoDrive.getAllUnits(self.vehicle)
     AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, false)
+
+    -- Primary exit: local Dijkstra course. It uses fruit, collision and combine-front costs,
+    -- while normal network pathfinding is only needed after we have left the field.
+    self:tryEscapeCourse()
+end
+
+-- Primary free-space exit: generate a collision-checked course to the nearest off-field spot
+-- without waypoint network, then plan the network approach from that better position. Only
+-- tried once per task run. Runs incrementally - polled in STATE_ESCAPE_PLANNING.
+function ExitFieldTask:tryEscapeCourse()
+    if self.escapeCourseTried then
+        return false
+    end
+    self.escapeCourseTried = true
+    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask - starting primary Dijkstra escape course")
+    self.escapeJob = ADEscapeCourseGenerator.begin(self.vehicle, ADEscapeCourseGenerator.TARGET_OFF_FIELD, {
+        exclusionZone = AutoDrive.getCombineExclusionZone(self.combine),
+        combine = self.combine
+    })
+    self.state = ExitFieldTask.STATE_ESCAPE_PLANNING
+    return true
 end
 
 function ExitFieldTask:update(dt)
@@ -36,6 +60,9 @@ function ExitFieldTask:update(dt)
                 self.failedPathFinder = self.failedPathFinder + 1
                 if self.nextExitStrategy == ExitFieldTask.STRATEGY_CLOSEST and self:selectNextClosestCandidate() then
                     self:startPathPlanning()
+                elseif self:tryEscapeCourse() then
+                    -- free-space escape course set, drive it and replan afterwards
+                    return
                 elseif self.failedPathFinder > 5 then
                     self.failedPathFinder = 0
                     self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:notifyAboutFailedPathfinder()
@@ -75,6 +102,38 @@ function ExitFieldTask:update(dt)
     elseif self.state == ExitFieldTask.STATE_DRIVING then
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             self.state = ExitFieldTask.STATE_FINISHED
+        else
+            self.vehicle.ad.drivePathModule:update(dt)
+        end
+    elseif self.state == ExitFieldTask.STATE_ESCAPE_PLANNING then
+        self.vehicle.ad.specialDrivingModule:stopVehicle()
+        self.vehicle.ad.specialDrivingModule:update(dt)
+        if self.escapeJob ~= nil then
+            self.escapeJob:update()
+            if self.escapeJob:isFinished() then
+                local escapeCourse = self.escapeJob:getCourse()
+                self.escapeJob = nil
+                if escapeCourse ~= nil then
+                    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask - driving escape course with %d waypoints", #escapeCourse)
+                    self.vehicle.ad.drivePathModule:setWayPoints(escapeCourse)
+                    self.state = ExitFieldTask.STATE_ESCAPE_DRIVING
+                else
+                    -- no escape course found - continue with the next exit strategy
+                    self:selectNextStrategy()
+                    self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
+                end
+            end
+        else
+            self:selectNextStrategy()
+            self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
+        end
+    elseif self.state == ExitFieldTask.STATE_ESCAPE_DRIVING then
+        if self.vehicle.ad.drivePathModule:isTargetReached() then
+            -- off the field now (or as close as the course got us) - replan from this position
+            self.exitCandidates = nil
+            self.exitCandidateIndex = 1
+            self.failedPathFinder = 0
+            self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
         else
             self.vehicle.ad.drivePathModule:update(dt)
         end

@@ -6,6 +6,9 @@ EmptyHarvesterTask.STATE_DRIVING = {}
 EmptyHarvesterTask.STATE_UNLOADING = {}
 EmptyHarvesterTask.STATE_REVERSING = {}
 EmptyHarvesterTask.STATE_LEAVING_FORWARD = {}
+EmptyHarvesterTask.STATE_WAITING_FOR_COMBINE_CLEARANCE = {}
+EmptyHarvesterTask.STATE_LEAVING_PLANNING = {}
+EmptyHarvesterTask.STATE_LEAVING_COURSE = {}
 EmptyHarvesterTask.STATE_WAITING = {}
 EmptyHarvesterTask.STATE_UNLOADING_FINISHED = {}
 
@@ -13,6 +16,8 @@ EmptyHarvesterTask.REVERSE_TIME = 30000
 EmptyHarvesterTask.MAX_STUCK_TIME = 60000
 EmptyHarvesterTask.WAITING_TIME = 7000
 EmptyHarvesterTask.WAITING_FOR_PIPE = 1000
+EmptyHarvesterTask.COMBINE_CLEARANCE_WAIT_TIME = 7000
+EmptyHarvesterTask.COMBINE_CLEARANCE_DISTANCE = 5
 
 function EmptyHarvesterTask:new(vehicle, combine)
     local o = EmptyHarvesterTask:create()
@@ -22,6 +27,7 @@ function EmptyHarvesterTask:new(vehicle, combine)
     o.wayPoints = nil
     o.reverseStartLocation = nil
     o.leaveForwardStartLocation = nil
+    o.combineClearanceStartLocation = nil
     o.stuckTimer = AutoDriveTON:new()
     o.reverseTimer = AutoDriveTON:new()
     o.leaveForwardTimer = AutoDriveTON:new()
@@ -32,6 +38,43 @@ function EmptyHarvesterTask:new(vehicle, combine)
     o.tractorTrainLength = 0
     EmptyHarvesterTask.setStateNames(o)
     return o
+end
+
+-- Start a departure only after checking the current situation again. The harvester can move
+-- while we wait, so sensor and turn data from the unload-complete frame are stale here.
+function EmptyHarvesterTask:startLeavingManeuver()
+    local reverseAllowed = self.vehicle.ad.trailerModule:canBeHandledInReverse()
+    local forwardBlocked = self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() or self.vehicle.ad.sensors.frontSensor:pollInfo()
+    local reverseBlocked = self.vehicle.ad.sensors.rearSensor:pollInfo()
+    local preferReverse = AutoDrive:getIsCPCombineInPocket(self.combine) or AutoDrive.combineIsTurning(self.combine)
+
+    if (preferReverse or forwardBlocked) and reverseAllowed and not reverseBlocked then
+        local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+        self.reverseStartLocation = {x = x, y = y, z = z}
+        self.state = EmptyHarvesterTask.STATE_REVERSING
+    elseif not forwardBlocked then
+        local exclusionZone = AutoDrive.getCombineExclusionZone(self.combine)
+        self.escapeJob = ADEscapeCourseGenerator.begin(self.vehicle, ADEscapeCourseGenerator.TARGET_CLEAR_OF_ZONE, {
+            exclusionZone = exclusionZone,
+            combine = self.combine,
+            maxRadius = 80
+        })
+        self.state = EmptyHarvesterTask.STATE_LEAVING_PLANNING
+    else
+        -- Both directions blocked (or reverse unsupported): wait, then reassess instead of
+        -- completing the task from an unsafe position.
+        self.state = EmptyHarvesterTask.STATE_WAITING
+    end
+end
+
+function EmptyHarvesterTask:shouldWaitForCombineClearance()
+    return AutoDrive:getIsCPActive(self.combine) or (self.combine.getIsAIActive ~= nil and self.combine:getIsAIActive())
+end
+
+function EmptyHarvesterTask:beginCombineClearanceWait()
+    local x, y, z = getWorldTranslation(self.combine.components[1].node)
+    self.combineClearanceStartLocation = {x = x, y = y, z = z}
+    self.state = EmptyHarvesterTask.STATE_WAITING_FOR_COMBINE_CLEARANCE
 end
 
 function EmptyHarvesterTask:setUp()
@@ -57,6 +100,7 @@ function EmptyHarvesterTask:update(dt)
     local checkForStuck = (self.vehicle.lastSpeedReal <= 0.0002) and (
         self.state == EmptyHarvesterTask.STATE_DRIVING
         or self.state == EmptyHarvesterTask.STATE_UNLOADING
+        or self.state == EmptyHarvesterTask.STATE_LEAVING_COURSE
     )
 
     self.stuckTimer:timer(checkForStuck, self.MAX_STUCK_TIME, dt)
@@ -167,30 +211,60 @@ function EmptyHarvesterTask:update(dt)
         end
     elseif self.state == EmptyHarvesterTask.STATE_UNLOADING_FINISHED then
         EmptyHarvesterTask.debugMsg(self.vehicle, "EmptyHarvesterTask:update - STATE_UNLOADING_FINISHED getIsCPCombineInPocket %s", tostring(AutoDrive:getIsCPCombineInPocket(self.combine)))
-        -- Always compare a forward and a reverse escape candidate here, instead of only reversing
-        -- when Courseplay reports a pocket/turn - that left the normal case with no safe-distance
-        -- maneuver at all and dropped the driver straight into the next mode task.
-        local reverseAllowed = self.vehicle.ad.trailerModule:canBeHandledInReverse()
-        local forwardBlocked = self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() or self.vehicle.ad.sensors.frontSensor:pollInfo()
-        local reverseBlocked = self.vehicle.ad.sensors.rearSensor:pollInfo()
-        local preferReverse = AutoDrive:getIsCPCombineInPocket(self.combine) or AutoDrive.combineIsTurning(self.combine)
+        -- A turning harvester needs its manoeuvring space immediately. Otherwise wait only for
+        -- actively driven harvesters to create a clear strip behind them, then plan from their
+        -- new position instead of following a course calculated beside the old one.
+        if AutoDrive:getIsCPCombineInPocket(self.combine) or AutoDrive.combineIsTurning(self.combine) then
+            self:startLeavingManeuver()
+        elseif self:shouldWaitForCombineClearance() then
+            self:beginCombineClearanceWait()
+        else
+            self:startLeavingManeuver()
+        end
+        return
+    elseif self.state == EmptyHarvesterTask.STATE_WAITING_FOR_COMBINE_CLEARANCE then
+        self.vehicle.ad.specialDrivingModule:stopVehicle()
+        self.vehicle.ad.specialDrivingModule:update(dt)
 
-        if (preferReverse or forwardBlocked) and reverseAllowed and not reverseBlocked then
-            -- reverse if CP unload in a pocket or pullback position, if the combine is turning,
-            -- or if the forward path away from the combine is currently blocked
-            local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
-            self.reverseStartLocation = {x = x, y = y, z = z}
-            self.state = EmptyHarvesterTask.STATE_REVERSING
-            return
-        elseif not forwardBlocked then
+        -- A turn may begin during the wait. Leave immediately in that case; never keep the
+        -- unloader beside a harvester that needs its turning area.
+        local combineX, _, combineZ = getWorldTranslation(self.combine.components[1].node)
+        local movedDistance = MathUtil.vector2Length(combineX - self.combineClearanceStartLocation.x, combineZ - self.combineClearanceStartLocation.z)
+        if AutoDrive.combineIsTurning(self.combine)
+            or movedDistance >= EmptyHarvesterTask.COMBINE_CLEARANCE_DISTANCE
+            or self.waitTimer:timer(true, EmptyHarvesterTask.COMBINE_CLEARANCE_WAIT_TIME, dt) then
+            self:startLeavingManeuver()
+        end
+    elseif self.state == EmptyHarvesterTask.STATE_LEAVING_PLANNING then
+        self.vehicle.ad.specialDrivingModule:stopVehicle()
+        self.vehicle.ad.specialDrivingModule:update(dt)
+        if self.escapeJob ~= nil then
+            self.escapeJob:update()
+            if self.escapeJob:isFinished() then
+                local escapeCourse = self.escapeJob:getCourse()
+                self.escapeJob = nil
+                if escapeCourse ~= nil then
+                    EmptyHarvesterTask.debugMsg(self.vehicle, "EmptyHarvesterTask:update - using escape course with %d waypoints", #escapeCourse)
+                    self.vehicle.ad.drivePathModule:setWayPoints(escapeCourse)
+                    self.state = EmptyHarvesterTask.STATE_LEAVING_COURSE
+                else
+                    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+                    self.leaveForwardStartLocation = {x = x, y = y, z = z}
+                    self.state = EmptyHarvesterTask.STATE_LEAVING_FORWARD
+                end
+            end
+        else
             local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
             self.leaveForwardStartLocation = {x = x, y = y, z = z}
             self.state = EmptyHarvesterTask.STATE_LEAVING_FORWARD
+        end
+    elseif self.state == EmptyHarvesterTask.STATE_LEAVING_COURSE then
+        self.vehicle.ad.specialDrivingModule.motorShouldNotBeStopped = false
+        if self.vehicle.ad.drivePathModule:isTargetReached() then
+            self:finished()
             return
         else
-            -- both directions currently blocked (or reverse unsupported for this train) -> hold and wait it out
-            self.state = EmptyHarvesterTask.STATE_WAITING
-            return
+            self.vehicle.ad.drivePathModule:update(dt)
         end
     elseif self.state == EmptyHarvesterTask.STATE_LEAVING_FORWARD then
         self.vehicle.ad.specialDrivingModule.motorShouldNotBeStopped = false
@@ -204,7 +278,7 @@ function EmptyHarvesterTask:update(dt)
         end
         self.leaveForwardTimer:timer(true, EmptyHarvesterTask.REVERSE_TIME, dt)
         if (distanceToStart > overallLength) or self.leaveForwardTimer:done() then
-            self.state = EmptyHarvesterTask.STATE_WAITING
+            self:finished()
             return
         elseif self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() or self.vehicle.ad.sensors.frontSensor:pollInfo() then
             -- forward path became blocked while leaving -> hold, the timeout above decides the next step
@@ -238,7 +312,7 @@ function EmptyHarvesterTask:update(dt)
         end
         self.reverseTimer:timer(true, EmptyHarvesterTask.REVERSE_TIME, dt)
         if (distanceToReversStart > overallLength) or self.reverseTimer:done() then
-            self.state = EmptyHarvesterTask.STATE_WAITING
+            self:finished()
             return
         else
             self.vehicle.ad.specialDrivingModule:driveReverse(dt, 10, 1, self.vehicle.ad.trailerModule:canBeHandledInReverse())
@@ -250,8 +324,8 @@ function EmptyHarvesterTask:update(dt)
             waitTime = 3 * EmptyHarvesterTask.WAITING_TIME
         end
         self.waitTimer:timer(true, waitTime, dt)
-        if self.waitTimer:done() or AutoDrive.isVehicleOrTrailerInCrop(self.vehicle, true) then
-            self:finished()
+        if self.waitTimer:done() then
+            self:startLeavingManeuver()
             return
         else
             self.vehicle.ad.specialDrivingModule:stopVehicle()
@@ -319,9 +393,13 @@ function EmptyHarvesterTask:getI18nInfo()
         text = text .. " - " .. "$l10n_AD_task_unloading_combine;"
     elseif self.state == EmptyHarvesterTask.STATE_REVERSING then
         text = text .. " - " .. "$l10n_AD_task_reversing_from_combine;"
+    elseif self.state == EmptyHarvesterTask.STATE_LEAVING_PLANNING
+        or self.state == EmptyHarvesterTask.STATE_LEAVING_COURSE then
+        text = text .. " - " .. "$l10n_AD_task_leaving_combine;"
     elseif self.state == EmptyHarvesterTask.STATE_LEAVING_FORWARD then
         text = text .. " - " .. "$l10n_AD_task_leaving_combine;"
-    elseif self.state == EmptyHarvesterTask.STATE_WAITING then
+    elseif self.state == EmptyHarvesterTask.STATE_WAITING_FOR_COMBINE_CLEARANCE
+        or self.state == EmptyHarvesterTask.STATE_WAITING then
         text = text .. " - " .. "$l10n_AD_task_waiting_for_room;"
     end
     return text 
