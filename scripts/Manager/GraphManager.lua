@@ -241,7 +241,8 @@ end
 -- always outranked by a farther but more direct road entry with a shorter onward route).
 -- exclusionZone = {x, z, radius}: candidates inside this circle are dropped entirely, e.g. to
 -- keep the exit-field candidate search from picking a network point right next to a harvester.
-function ADGraphManager:getReachableNetworkEntryCandidates(vehicle, destinationId, maxDistance, maxCandidates, rankByApproachOnly, exclusionZone)
+-- excludedWayPointId: candidates whose route to the destination passes this point are dropped.
+function ADGraphManager:getReachableNetworkEntryCandidates(vehicle, destinationId, maxDistance, maxCandidates, rankByApproachOnly, exclusionZone, excludedWayPointId)
     local vehicleX, _, vehicleZ = getWorldTranslation(vehicle.components[1].node)
     local closest = vehicle:getClosestWayPoint()
     local candidates = vehicle:getWayPointIdsInRange(0, maxDistance or 60)
@@ -263,6 +264,14 @@ function ADGraphManager:getReachableNetworkEntryCandidates(vehicle, destinationI
         local excluded = exclusionZone ~= nil and entryPoint ~= nil
             and MathUtil.vector2Length(entryPoint.x - exclusionZone.x, entryPoint.z - exclusionZone.z) < exclusionZone.radius
         local wayPoints = (not excluded) and self:pathFromTo(candidates[index], destinationId) or nil
+        if wayPoints ~= nil and excludedWayPointId ~= nil then
+            for _, wayPoint in ipairs(wayPoints) do
+                if wayPoint.id == excludedWayPointId then
+                    wayPoints = nil
+                    break
+                end
+            end
+        end
         if wayPoints ~= nil and #wayPoints > 0 then
             local networkDistance = 0
             for pathIndex = 2, #wayPoints do

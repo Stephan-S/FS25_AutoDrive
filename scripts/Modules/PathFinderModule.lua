@@ -187,7 +187,7 @@ function PathFinderModule:getPath()
     return self.wayPoints
 end
 
-function PathFinderModule:startPathPlanningToNetwork(destinationId)
+function PathFinderModule:startPathPlanningToNetwork(destinationId, excludedWayPointId)
     PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:startPathPlanningToNetwork destinationId %s"
         , tostring(destinationId)
     )
@@ -198,7 +198,19 @@ function PathFinderModule:startPathPlanningToNetwork(destinationId)
     )
     local unloadMode = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]
     local combine = unloadMode ~= nil and unloadMode.combine or nil
-    local candidates = ADGraphManager:getReachableNetworkEntryCandidates(self.vehicle, destinationId, ADGraphManager.NETWORK_ENTRY_SEARCH_RADIUS, 12, true, AutoDrive.getCombineExclusionZone(combine))
+    local maxCandidates = excludedWayPointId ~= nil and 30 or 12
+    local candidates = ADGraphManager:getReachableNetworkEntryCandidates(self.vehicle, destinationId, ADGraphManager.NETWORK_ENTRY_SEARCH_RADIUS, maxCandidates, true, AutoDrive.getCombineExclusionZone(combine), excludedWayPointId)
+    if excludedWayPointId ~= nil then
+        local collisionFreeCandidates = {}
+        for _, candidateId in ipairs(candidates) do
+            if self:isNetworkEntryCollisionFree(candidateId, destinationId) then
+                table.insert(collisionFreeCandidates, candidateId)
+            elseif AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PFM:startPathPlanningToNetwork rejected blocked entry %d", candidateId)
+            end
+        end
+        candidates = collisionFreeCandidates
+    end
     local entryWayPointId = candidates[1]
 
     if entryWayPointId ~= nil then
@@ -211,6 +223,25 @@ function PathFinderModule:startPathPlanningToNetwork(destinationId)
         self:abort()
     end
     self.goingToNetwork = true
+end
+
+--- Check whether the vehicle footprint can occupy a network entry before spending time
+--- generating a course to it. The resulting filtered list is retained for later retries.
+function PathFinderModule:isNetworkEntryCollisionFree(wayPointId, destinationId)
+    local targetNode = ADGraphManager:getWayPointById(wayPointId)
+    local wayPoints = ADGraphManager:pathFromTo(wayPointId, destinationId)
+    if targetNode == nil or wayPoints == nil or #wayPoints == 0 then
+        return false
+    end
+
+    local targetVector = self:getNetworkEntryVector(targetNode, wayPoints)
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-targetVector.z, targetVector.x))
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, targetNode.x, 1, targetNode.z)
+    local footprintRadius = self.minTurnRadius / 2
+    self.collisionhits = 0
+    overlapBox(targetNode.x, y + 3, targetNode.z, 0, angleRad, 0, footprintRadius, 2.65, footprintRadius,
+        "collisionTestCallback", self, self.mask, true, true, true, true)
+    return self.collisionhits == 0
 end
 
 function PathFinderModule:getNetworkEntryVector(targetNode, wayPoints)

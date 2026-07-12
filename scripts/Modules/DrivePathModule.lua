@@ -11,7 +11,6 @@ ADDrivePathModule.BLINK_TIMEOUT = 1000
 ADDrivePathModule.AVOIDANCE_REVERSE = 1
 ADDrivePathModule.AVOIDANCE_PATHPLANNING = 2
 ADDrivePathModule.AVOIDANCE_REVERSE_DISTANCE = 12
-ADDrivePathModule.AVOIDANCE_SKIP_DISTANCE = 20
 ADDrivePathModule.AVOIDANCE_REVERSE_SPEED = 6
 -- if stuck closer to the end of the route than this, declare the target reached instead of
 -- maneuvering (fallback, configurable via the stuckHandoverDistance setting)
@@ -908,55 +907,47 @@ function ADDrivePathModule:isStuckCloseToTarget()
 end
 
 --- Start the obstacle avoidance maneuver: back up a bit, then drive around the obstacle
---- with a lateral offset and rejoin the current route at a waypoint beyond it.
---- Returns false when there is no waypoint far enough ahead to rejoin at.
+--- using a collision-checked path to a reachable network entry.
+--- Returns false when the current route has no network destination.
 function ADDrivePathModule:startObstacleAvoidance()
     if self.wayPoints == nil then
         return false
     end
     local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
-    local skipIx = nil
+    local destinationId = self:getLastWayPointId()
+    if destinationId == nil or destinationId < 1 or ADGraphManager:getWayPointById(destinationId) == nil then
+        return false
+    end
+    local blockedWayPointId = nil
     for i = math.max(self:getCurrentWayPointIndex(), 1), #self.wayPoints do
-        local wp = self.wayPoints[i]
-        if MathUtil.vector2Length(wp.x - x, wp.z - z) > ADDrivePathModule.AVOIDANCE_SKIP_DISTANCE then
-            skipIx = i
+        local wayPointId = self.wayPoints[i].id
+        if wayPointId ~= nil and wayPointId > 0 then
+            blockedWayPointId = wayPointId
             break
         end
     end
-    if skipIx == nil then
+    if blockedWayPointId == nil or blockedWayPointId == destinationId then
         return false
     end
 
     local rx, ry, rz = AutoDrive.localToWorld(self.vehicle, 0, 0, -100)
     self.avoidanceReverseTarget = {x = rx, y = ry, z = rz}
     self.avoidanceStartPosition = {x = x, y = y, z = z}
-    self.avoidanceSkipIx = skipIx
+    self.avoidanceDestinationId = destinationId
+    self.avoidanceBlockedWayPointId = blockedWayPointId
     self.avoidanceTimer = 0
     self.obstacleAvoidanceState = ADDrivePathModule.AVOIDANCE_REVERSE
     if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
-        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "startObstacleAvoidance skipIx %d", skipIx)
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "startObstacleAvoidance destinationId %d blockedWayPointId %d", destinationId, blockedWayPointId)
     end
     return true
 end
 
 function ADDrivePathModule:startObstacleAvoidancePathPlanning()
-    local target = self.wayPoints[self.avoidanceSkipIx]
-    local nextTarget = self.wayPoints[self.avoidanceSkipIx + 1]
-    local targetVector
-    if nextTarget ~= nil then
-        targetVector = {x = nextTarget.x - target.x, z = nextTarget.z - target.z}
-    else
-        local previousTarget = self.wayPoints[self.avoidanceSkipIx - 1]
-        if previousTarget ~= nil then
-            targetVector = {x = target.x - previousTarget.x, z = target.z - previousTarget.z}
-        else
-            local rx, _, rz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
-            targetVector = {x = rx, z = rz}
-        end
-    end
-
     self.vehicle.ad.pathFinderModule:reset()
-    self.vehicle.ad.pathFinderModule:startPathPlanningTo(target, targetVector)
+    -- This selects nearby entries which have a graph route to the destination. If the
+    -- collision-aware local pathfinder cannot reach one, PathFinderModule retries the next.
+    self.vehicle.ad.pathFinderModule:startPathPlanningToNetwork(self.avoidanceDestinationId, self.avoidanceBlockedWayPointId)
     self.obstacleAvoidanceState = ADDrivePathModule.AVOIDANCE_PATHPLANNING
 end
 
@@ -990,13 +981,9 @@ function ADDrivePathModule:updateObstacleAvoidance(dt)
     end
 end
 
---- Rejoin the route at the waypoint beyond the obstacle and hand control back to the
---- normal waypoint following
+--- Continue along the collision-checked approach and its appended network route.
 function ADDrivePathModule:finishObstacleAvoidance(avoidancePath)
     self.vehicle.ad.specialDrivingModule:releaseVehicle()
-    for i = self.avoidanceSkipIx + 1, #self.wayPoints do
-        table.insert(avoidancePath, self.wayPoints[i])
-    end
     self.wayPoints = avoidancePath
     self:setCurrentWayPointIndex(self.wayPoints[2] ~= nil and 2 or 1)
     self.minDistanceToNextWp = math.huge
