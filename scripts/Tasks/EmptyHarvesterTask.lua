@@ -40,13 +40,31 @@ function EmptyHarvesterTask:new(vehicle, combine)
     return o
 end
 
+-- Only a real, currently executed turn maneuver justifies backing straight away.
+-- AutoDrive.combineIsTurning additionally guesses "about to turn" from field-border proximity,
+-- which near headlands (where harvesters usually stand when full) and on small fields is true
+-- almost everywhere and forced needless reversing - the forward escape course clears the
+-- headland just as well.
+function EmptyHarvesterTask:combineIsActuallyTurning()
+    if AutoDrive:getIsCPTurning(self.combine) then
+        return true
+    end
+    if self.combine.getRootVehicle ~= nil then
+        local rootVehicle = self.combine:getRootVehicle()
+        if rootVehicle ~= nil and rootVehicle.getAIFieldWorkerIsTurning ~= nil and rootVehicle:getAIFieldWorkerIsTurning() then
+            return true
+        end
+    end
+    return false
+end
+
 -- Start a departure only after checking the current situation again. The harvester can move
 -- while we wait, so sensor and turn data from the unload-complete frame are stale here.
 function EmptyHarvesterTask:startLeavingManeuver()
     local reverseAllowed = self.vehicle.ad.trailerModule:canBeHandledInReverse()
     local forwardBlocked = self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() or self.vehicle.ad.sensors.frontSensor:pollInfo()
     local reverseBlocked = self.vehicle.ad.sensors.rearSensor:pollInfo()
-    local preferReverse = AutoDrive:getIsCPCombineInPocket(self.combine) or AutoDrive.combineIsTurning(self.combine)
+    local preferReverse = AutoDrive:getIsCPCombineInPocket(self.combine) or self:combineIsActuallyTurning()
 
     if (preferReverse or forwardBlocked) and reverseAllowed and not reverseBlocked then
         local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
@@ -57,7 +75,8 @@ function EmptyHarvesterTask:startLeavingManeuver()
         self.escapeJob = ADEscapeCourseGenerator.begin(self.vehicle, ADEscapeCourseGenerator.TARGET_CLEAR_OF_ZONE, {
             exclusionZone = exclusionZone,
             combine = self.combine,
-            maxRadius = 80
+            maxRadius = 80,
+            preferredSide = AutoDrive.getPipeSide(self.combine)
         })
         self.state = EmptyHarvesterTask.STATE_LEAVING_PLANNING
     else

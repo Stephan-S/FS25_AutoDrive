@@ -30,6 +30,7 @@ ADEscapeCourseGenerator.MAX_CELL_SIZE = 8 -- m
 ADEscapeCourseGenerator.FRUIT_CELL_COST = 20 -- multiplier: crossing fruit is possible but expensive - prefer detours up to ~20x the direct distance around standing crop
 ADEscapeCourseGenerator.ZONE_CELL_COST = 6 -- multiplier: crossing the harvester exclusion zone is possible but expensive
 ADEscapeCourseGenerator.COMBINE_FRONT_CELL_PENALTY = 1000000 -- use ground ahead of harvester only when no other course exists
+ADEscapeCourseGenerator.WRONG_SIDE_CELL_COST = 4 -- multiplier: cells opposite the preferred (pipe) side of the combine cost extra - below FRUIT_CELL_COST so avoiding crop still wins over side preference
 ADEscapeCourseGenerator.HELPER_ZONE_CENTER_COST = 250 -- increasingly expensive toward rectangle center
 ADEscapeCourseGenerator.HELPER_ZONE_DEEPER_PENALTY = 100000 -- entering deeper than start is last resort
 ADEscapeCourseGenerator.DEBUG_MAX_CELLS = 400
@@ -96,7 +97,10 @@ end
 --   options (all optional): exclusionZone = {x, z, radius}, combine = vehicle,
 --                           helperZone, combineFrontPenalty, targetFruitClearance (m),
 --                           targetContinuationDistance (m), allowFruitAtTarget, fruitCellCost,
---                           helperZoneTargetMargin (m), maxPathLength (m), maxRadius (m), maxCells
+--                           helperZoneTargetMargin (m), maxPathLength (m), maxRadius (m), maxCells,
+--                           preferredSide (-1 right / 1 left of the combine, e.g. its pipe side:
+--                           cells on the opposite side of the combine's long axis cost extra, so the
+--                           course curves away toward that side; requires combine)
 -- Returns a job. Call job:update() once per frame until job:isFinished(), then job:getCourse()
 -- returns a waypoint list ({x,y,z}, ...) or nil if no valid course was found within budget.
 function ADEscapeCourseGenerator.begin(vehicle, targetType, options)
@@ -139,6 +143,18 @@ function ADEscapeCourseGenerator.begin(vehicle, targetType, options)
     local rx, _, rz = AutoDrive.localDirectionToWorld(vehicle, 0, 0, 1)
     job.headingX = rx
     job.headingZ = rz
+
+    -- Side preference: bias the search toward one side of the combine (usually its pipe side).
+    -- Snapshotted here - the combine may move while the incremental search runs.
+    local preferredSide = options.preferredSide or 0
+    if preferredSide ~= 0 and job.combine ~= nil and job.combine.components ~= nil and job.combine.components[1] ~= nil then
+        local combineX, _, combineZ = getWorldTranslation(job.combine.components[1].node)
+        local sideX, _, sideZ = AutoDrive.localDirectionToWorld(job.combine, preferredSide, 0, 0)
+        job.preferredSideRefX = combineX
+        job.preferredSideRefZ = combineZ
+        job.preferredSideDirX = sideX
+        job.preferredSideDirZ = sideZ
+    end
 
     local startCell = job:evaluateCell(0, 0)
     -- the start cell is where the vehicle already stands - accept it even if it reads as
@@ -428,6 +444,12 @@ function EscapeJob:cellStepCost(cell, baseCost)
         cost = cost + (1 - math.clamp(progress, 0, 1)) * ADEscapeCourseGenerator.HELPER_ZONE_CENTER_COST
         if self.helperStartProgress ~= nil and progress + 0.05 < self.helperStartProgress then
             cost = cost + ADEscapeCourseGenerator.HELPER_ZONE_DEEPER_PENALTY
+        end
+    end
+    if self.preferredSideDirX ~= nil then
+        local lateral = (cell.worldX - self.preferredSideRefX) * self.preferredSideDirX + (cell.worldZ - self.preferredSideRefZ) * self.preferredSideDirZ
+        if lateral < 0 then
+            cost = cost * ADEscapeCourseGenerator.WRONG_SIDE_CELL_COST
         end
     end
     if self:cellIsInFrontOfCombine(cell.worldX, cell.worldZ) then
