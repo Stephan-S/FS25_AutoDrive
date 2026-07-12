@@ -165,6 +165,10 @@
 		<text name="gui_ad_aboveDriver"								text="Sopra il veicolo" />
 		<text name="gui_ad_enableTrafficDetection"						text="Rileva collisioni" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Rilevamento di collisioni avanzato, che rileva anche traffico IA, segnali stradali, recinzioni ecc. Se Disattivato, rileva la collisione standard di FS 22 o FS 19" />
+		<text name="gui_ad_reverseOnStuck"								text="Retromarcia se bloccato" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Se il conducente è bloccato da un ostacolo per il tempo selezionato, fa retromarcia e prova a continuare. Dopo 3 tentativi falliti nello stesso punto, si ferma con un messaggio di errore. '-' disattiva questa funzione." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Tolleranza di arrivo se bloccato" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Se il conducente rimane bloccato più vicino alla fine del percorso di questo valore, la destinazione conta come raggiunta (in modalità 'Guida verso' o con passaggio a CP/AIVE/IA) - ad es. se un altro veicolo è parcheggiato sul punto di destinazione." />
 		<text name="gui_ad_shovelWidth"								text="Larghezza della pala (aggiunta)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Se la larghezza della pala rilevata automaticamente è troppo piccola, può essere aumentata con questo valore" />
 		<text name="gui_ad_preCallLevel"								text="Anticipa chiamata per scarico" />

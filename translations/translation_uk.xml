@@ -165,6 +165,10 @@
 		<text name="gui_ad_aboveDriver"								text="над технікою" />
 		<text name="gui_ad_enableTrafficDetection"						text="Виявлення перешкод" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Розширене виявлення бар'єрів/зіткнень, яке також виявляє ШІ-трафік, знаки, паркани і т.д. Вимкнено виявлення зіткнення FS22 або FS19" />
+		<text name="gui_ad_reverseOnStuck"								text="Здавати назад при блокуванні" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Якщо водія блокує перешкода довше за вибраний час, він здає назад і намагається продовжити. Після 3 невдалих спроб на одному місці він зупиняється з повідомленням про помилку. «-» вимикає функцію." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Допуск прибуття при блокуванні" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Якщо водій застрягає ближче до кінця маршруту, ніж це значення, ціль вважається досягнутою (у режимі 'Їхати до' або при передачі CP/AIVE/ШІ) - наприклад, якщо на цільовій точці стоїть інший транспортний засіб." />
 		<text name="gui_ad_shovelWidth"								text="Додаткова ширина ковша" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Якщо автоматично визначена ширина ковша занадто мала, ви можете збільшити його за допомогою цього значення." />
 		<text name="gui_ad_preCallLevel"								text="Рівень попереднього виклику" />

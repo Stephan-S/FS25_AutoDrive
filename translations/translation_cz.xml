@@ -165,6 +165,10 @@
 		<text name="gui_ad_aboveDriver"								text="Nad vozidlem" />
 		<text name="gui_ad_enableTrafficDetection"						text="Detekovat kolize" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Pokročilá detekce překážek. Zahrnuje např. AI-provoz, značky, ploty,  atd. Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="Couvání při zablokování" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Pokud je řidič blokován překážkou po zvolenou dobu, zacouvá a pokusí se pokračovat. Po 3 neúspěšných pokusech na stejném místě zastaví s chybovým hlášením. '-' funkci vypne." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Tolerance příjezdu při zablokování" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Pokud řidič uvízne blíže ke konci trasy, než je tato hodnota, cíl se počítá jako dosažený (v režimu 'Jet do' nebo při předání CP/AIVE/AI) - např. když na cílovém bodě parkuje jiné vozidlo." />
 		<text name="gui_ad_shovelWidth"								text="Šířka lžíce" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Pokud není šířka lžíce správně detekována, bude použita tato hodnota" />
 		<text name="gui_ad_preCallLevel"								text="Zavolat odvozce při naplnění" />

@@ -166,6 +166,10 @@
 		<text name="gui_ad_aboveDriver"								text="Über dem Fahrzeug" />
 		<text name="gui_ad_enableTrafficDetection"						text="Kollisionserkennung" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Erweiterte Kollisionserkennung, die auch auf KI-Verkehr, Schilder, Zäune etc. reagiert." />
+		<text name="gui_ad_reverseOnStuck"								text="Bei Blockade zurücksetzen" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Steht der Fahrer länger als die eingestellte Zeit vor einem Hindernis oder hängt fest, setzt er zurück und versucht weiterzufahren. Nach 3 erfolglosen Versuchen an derselben Stelle hält er mit Fehlermeldung an. '-' deaktiviert die Funktion." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Ankunftstoleranz bei Blockade" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Steckt der Fahrer näher als dieser Wert am Routenende fest, gilt das Ziel als erreicht (im Modus 'Fahre zu Ziel' oder bei Helfer-Übergabe CP/AIVE/KI) - z. B. wenn ein anderes Fahrzeug auf dem Zielpunkt parkt." />
 		<text name="gui_ad_shovelWidth"								text="Schaufelbreite (Zusatz)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Falls die automatisch erkannte Breite zu klein ist, kann sie hiermit erhöht werden." />
 		<text name="gui_ad_preCallLevel"								text="Früher rufen ab" />
