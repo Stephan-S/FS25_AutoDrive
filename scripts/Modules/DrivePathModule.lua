@@ -9,11 +9,13 @@ ADDrivePathModule.BLINK_TIMEOUT = 1000
 
 -- obstacle avoidance (panic mode) parameters
 ADDrivePathModule.AVOIDANCE_REVERSE = 1
-ADDrivePathModule.AVOIDANCE_FORWARD = 2
+ADDrivePathModule.AVOIDANCE_PATHPLANNING = 2
+ADDrivePathModule.AVOIDANCE_FORWARD = 3
 ADDrivePathModule.AVOIDANCE_REVERSE_DISTANCE = 12
 ADDrivePathModule.AVOIDANCE_SKIP_DISTANCE = 20
-ADDrivePathModule.AVOIDANCE_FORWARD_SPEED = 8
 ADDrivePathModule.AVOIDANCE_REVERSE_SPEED = 6
+ADDrivePathModule.AVOIDANCE_PATHPLANNING_TIMEOUT = 15000
+ADDrivePathModule.AVOIDANCE_FORWARD_TIMEOUT = 45000
 -- if stuck closer to the end of the route than this, declare the target reached instead of
 -- maneuvering (fallback, configurable via the stuckHandoverDistance setting)
 ADDrivePathModule.STUCK_HANDOVER_DISTANCE = 30
@@ -200,7 +202,10 @@ function ADDrivePathModule:update(dt)
             self:followWaypoints(dt)
             self:checkIfStuck(dt)
 
-            if self:isCloseToWaypoint() then
+            -- checkIfStuck can hand off control (e.g. stopAutoDrive -> passToExternalMod_*)
+            -- which resets this module and nils self.wayPoints; isCloseToWaypoint()/
+            -- handleReachedWayPoint() would then index a nil wayPoints table
+            if self.wayPoints ~= nil and self:isCloseToWaypoint() then
                 self:handleReachedWayPoint()
             end
         end
@@ -859,11 +864,21 @@ function ADDrivePathModule:handleBeingStuck()
 
         if reverseTime > 0 and self:isStuckCloseToTarget() then
             -- stuck within a few meters of the destination - most likely another vehicle is
-            -- already parked on the target point. Declare the target reached so the route ends
-            -- normally, including a possible handover to CP/AIVE/AI helper
+            -- already parked on the target point
             AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_got_stuck;", 5000, self.vehicle.ad.stateModule:getName())
             self.stuckRecoveryCounter = 0
-            self.atTarget = true
+            if self.vehicle.ad.stateModule:getCanRestartHelper() and self.vehicle.ad.stateModule:getMode() ~= AutoDrive.MODE_DRIVETO then
+                -- in modes like LOAD/UNLOAD the helper (CP/AI) is only started via stopAutoDrive
+                -- at the end of the task chain - the load/unload tasks would swallow atTarget
+                -- and wait at a (non-existing) trigger forever. Stop AD directly instead,
+                -- which passes control to the helper (passToExternalMod_*)
+                Logging.info("[AutoDrive stuck-recovery] '%s': stuck close to target -> stopping AD to pass control to helper", tostring(self.vehicle.ad.stateModule:getName()))
+                self.vehicle:stopAutoDrive()
+            else
+                -- declare the target reached so the route ends normally
+                Logging.info("[AutoDrive stuck-recovery] '%s': stuck close to target -> declaring target reached", tostring(self.vehicle.ad.stateModule:getName()))
+                self.atTarget = true
+            end
             return
         end
 
@@ -879,6 +894,7 @@ function ADDrivePathModule:handleBeingStuck()
             -- panic mode: back up, drive around the obstacle with a side offset and
             -- continue the current route at a waypoint beyond it (restarting the mode
             -- would just replan the same route on the waypoint network)
+            Logging.info("[AutoDrive stuck-recovery] '%s': starting obstacle avoidance, attempt %d", tostring(self.vehicle.ad.stateModule:getName()), self.stuckRecoveryCounter)
             AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_got_stuck;", 5000, self.vehicle.ad.stateModule:getName())
         elseif reverseTime > 0 and self.stuckRecoveryCounter > 3 then
             -- several recovery attempts in the same spot failed - give up for good instead of looping
@@ -900,17 +916,31 @@ end
 --- give up right next to it.
 function ADDrivePathModule:isStuckCloseToTarget()
     local maxDistance = AutoDrive.getSetting("stuckHandoverDistance") or ADDrivePathModule.STUCK_HANDOVER_DISTANCE
+    -- path distance along the remaining waypoints (math.huge when more than 60 waypoints remain)
     local distance = self:getDistanceToLastWaypoint(60)
-    if distance == nil or distance > maxDistance then
-        return false
+    -- beeline to the final waypoint as fallback: dense waypoints or loops in the last route
+    -- section must not prevent the handover when the vehicle is physically next to the target
+    if self.wayPoints ~= nil and #self.wayPoints > 0 then
+        local target = self.wayPoints[#self.wayPoints]
+        local x, _, z = getWorldTranslation(self.vehicle.components[1].node)
+        local beeline = MathUtil.vector2Length(target.x - x, target.z - z)
+        if distance == nil or beeline < distance then
+            distance = beeline
+        end
     end
     local usesHelper = self.vehicle.ad.stateModule.usedHelper ~= nil and
         self.vehicle.ad.stateModule.usedHelper ~= ADStateModule.HELPER_NONE
-    return self.vehicle.ad.stateModule:getMode() == AutoDrive.MODE_DRIVETO or usesHelper
+    local modeOk = self.vehicle.ad.stateModule:getMode() == AutoDrive.MODE_DRIVETO or usesHelper
+    local result = distance ~= nil and distance <= maxDistance and modeOk
+    Logging.info("[AutoDrive stuck-recovery] '%s': distanceToTarget=%s max=%d mode=%s usedHelper=%s -> handover=%s",
+        tostring(self.vehicle.ad.stateModule:getName()), tostring(distance), maxDistance,
+        tostring(self.vehicle.ad.stateModule:getMode()), tostring(self.vehicle.ad.stateModule.usedHelper), tostring(result))
+    return result
 end
 
---- Start the obstacle avoidance maneuver: back up a bit, then drive around the obstacle
---- with a lateral offset and rejoin the current route at a waypoint beyond it.
+--- Start the obstacle avoidance maneuver: back up a bit, then let AD's own A* pathfinder
+--- (the one ExitFieldTask/DriveToVehicleTask etc. use for off-network driving) plan a way
+--- around the obstacle to a waypoint beyond it on the current route.
 --- Returns false when there is no waypoint far enough ahead to rejoin at.
 function ADDrivePathModule:startObstacleAvoidance()
     if self.wayPoints == nil then
@@ -929,29 +959,26 @@ function ADDrivePathModule:startObstacleAvoidance()
         return false
     end
 
-    -- pass the obstacle on the side where the front corner sensors report more space,
-    -- alternate the side and go wider with every further attempt in the same spot
-    local leftBlocked = self.vehicle.ad.sensors.leftFrontSensor:pollInfo()
-    local rightBlocked = self.vehicle.ad.sensors.rightFrontSensor:pollInfo()
-    local side = 1
-    if rightBlocked and not leftBlocked then
-        side = -1
+    local targetNode = self.wayPoints[skipIx]
+    local afterNode = self.wayPoints[skipIx + 1]
+    local vecToNextPoint
+    if afterNode ~= nil then
+        vecToNextPoint = {x = afterNode.x - targetNode.x, z = afterNode.z - targetNode.z}
+    else
+        local beforeNode = self.wayPoints[skipIx - 1] or targetNode
+        vecToNextPoint = {x = targetNode.x - beforeNode.x, z = targetNode.z - beforeNode.z}
     end
-    if self.stuckRecoveryCounter % 2 == 0 then
-        side = -side
-    end
-    local lateralOffset = 4 + 1.5 * (self.stuckRecoveryCounter - 1)
+    self.avoidanceTargetNode = targetNode
+    self.avoidanceTargetVector = vecToNextPoint
 
     local rx, ry, rz = AutoDrive.localToWorld(self.vehicle, 0, 0, -100)
     self.avoidanceReverseTarget = {x = rx, y = ry, z = rz}
-    local fx, fy, fz = AutoDrive.localToWorld(self.vehicle, side * lateralOffset, 0, ADDrivePathModule.AVOIDANCE_SKIP_DISTANCE + 2)
-    self.avoidanceForwardTarget = {x = fx, y = fy, z = fz}
     self.avoidanceStartPosition = {x = x, y = y, z = z}
     self.avoidanceSkipIx = skipIx
     self.avoidanceTimer = 0
     self.obstacleAvoidanceState = ADDrivePathModule.AVOIDANCE_REVERSE
     if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
-        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "startObstacleAvoidance side %d offset %.1f skipIx %d", side, lateralOffset, skipIx)
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "startObstacleAvoidance skipIx %d", skipIx)
     end
     return true
 end
@@ -963,38 +990,82 @@ function ADDrivePathModule:updateObstacleAvoidance(dt)
         local distanceReversed = MathUtil.vector2Length(x - self.avoidanceStartPosition.x, z - self.avoidanceStartPosition.z)
         if distanceReversed >= ADDrivePathModule.AVOIDANCE_REVERSE_DISTANCE or self.avoidanceTimer > 15000 then
             self.vehicle.ad.specialDrivingModule:releaseVehicle()
-            self.obstacleAvoidanceState = ADDrivePathModule.AVOIDANCE_FORWARD
+            self.vehicle.ad.pathFinderModule:reset()
+            self.vehicle.ad.pathFinderModule:startPathPlanningTo(self.avoidanceTargetNode, self.avoidanceTargetVector)
+            Logging.info("[AutoDrive stuck-recovery] '%s': reversed clear of obstacle, starting pathfinder around it", tostring(self.vehicle.ad.stateModule:getName()))
+            self.obstacleAvoidanceState = ADDrivePathModule.AVOIDANCE_PATHPLANNING
             self.avoidanceTimer = 0
         else
             self.vehicle.ad.specialDrivingModule:reverseToTargetLocation(dt, self.avoidanceReverseTarget, ADDrivePathModule.AVOIDANCE_REVERSE_SPEED)
         end
-    elseif self.obstacleAvoidanceState == ADDrivePathModule.AVOIDANCE_FORWARD then
-        local distanceToTarget = MathUtil.vector2Length(x - self.avoidanceForwardTarget.x, z - self.avoidanceForwardTarget.z)
-        if distanceToTarget < 3 or self.avoidanceTimer > 20000 then
-            self:finishObstacleAvoidance()
+    elseif self.obstacleAvoidanceState == ADDrivePathModule.AVOIDANCE_PATHPLANNING then
+        if self.vehicle.ad.pathFinderModule:hasFinished() then
+            local path = self.vehicle.ad.pathFinderModule:getPath()
+            if path == nil or #path == 0 then
+                Logging.info("[AutoDrive stuck-recovery] '%s': pathfinder found no way around the obstacle, aborting this attempt", tostring(self.vehicle.ad.stateModule:getName()))
+                self:finishObstacleAvoidance(false)
+            else
+                Logging.info("[AutoDrive stuck-recovery] '%s': pathfinder found a way around the obstacle, %d waypoints", tostring(self.vehicle.ad.stateModule:getName()), #path)
+                self.avoidancePath = path
+                self.avoidancePathIndex = 1
+                self.obstacleAvoidanceState = ADDrivePathModule.AVOIDANCE_FORWARD
+                self.avoidanceTimer = 0
+            end
+        elseif self.avoidanceTimer > ADDrivePathModule.AVOIDANCE_PATHPLANNING_TIMEOUT then
+            Logging.info("[AutoDrive stuck-recovery] '%s': pathfinder timed out, aborting this attempt", tostring(self.vehicle.ad.stateModule:getName()))
+            self.vehicle.ad.pathFinderModule:abort()
+            self:finishObstacleAvoidance(false)
         else
-            -- deliberately no collision stop here: we are skirting an obstacle the sensors
-            -- would stop for anyway, at limited speed
-            local lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.avoidanceForwardTarget.x, self.avoidanceForwardTarget.y, self.avoidanceForwardTarget.z)
+            self.vehicle.ad.pathFinderModule:update(dt)
+            self.vehicle.ad.specialDrivingModule:stopVehicle()
+            self.vehicle.ad.specialDrivingModule:update(dt)
+        end
+    elseif self.obstacleAvoidanceState == ADDrivePathModule.AVOIDANCE_FORWARD then
+        if self.avoidancePathIndex > #self.avoidancePath then
+            -- drove through every pathfinder waypoint - rejoin the original route
+            Logging.info("[AutoDrive stuck-recovery] '%s': detour around obstacle completed, rejoining route", tostring(self.vehicle.ad.stateModule:getName()))
+            self:finishObstacleAvoidance(true)
+        elseif self.avoidanceTimer > ADDrivePathModule.AVOIDANCE_FORWARD_TIMEOUT then
+            -- taking too long (e.g. stuck again on the detour) - fall back to the original
+            -- route; checkIfStuck will trigger a fresh avoidance attempt if still blocked
+            Logging.info("[AutoDrive stuck-recovery] '%s': detour took too long, giving up and rejoining route anyway", tostring(self.vehicle.ad.stateModule:getName()))
+            self:finishObstacleAvoidance(true)
+        else
+            -- Drive the pathfinder-planned detour with AD's own waypoint-follower
+            -- (handles curvature/speed/lookahead properly) instead of blindly aiming at
+            -- each point - a naive point-chase could not actually traverse the turns the
+            -- plan needed and always ran into the timeout above. self.wayPoints/currentWayPoint
+            -- are only swapped for the duration of this call and restored right after, so
+            -- the real route (and atTarget/reachedTarget()) are never touched by this.
+            local savedWayPoints, savedIndex = self.wayPoints, self.currentWayPoint
+            self.wayPoints = self.avoidancePath
+            self.currentWayPoint = self.avoidancePathIndex
             self.vehicle.ad.trailerModule:handleTrailerReversing(false)
-            AutoDrive.driveInDirection(self.vehicle, dt, 30, 0.75, 0.2, 20, true, true, lx, lz, ADDrivePathModule.AVOIDANCE_FORWARD_SPEED, 0.3)
+            self:followWaypoints(dt)
+            if self:isCloseToWaypoint() then
+                self.avoidancePathIndex = self.avoidancePathIndex + 1
+            end
+            self.wayPoints = savedWayPoints
+            self.currentWayPoint = savedIndex
         end
     else
-        self:finishObstacleAvoidance()
+        self:finishObstacleAvoidance(false)
     end
 end
 
---- Rejoin the route at the waypoint beyond the obstacle and hand control back to the
---- normal waypoint following
-function ADDrivePathModule:finishObstacleAvoidance()
+--- Ends the avoidance maneuver. When reachedSkip is true the pathfinder-planned detour was
+--- driven successfully, so rejoin the route at the waypoint beyond the obstacle; otherwise
+--- just hand control back at the current position and let checkIfStuck retry or give up.
+function ADDrivePathModule:finishObstacleAvoidance(reachedSkip)
     self.vehicle.ad.specialDrivingModule:releaseVehicle()
-    if self.wayPoints ~= nil and self.avoidanceSkipIx ~= nil and self.avoidanceSkipIx <= #self.wayPoints then
+    if reachedSkip and self.wayPoints ~= nil and self.avoidanceSkipIx ~= nil and self.avoidanceSkipIx <= #self.wayPoints then
         self:setCurrentWayPointIndex(self.avoidanceSkipIx)
     end
     self.minDistanceToNextWp = math.huge
     self.minDistanceTimer:timer(false)
     self.blockedStuckTimer:timer(false)
     self.obstacleAvoidanceState = nil
+    self.avoidancePath = nil
 end
 
 function ADDrivePathModule:checkForReverseSection()

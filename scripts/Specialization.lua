@@ -1413,7 +1413,16 @@ function AutoDrive.passToExternalMod_CP(vehicle)
     -- TODO: check if this dirty hack works in future!
     local isControlled = vehicle:getIsControlled()
 
-    if not vehicle.ad.isStoppingWithError and distanceToStart < 30 then
+    -- allow the handover a bit further away from the marker when the user raised the
+    -- stuck handover distance - the vehicle may have been stopped short of the target
+    -- by another vehicle parked on it
+    local maxDistance = 30
+    local handoverDistance = AutoDrive.getSetting("stuckHandoverDistance")
+    if handoverDistance ~= nil and handoverDistance > maxDistance then
+        maxDistance = handoverDistance
+    end
+
+    if not vehicle.ad.isStoppingWithError and distanceToStart < maxDistance then
         AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive.passToExternalMod_CP")
         -- CP button enabled
         if (vehicle.cpStartStopDriver ~= nil and vehicle.ad.stateModule:getUsedHelper() == ADStateModule.HELPER_CP) then
@@ -1422,15 +1431,17 @@ function AutoDrive.passToExternalMod_CP(vehicle)
             if vehicle.ad.restartCP == true then
                 -- restart CP to continue
                 vehicle.ad.restartCP = false
-                AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive.passToExternalMod_CP pass control to CP with restart")
+                Logging.info("[AutoDrive stuck-recovery] '%s': passing control to CP (restart), distanceToStart=%.1f", tostring(vehicle.ad.stateModule:getName()), distanceToStart)
                 AutoDrive:RestartCP(vehicle)
             else
                 -- start CP from beginning
-                AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive.passToExternalMod_CP pass control to CP with start")
+                Logging.info("[AutoDrive stuck-recovery] '%s': passing control to CP (start), distanceToStart=%.1f", tostring(vehicle.ad.stateModule:getName()), distanceToStart)
                 AutoDrive:StartCP(vehicle)
             end
             vehicle.spec_enterable.isControlled = isControlled
         end
+    elseif not vehicle.ad.isStoppingWithError then
+        Logging.info("[AutoDrive stuck-recovery] '%s': NOT passing control to CP, distanceToStart=%.1f > max=%d", tostring(vehicle.ad.stateModule:getName()), distanceToStart, maxDistance)
     end
 end
 
