@@ -6,6 +6,7 @@ function ADCollisionDetectionModule:new(vehicle)
     self.__index = self
     o.vehicle = vehicle
     o.detectedObstable = false
+    o.detectedPhysicalObstacle = false
     o.reverseSectionClear = AutoDriveTON:new()
     o.reverseSectionClear.elapsedTime = 20000
     o.detectedCollision = false
@@ -31,6 +32,10 @@ function ADCollisionDetectionModule:hasDetectedObstable(dt)
         , tostring(not self.reverseSectionClear:done())
         )
     end
+
+    -- physically sensed obstacle (sensor box / vehicle collision), as opposed to
+    -- AD-internal right-of-way waiting - only the former justifies a stuck-recovery maneuver
+    self.detectedPhysicalObstacle = detectObstacle
 
     self.detectedObstable = detectObstacle or detectAdTrafficOnRoute or not self.reverseSectionClear:done()
     return self.detectedObstable

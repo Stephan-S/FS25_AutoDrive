@@ -165,6 +165,10 @@
 		<text name="gui_ad_aboveDriver"								text="Acima do trator" />
 		<text name="gui_ad_enableTrafficDetection"						text="Detecção de colisão" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Detecção avançada de colisões, que também detecta tráfego de IA, sinais, cercas etc. Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="Dar marcha-atrás quando bloqueado" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Se o condutor ficar bloqueado por um obstáculo durante o tempo selecionado, dá marcha-atrás e tenta continuar. Após 3 tentativas falhadas no mesmo local, para com uma mensagem de erro. '-' desativa esta função." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Tolerância de chegada quando bloqueado" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Se o condutor ficar bloqueado mais perto do fim da rota do que este valor, o destino conta como alcançado (no modo 'Conduzir para' ou com entrega a CP/AIVE/IA) - p. ex. quando outro veículo está estacionado no ponto de destino." />
 		<text name="gui_ad_shovelWidth"								text="Largura da pá (adição)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Se a largura da pá detectada automaticamente for muito pequena, ela poderá ser aumentada com esse valor" />
 		<text name="gui_ad_preCallLevel"								text="Nível de pré-chamada" />

@@ -165,6 +165,10 @@
 		<text name="gui_ad_aboveDriver"								text="Por encima del tractor" />
 		<text name="gui_ad_enableTrafficDetection"						text="Detectar obstáculos" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="Detección avanzada de obstáculos, que incluye detección de tráfico IA, señales, vallas, etc. Desactivado, detectar colisión de FS19 o FS22." />
+		<text name="gui_ad_reverseOnStuck"								text="Retroceder al quedar bloqueado" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="Si el conductor queda bloqueado por un obstáculo durante el tiempo seleccionado, retrocede e intenta continuar. Tras 3 intentos fallidos en el mismo lugar, se detiene con un mensaje de error. '-' desactiva esta función." />
+		<text name="gui_ad_stuckHandoverDistance"						text="Tolerancia de llegada al quedar bloqueado" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="Si el conductor queda bloqueado más cerca del final de la ruta que este valor, el destino cuenta como alcanzado (en modo 'Conducir a' o con transferencia a CP/AIVE/IA), p. ej. si otro vehículo está aparcado en el punto de destino." />
 		<text name="gui_ad_shovelWidth"								text="Ancho de pala (incrementar)" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="Si el ancho de la pala detectado automáticamente es demasiado pequeño, se puede aumentar con este valor" />
 		<text name="gui_ad_preCallLevel"								text="Nivel para llamar" />

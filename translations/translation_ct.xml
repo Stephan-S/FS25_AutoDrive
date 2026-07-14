@@ -165,6 +165,10 @@
 		<text name="gui_ad_aboveDriver"								text="拖拉機上方" />
 		<text name="gui_ad_enableTrafficDetection"						text="碰撞檢測" />
 		<text name="gui_ad_enableTrafficDetection_tooltip"				text="高級碰撞檢測，還可以檢測 AI 交通、標志、圍欄等。 Off, detect FS 22 or FS 19 collision" />
+		<text name="gui_ad_reverseOnStuck"								text="被阻擋時倒車" />
+		<text name="gui_ad_reverseOnStuck_tooltip"						text="如果駕駛員被障礙物阻擋超過所選時間，他會倒車並嘗試繼續行駛。在同一位置嘗試3次失敗後，將停車並顯示錯誤訊息。'-'表示停用此功能。" />
+		<text name="gui_ad_stuckHandoverDistance"						text="卡住時的到達容差" />
+		<text name="gui_ad_stuckHandoverDistance_tooltip"				text="如果駕駛員卡在離路線終點比該值更近的地方，則目標視為已到達（'駕駛到'模式或移交給CP/AIVE/AI時）——例如目標點上停著另一輛車。" />
 		<text name="gui_ad_shovelWidth"								text="工具寬度（加法）" />
 		<text name="gui_ad_shovelWidth_tooltip"						text="如果自動檢測到的工具寬度太小，可以增加這個值" />
 		<text name="gui_ad_preCallLevel"								text="預呼叫級別" />
