@@ -1074,7 +1074,7 @@ function ADDrivePathModule:checkForReverseSection()
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "checkForReverseSection start")
     end
 
-    if self.wayPoints == nil or self:getCurrentWayPointIndex() < 1 or #self.wayPoints <= self:getCurrentWayPointIndex() + 1 then
+    if self.wayPoints == nil or self:getCurrentWayPointIndex() < 2 or #self.wayPoints <= self:getCurrentWayPointIndex() + 1 then
         if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:checkForReverseSection wpIdx=%d - first or last segment"
             , self:getCurrentWayPointIndex())
