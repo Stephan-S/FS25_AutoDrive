@@ -211,6 +211,7 @@ function AutoDriveSync.streamReadGraph(streamId)
             Logging.error("[AutoDriveSync] Error receiving marker %s (%s)", AutoDrive.streamReadStringOrEmpty(streamId), markerId)
             -- we have to read everything to keep the right reading order
             _ = AutoDrive.streamReadStringOrEmpty(streamId)
+            _ = streamReadBool(streamId)
         end
     end
 
