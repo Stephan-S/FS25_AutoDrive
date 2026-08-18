@@ -161,16 +161,18 @@ function RefuelTask:startRefueling()
                     if not item.wasLoaded then
                         local refuelFillTypeTitle = g_fillTypeManager:getFillTypeByIndex(item.fillType) and g_fillTypeManager:getFillTypeByIndex(item.fillType).title or "unknown"
                         if AutoDrive.fillTypesMatch(self.vehicle, self.refuelTrigger, self.vehicle, {item.fillType}, consumer.fillUnitIndex) then
-                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "RefuelTask:startRefueling fillTypesMatch -> refuelFillTypeTitle %s", refuelFillTypeTitle)
+                            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "RefuelTask:startRefueling fillTypesMatch -> refuelFillTypeTitle %s", refuelFillTypeTitle)
 
                             self.refuelTrigger.autoStart = true
                             self.refuelTrigger.selectedFillType = item.fillType
+                            self.refuelTrigger.validFillableObject = self.vehicle
+                            self.refuelTrigger.validFillableFillUnitIndex = consumer.fillUnitIndex
                             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "RefuelTask:startRefueling Start onFillTypeSelection")
                             self.refuelTrigger:onFillTypeSelection(item.fillType)
                             if self.refuelTrigger.isLoading then    
                                 AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "RefuelTask:startRefueling isLoading")
                                 self.refuelTrigger.selectedFillType = item.fillType
-                                self.refuelTrigger.autoStart = true
+                                self.refuelTrigger.autoStart = false
                                 g_effectManager:setEffectTypeInfo(self.refuelTrigger.effects, self.refuelTrigger.selectedFillType)
                             end
                             if self.refuelTrigger.stoppedTimer == nil then
