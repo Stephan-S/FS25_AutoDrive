@@ -68,6 +68,10 @@ function ADSpecialDrivingModule:stopAndHoldVehicle(dt)
         self:stopAndHoldVehicle_org(dt)
     else
         local speedSign = AutoDrive.sign(self.vehicle.lastSignedSpeed)
+        local spec = self.vehicle.spec_reverseDriving
+        if spec and spec.hasReverseDriving and spec.isReverseDriving then
+            speedSign = -speedSign
+        end
         if self.vehicle.lastSpeedReal * 3600 > 10 then
             self.vehicle:updateVehiclePhysics(-speedSign * 15   , 0, true, dt)
         elseif self.vehicle.lastSpeedReal * 3600 > 5 then
