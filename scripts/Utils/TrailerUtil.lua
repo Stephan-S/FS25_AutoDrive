@@ -429,16 +429,17 @@ function AutoDrive.getAllDischargeableUnits(vehicle, initialize)
                             for _, dischargeNode in ipairs(spec_dischargeable.dischargeNodes) do
                                 if dischargeNode.fillUnitIndex and dischargeNode.fillUnitIndex > 0 and dischargeNode.fillUnitIndex == fillUnitIndex then
                                     -- the fillUnit can be discharged
+                                    local autoAimTargetNode = trailer.getFillUnitAutoAimTargetNode and trailer:getFillUnitAutoAimTargetNode(fillUnitIndex)
                                     if fillUnit.exactFillRootNode then
                                         if dischargeableUnits == nil then
                                             dischargeableUnits = {}
                                         end
-                                        table.insert(dischargeableUnits, {fillUnit = fillUnit, node = fillUnit.exactFillRootNode, object = trailer, fillUnitIndex = fillUnitIndex})
+                                        table.insert(dischargeableUnits, {fillUnit = fillUnit, node = fillUnit.exactFillRootNode, object = trailer, fillUnitIndex = fillUnitIndex, autoAimTargetNode = autoAimTargetNode})
                                     elseif fillUnit.fillRootNode then
                                         if dischargeableUnits == nil then
                                             dischargeableUnits = {}
                                         end
-                                        table.insert(dischargeableUnits, {fillUnit = fillUnit, node = fillUnit.fillRootNode, object = trailer, fillUnitIndex = fillUnitIndex})
+                                        table.insert(dischargeableUnits, {fillUnit = fillUnit, node = fillUnit.fillRootNode, object = trailer, fillUnitIndex = fillUnitIndex, autoAimTargetNode = autoAimTargetNode})
                                     end
                                     break
                                 end
@@ -456,6 +457,7 @@ end
 -- new, return next fillUnit with room to fill or RootVehicle as default
 function AutoDrive.getNextFreeDischargeableUnit(vehicle)
     local nextFreeDischargeableUnit = nil
+    local nextFreeAutoAimTargetNode = nil
     local rootVehicle = vehicle.getRootVehicle and vehicle:getRootVehicle() -- default in case no free fill unit will be found
     local nextFreeDischargeableNode = rootVehicle and rootVehicle.components[1].node
 
@@ -474,12 +476,13 @@ function AutoDrive.getNextFreeDischargeableUnit(vehicle)
                 if freeCapacity > 0.1 then
                     nextFreeDischargeableUnit = item.fillUnit
                     nextFreeDischargeableNode = item.node
+                    nextFreeAutoAimTargetNode = item.autoAimTargetNode
                     break
                 end
             end
         end
     end
-    return nextFreeDischargeableUnit, nextFreeDischargeableNode
+    return nextFreeDischargeableUnit, nextFreeDischargeableNode, nextFreeAutoAimTargetNode
 end
 
 -- ###################################################################################################

@@ -604,7 +604,11 @@ end
 function CombineUnloaderMode:getDynamicSideChaseOffsetZ()
     local nodeX, nodeY, nodeZ = getWorldTranslation(AutoDrive.getDischargeNode(self.combine))
     local _, _, pipeZOffsetToCombine = AutoDrive.worldToLocal(self.combine, nodeX, nodeY, nodeZ, self.combine.ad.ADRootNode)
-    local targetX, targetY, targetZ = getWorldTranslation(self.targetFillNode)
+    local targetFillNode = self.targetFillNode
+    if self.combine.ad.isAutoAimingChopper and self.targetAutoAimTargetNode then
+        targetFillNode = self.targetAutoAimTargetNode
+    end
+    local targetX, targetY, targetZ = getWorldTranslation(targetFillNode)
 
     local _, _, vehicleZOffsetToTarget = AutoDrive.worldToLocal(self.vehicle, targetX, targetY, targetZ)
 
@@ -752,7 +756,7 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
     end
 
     self.pipeSide = AutoDrive.getPipeSide(self.combine)
-    self.targetFillUnit, self.targetFillNode = AutoDrive.getNextFreeDischargeableUnit(self.vehicle)
+    self.targetFillUnit, self.targetFillNode, self.targetAutoAimTargetNode = AutoDrive.getNextFreeDischargeableUnit(self.vehicle)
 
     local sideChaseTermX = self:getSideChaseOffsetX()
     local sideChaseTermZ = self:getSideChaseOffsetZ(AutoDrive.dynamicChaseDistance or self.combine.ad.isHarvester)
