@@ -142,13 +142,16 @@ function ADGraphManager:getPathTo(vehicle, waypointId, startPoint)
         end
     end
 
-    local closestWaypoint = self:findMatchingWayPointForVehicle(vehicle)
+    local closestWaypoint = nil
     if startPoint ~= nil and startPoint.id ~= nil then
         -- consider id to avoid using Pathfinder wayPoints
         local distanceToStartPoint = MathUtil.vector2Length(x - startPoint.x, z - startPoint.z)
         if distanceToStartPoint < 5 then
             closestWaypoint = startPoint.id
         end
+    end
+    if closestWaypoint == nil then
+        closestWaypoint = self:findMatchingWayPointForVehicle(vehicle)
     end
     if closestWaypoint ~= nil then
         local outCandidates = self:getBestOutPoints(vehicle, closestWaypoint)
