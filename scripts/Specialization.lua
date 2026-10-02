@@ -1183,13 +1183,13 @@ function AutoDrive:startAutoDrive()
     end
 end
 
-function AutoDrive:stopAutoDrive()
+function AutoDrive:stopAutoDrive(retainLastUsedWaypoint)
 
     if self.isServer then
         ADScheduler:removePathfinderVehicle(self)
 
         if self.ad.stateModule:isActive() then
-            self.ad.drivePathModule:reset()
+            self.ad.drivePathModule:reset(retainLastUsedWaypoint)
             self.ad.specialDrivingModule:reset()
             self.ad.trailerModule:reset()
 
