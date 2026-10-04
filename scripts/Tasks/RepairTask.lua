@@ -88,7 +88,7 @@ end
 function RepairTask:finished()    
     self.vehicle.ad.onRouteToRepair = false
 
-    self.vehicle:stopAutoDrive()
+    self.vehicle:stopAutoDrive(true) -- stop AD, but retain last used waypoint so we can resume from it
     self.vehicle.ad.stateModule:getCurrentMode():start()
     self.vehicle.ad.taskModule:setCurrentTaskFinished(ADTaskModule.DONT_PROPAGATE)
 end
