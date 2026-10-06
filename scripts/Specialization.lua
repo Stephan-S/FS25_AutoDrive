@@ -1744,6 +1744,37 @@ function AutoDrive:toggleMouse()
     self.ad.lastMouseState = g_inputBinding:getShowMouseCursor()
 end
 
+function AutoDrive.turnOffLightsForStoppedEngine(vehicle)
+    if vehicle == nil or vehicle.spec_lights == nil then
+        return
+    end
+    local anyLightOn = false
+    if vehicle.getLightsTypesMask ~= nil and vehicle:getLightsTypesMask() ~= 0 then
+        anyLightOn = true
+    end
+    if vehicle.getBeaconLightsVisibility ~= nil and vehicle:getBeaconLightsVisibility() then
+        anyLightOn = true
+    end
+    if vehicle.getTurnLightState ~= nil and vehicle:getTurnLightState() ~= Lights.TURNLIGHT_OFF then
+        anyLightOn = true
+    end
+    if not anyLightOn then
+        return
+    end
+    if vehicle.deactivateLights ~= nil then
+        vehicle:deactivateLights()
+    end
+    if vehicle.setLightsTypesMask ~= nil then
+        vehicle:setLightsTypesMask(0)
+    end
+    if vehicle.setBeaconLightsVisibility ~= nil then
+        vehicle:setBeaconLightsVisibility(false)
+    end
+    if vehicle.setTurnLightState ~= nil then
+        vehicle:setTurnLightState(Lights.TURNLIGHT_OFF)
+    end
+end
+
 function AutoDrive:updateAutoDriveLights(switchOff)
     if not self.setTurnLightState then
         AutoDrive.errorMsg(self, "AutoDrive:updateAutoDriveLights self.setTurnLightState %s", tostring(self.setTurnLightState))
@@ -1753,6 +1784,14 @@ function AutoDrive:updateAutoDriveLights(switchOff)
             self:setTurnLightState(Lights.TURNLIGHT_OFF)
         end
     elseif self.ad ~= nil and self.ad.stateModule:isActive() then
+        local motorStarted = true
+        if self.getIsMotorStarted ~= nil then
+            motorStarted = self:getIsMotorStarted()
+        end
+        if not motorStarted then
+            AutoDrive.turnOffLightsForStoppedEngine(self)
+            return
+        end
         local isInRangeToLoadUnloadTarget = false
         local isInBunkerSilo              = false
         local isOnField                   = ( self.getIsOnField ~= nil and self:getIsOnField() )
