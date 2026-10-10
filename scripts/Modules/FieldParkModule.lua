@@ -11,6 +11,7 @@
 ]]
 
 ADFieldPark = {}
+ADFieldPark.parked = {}                             -- vehicle -> spot where it is parked, waiting for a call
 
 ADFieldPark.RADII = {45, 55, 65, 75, 85}            -- m, rings searched around the vehicle (beyond ENTRANCE_CLEARANCE)
 ADFieldPark.ANGLE_STEP = 10                         -- degrees between two candidates on a ring
@@ -23,6 +24,7 @@ ADFieldPark.PLANNING_TIMEOUT = 20000                -- ms given to the pathfinde
 ADFieldPark.RETRY_DELAY = 30000                     -- ms before looking again when no spot could be reached
 ADFieldPark.MIN_TURN_RADIUS = 6                     -- m, tightest turn tried for the direct path
 ADFieldPark.CROP_MARGIN = 0.25                      -- m added on each side of the train when checking the crop
+ADFieldPark.QUEUE_GAP = 3                           -- m between two unloaders parked one behind the other
 ADFieldPark.MAX_TRIES = 3                           -- spots tried in turn when no clean path leads to the previous one
 
 
@@ -211,9 +213,45 @@ end
 
 -- one step of the search; returns nil while searching, then the list of spots best first: along the field
 -- border, then close to the vehicle, then nose ahead. Each spot is {x, y, z, dirX, dirZ}, where the tractor stops
+-- an unloader reached its spot / left it
+function ADFieldPark.setParked(vehicle, spot)
+    ADFieldPark.parked[vehicle] = spot
+end
+
+-- spots right behind, then right in front of the unloaders already parked nearby, in line with them, so the
+-- unloaders queue along the border. They come before any other candidate
+function ADFieldPark.addQueueCandidates(search)
+    for other, spot in pairs(ADFieldPark.parked) do
+        local valid = other ~= search.vehicle and other.isDeleted ~= true and other.components ~= nil and spot.cx ~= nil
+        if valid then
+            -- still standing there
+            local ox, _, oz = ADTrafficYieldModule.getPosition(other)
+            valid = MathUtil.vector2Length(ox - spot.x, oz - spot.z) < 5
+        end
+        if not valid then
+            ADFieldPark.parked[other] = nil
+        elseif MathUtil.vector2Length(spot.cx - search.x, spot.cz - search.z) < ADFieldPark.RADII[#ADFieldPark.RADII] + 50 then
+            local offset = spot.halfL + ADFieldPark.QUEUE_GAP + search.halfL
+            for rank, sign in ipairs({-1, 1}) do
+                local cx, cz = spot.cx + spot.dirX * sign * offset, spot.cz + spot.dirZ * sign * offset
+                local maxH = ADFieldPark.isSpotAllowed(search, cx, cz, spot.dirX, spot.dirZ)
+                    and ADFieldPark.isGroundFree(cx, cz, spot.dirX, spot.dirZ, search.halfW, search.halfL, search.nearby, search.py) or nil
+                if maxH ~= nil then
+                    table.insert(search.candidates, {cx = cx, cz = cz, dx = spot.dirX, dz = spot.dirZ, maxH = maxH, cost = -1000 + rank})
+                end
+            end
+        end
+    end
+end
+
 function ADFieldPark.searchStep(search)
     if search.result ~= nil then
         return {}
+    end
+    if not search.queueDone then
+        search.queueDone = true
+        ADFieldPark.addQueueCandidates(search)
+        return nil
     end
     local radius = ADFieldPark.RADII[search.radiusIndex]
     if radius ~= nil then
@@ -288,7 +326,10 @@ function ADFieldPark.pickSpots(search)
             local tx, tz = c.cx + c.dx * shift, c.cz + c.dz * shift
             table.insert(spots, {
                 x = tx, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, tx, search.py, tz), z = tz,
-                dirX = c.dx, dirZ = c.dz
+                dirX = c.dx, dirZ = c.dz,
+                -- footprint, for the next unloader that queues behind this one
+                cx = c.cx, cz = c.cz, halfL = search.halfL,
+                queued = c.cost < -900
             })
             if #spots >= ADFieldPark.MAX_TRIES then
                 break

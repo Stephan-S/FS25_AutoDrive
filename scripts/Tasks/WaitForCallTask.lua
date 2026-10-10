@@ -85,6 +85,7 @@ function WaitForCallTask:update(dt)
         end
     elseif self.state == WaitForCallTask.STATE_DRIVING then
         if self.vehicle.ad.drivePathModule:isTargetReached() then
+            ADFieldPark.setParked(self.vehicle, self.spots ~= nil and self.spots[self.spotIndex] or nil)
             self.state = WaitForCallTask.STATE_WAITING
             self:hold(dt)
         else
@@ -118,7 +119,7 @@ function WaitForCallTask:planToNextSpot()
         self.retryTime = 0
         return
     end
-    module:log("field park: spot %d found at x=%.0f z=%.0f heading %.0f°", self.spotIndex, spot.x, spot.z, math.deg(math.atan2(spot.dirX, spot.dirZ)))
+    module:log("field park: spot %d found at x=%.0f z=%.0f heading %.0f°%s", self.spotIndex, spot.x, spot.z, math.deg(math.atan2(spot.dirX, spot.dirZ)), spot.queued and " (in line with a parked unloader)" or "")
     local wayPoints = ADFieldPark.findDirectPath(self.vehicle, spot)
     if wayPoints ~= nil then
         module:log("field park: direct path to spot %d, %d points", self.spotIndex, #wayPoints)
@@ -138,6 +139,9 @@ function WaitForCallTask:hold(dt)
 end
 
 function WaitForCallTask:abort()
+    if ADFieldPark ~= nil then
+        ADFieldPark.setParked(self.vehicle, nil)
+    end
     -- called by a harvester while still planning: free the pathfinder for the next task
     if self.state == WaitForCallTask.STATE_PATHPLANNING then
         self.vehicle.ad.pathFinderModule:reset()
@@ -145,6 +149,9 @@ function WaitForCallTask:abort()
 end
 
 function WaitForCallTask:finished()
+    if ADFieldPark ~= nil then
+        ADFieldPark.setParked(self.vehicle, nil)
+    end
     self.vehicle.ad.taskModule:setCurrentTaskFinished(self.propagate)
 end
 
