@@ -175,7 +175,9 @@ function ADDrivePathModule:update(dt)
             self.vehicle.ad.specialDrivingModule:handleReverseDriving(dt)
         else
             self:followWaypoints(dt)
-            self:checkIfStuck(dt)
+            if self.vehicle.ad.trafficYieldModule == nil or not self.vehicle.ad.trafficYieldModule:isControlling() then
+                self:checkIfStuck(dt)
+            end
 
             if self:isCloseToWaypoint() then
                 self:handleReachedWayPoint()
@@ -351,7 +353,13 @@ function ADDrivePathModule:followWaypoints(dt)
         lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.targetX, y, self.targetZ, self.vehicle:getAISteeringNode())
     end
 
-    if self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) then
+    local obstacleDetected = self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt)
+    -- head-on deadlock resolution between two AD vehicles: the module takes control while active
+    if self.vehicle.ad.trafficYieldModule ~= nil and self.vehicle.ad.trafficYieldModule:handle(dt, obstacleDetected) then
+        return
+    end
+
+    if obstacleDetected then
         if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:followWaypoints - stopVehicle")
         end
