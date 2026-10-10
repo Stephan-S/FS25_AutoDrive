@@ -417,5 +417,8 @@
 		<text name="AD_trafficYield_giveUp" text="cannot pass the oncoming vehicle, no space and no junction found: please intervene" />
 		<text name="gui_ad_trafficYieldMargin" text="Passing clearance" />
 		<text name="gui_ad_trafficYieldMargin_tooltip" text="Free space left between both vehicle combinations when passing (the roadside spot adapts to the real width and length of both combinations)" />
+		<text name="gui_ad_fieldParkWhileWaiting" text="Wait inside the field" />
+		<text name="gui_ad_fieldParkWhileWaiting_tooltip" text="An unloader waiting for a harvester call drives into the field and parks on free ground without crop, away from the roads, so it does not block the way" />
+		<text name="AD_task_park_in_field" text="Parking in the field" />
 	</texts>
 </l10n>

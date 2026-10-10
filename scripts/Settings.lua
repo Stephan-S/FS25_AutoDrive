@@ -646,6 +646,17 @@ AutoDrive.settings.trafficYieldMargin = {
     isVehicleSpecific = false
 }
 
+AutoDrive.settings.fieldParkWhileWaiting = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_fieldParkWhileWaiting",
+    tooltip = "gui_ad_fieldParkWhileWaiting_tooltip",
+    translate = true,
+    isVehicleSpecific = false
+}
+
 AutoDrive.settings.shovelWidth = {
     values = {0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0},
     texts = {"0m", "0.2m", "0.4m", "0.6m", "0.8m", "1.0m", "1.2m", "1.4m", "1.6m", "1.8m", "2.0m", "2.2m", "2.4m", "2.6m", "2.8m", "3.0m", "3.2m", "3.4m", "3.6m", "3.8m", "4.0m"},

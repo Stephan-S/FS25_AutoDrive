@@ -110,6 +110,7 @@ source(Utils.getFilename("scripts/Tasks/HandleHarvesterTurnTask.lua", g_currentM
 source(Utils.getFilename("scripts/Modules/DrivePathModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/CollisionDetectionModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/TrafficYieldModule.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Modules/FieldParkModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/SpecialDrivingModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/TaskModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/TrailerModule.lua", g_currentModDirectory))
