@@ -406,5 +406,16 @@
 		<text name="gui_ad_editorTip_9"								text="Erster Punkt ist Kreuzungspunkt, zweiter Nachbar:" />
 		<text name="gui_ad_editorTip_10"								text="LSTRG: Streckentyp wechseln" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Nebenstrecke wechseln" />
+		<text name="gui_ad_trafficYieldEnabled" text="Begegnungsverkehr" />
+		<text name="gui_ad_trafficYieldEnabled_tooltip" text="Wenn sich zwei AutoDrive-Fahrzeuge auf einer Straße mit Gegenverkehr gegenseitig blockieren, setzt eines zurück, während das andere am Straßenrand parkt; danach fahren beide weiter" />
+		<text name="gui_ad_trafficYieldDelay" text="Wartezeit vor Ausweichen" />
+		<text name="gui_ad_trafficYieldDelay_tooltip" text="Wie lange sich beide Fahrzeuge gegenseitig blockieren müssen, bevor das Ausweichmanöver beginnt" />
+		<text name="gui_ad_trafficYieldMaxReverse" text="Max. Rückwärtsstrecke beim Ausweichen" />
+		<text name="gui_ad_trafficYieldMaxReverse_tooltip" text="Maximale Strecke, die das ausweichende Fahrzeug rückwärts fährt, um Platz zu machen" />
+		<text name="AD_trafficYield_giveWay" text="setzt zurück, um ein entgegenkommendes Fahrzeug vorbeizulassen" />
+		<text name="AD_trafficYield_failed" text="hat keinen Platz zum Ausweichen gefunden" />
+		<text name="AD_trafficYield_giveUp" text="kann dem entgegenkommenden Fahrzeug nicht ausweichen, kein Platz und keine Abzweigung gefunden: bitte eingreifen" />
+		<text name="gui_ad_trafficYieldMargin" text="Abstand beim Ausweichen" />
+		<text name="gui_ad_trafficYieldMargin_tooltip" text="Freier Abstand zwischen den beiden Gespannen beim Vorbeifahren (der Platz am Straßenrand passt sich an die tatsächliche Breite und Länge beider Gespanne an)" />
 	</texts>
 </l10n>

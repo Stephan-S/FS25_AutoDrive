@@ -406,5 +406,16 @@
 		<text name="gui_ad_editorTip_9"								text="1-ый узел это пересечение, 2-ой это соседний:" />
 		<text name="gui_ad_editorTip_10"								text="с L-Ctrl = Смена типа сегмента (одно/двусторонняя)" />
 		<text name="gui_ad_editorTip_11"								text="с L-Shift = Смена типа на 'боковая дорога'" />
+		<text name="gui_ad_trafficYieldEnabled" text="Head-on passing" />
+		<text name="gui_ad_trafficYieldEnabled_tooltip" text="When two AutoDrive vehicles block each other head-on on a two-way road, one reverses while the other parks on the roadside, then both continue" />
+		<text name="gui_ad_trafficYieldDelay" text="Delay before passing manoeuvre" />
+		<text name="gui_ad_trafficYieldDelay_tooltip" text="How long both vehicles must be blocked head-on before the passing manoeuvre starts" />
+		<text name="gui_ad_trafficYieldMaxReverse" text="Max reverse distance when passing" />
+		<text name="gui_ad_trafficYieldMaxReverse_tooltip" text="Maximum distance the yielding vehicle may reverse to make room" />
+		<text name="AD_trafficYield_giveWay" text="is reversing to let an oncoming vehicle pass" />
+		<text name="AD_trafficYield_failed" text="found no space to pass the oncoming vehicle" />
+		<text name="AD_trafficYield_giveUp" text="cannot pass the oncoming vehicle, no space and no junction found: please intervene" />
+		<text name="gui_ad_trafficYieldMargin" text="Passing clearance" />
+		<text name="gui_ad_trafficYieldMargin_tooltip" text="Free space left between both vehicle combinations when passing (the roadside spot adapts to the real width and length of both combinations)" />
 	</texts>
 </l10n>
