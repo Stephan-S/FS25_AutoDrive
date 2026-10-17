@@ -90,7 +90,7 @@ function ExitFieldTask:startPathPlanning()
     local closest, closestDistance = self.vehicle:getClosestWayPoint()
     if self.nextExitStrategy == ExitFieldTask.STRATEGY_CLOSEST then
         local closestNode = ADGraphManager:getWayPointById(closest)
-        local wayPoints = ADGraphManager:pathFromTo(closest, self.vehicle.ad.stateModule:getSecondWayPoint())
+        local wayPoints = ADGraphManager:pathFromTo(closest, self.vehicle.ad.stateModule:getSecondWayPoint(), nil, self.vehicle)
         if wayPoints ~= nil and #wayPoints > 1 then
             if closestDistance > AutoDrive.getDriverRadius(self.vehicle) then
                 -- initiate pathFinder only if distance to closest wayPoint is enought to find a path
@@ -109,7 +109,7 @@ function ExitFieldTask:startPathPlanning()
         end
     else
         local targetNode = ADGraphManager:getWayPointById(self.vehicle.ad.stateModule:getFirstWayPoint())
-        local wayPoints = ADGraphManager:pathFromTo(self.vehicle.ad.stateModule:getFirstWayPoint(), self.vehicle.ad.stateModule:getSecondWayPoint())
+        local wayPoints = ADGraphManager:pathFromTo(self.vehicle.ad.stateModule:getFirstWayPoint(), self.vehicle.ad.stateModule:getSecondWayPoint(), nil, self.vehicle)
         if wayPoints ~= nil and #wayPoints > 1 then
             local vecToNextPoint = {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
             if AutoDrive.getSetting("exitField", self.vehicle) == 1 and #wayPoints > 6 then

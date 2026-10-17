@@ -214,7 +214,7 @@ function PathFinderModule:startPathPlanningToWayPoint(wayPointId, destinationId)
         )
     )
     local targetNode = ADGraphManager:getWayPointById(wayPointId)
-    local wayPoints = ADGraphManager:pathFromTo(wayPointId, destinationId)
+    local wayPoints = ADGraphManager:pathFromTo(wayPointId, destinationId, nil, self.vehicle)
     if wayPoints ~= nil and #wayPoints > 1 then
         local vecToNextPoint = {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
         self:startPathPlanningTo(targetNode, vecToNextPoint)
@@ -356,6 +356,46 @@ function PathFinderModule:startPathPlanningToVehicle(targetVehicle, targetDistan
     end
 end
 
+PathFinderModule.START_DISTANCES_SHORTER = {5, 3, 1.5}
+
+-- longest start distance (up to PATHFINDER_START_DISTANCE) whose corridor, vehicle -> start point + turning radius at train width, hits no obstacle
+function PathFinderModule:getFreeStartDistance(vehicleWorldX, vehicleWorldZ, dirX, dirZ)
+    local maxDistance = self.PATHFINDER_START_DISTANCE
+    local distances = {maxDistance}
+    for _, d in ipairs(PathFinderModule.START_DISTANCES_SHORTER) do
+        if d < maxDistance then
+            table.insert(distances, d)
+        end
+    end
+    local halfWidth = ADPathCalculator.getPassageWidth(self.vehicle) / 2 + 0.5
+    local angleRad = math.atan2(dirX, dirZ)
+    local height = self.vehicleMinHeight or 6
+    -- from the front of the vehicle, so its own wheels and body are not in the box
+    local frontOffset = (self.vehicle.size ~= nil and self.vehicle.size.length ~= nil and self.vehicle.size.length / 2 or 2.5) + 0.3
+    -- beyond the start point the vehicle still needs about its turning radius to turn: check that too
+    local turnSpace = math.max(2, self.minTurnRadius or 2)
+    for _, distance in ipairs(distances) do
+        local length = distance + turnSpace - frontOffset
+        if length <= 0.5 then
+            return distance
+        end
+        local cx = vehicleWorldX + dirX * (frontOffset + length / 2)
+        local cz = vehicleWorldZ + dirZ * (frontOffset + length / 2)
+        local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 1, cz)
+        self.collisionhits = 0
+        overlapBox(cx, y + height / 2 + 0.3, cz, 0, angleRad, 0, halfWidth, height / 2, length / 2, "collisionTestCallback", self, self.mask, true, true, true, true)
+        if self.collisionhits == 0 then
+            if distance ~= maxDistance then
+                PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:getFreeStartDistance obstacle ahead, start %.1f m in front instead of %.1f m", distance, maxDistance)
+            end
+            return distance
+        end
+    end
+    local shortest = distances[#distances]
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:getFreeStartDistance obstacle right in front, start %.1f m in front", shortest)
+    return shortest
+end
+
 function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:startPathPlanningTo self.minTurnRadius %.1f"
         , self.minTurnRadius
@@ -378,8 +418,10 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     local vehicleWorldX, vehicleWorldY, vehicleWorldZ = getWorldTranslation(self.vehicle.components[1].node)
     local vehicleRx, _, vehicleRz =  AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
     local vehicleVector = {x = vehicleRx, z = vehicleRz}
-    self.startX = vehicleWorldX + self.PATHFINDER_START_DISTANCE * vehicleRx
-    self.startZ = vehicleWorldZ + self.PATHFINDER_START_DISTANCE * vehicleRz
+    -- the stretch from the vehicle to the start point is driven unchecked: pull the start closer if a tree, wall... is on it
+    local startDistance = self:getFreeStartDistance(vehicleWorldX, vehicleWorldZ, vehicleRx, vehicleRz)
+    self.startX = vehicleWorldX + startDistance * vehicleRx
+    self.startZ = vehicleWorldZ + startDistance * vehicleRz
 
     local angleRad = math.atan2(targetVector.z, targetVector.x)
     angleRad = AutoDrive.normalizeAngle(angleRad)
@@ -540,7 +582,7 @@ end
 function PathFinderModule:restartAtNextWayPoint()
     self.targetWayPointId = self.appendWayPoints[2].id
     local targetNode = ADGraphManager:getWayPointById(self.targetWayPointId)
-    local wayPoints = ADGraphManager:pathFromTo(self.targetWayPointId, self.destinationId)
+    local wayPoints = ADGraphManager:pathFromTo(self.targetWayPointId, self.destinationId, nil, self.vehicle)
     if wayPoints ~= nil and #wayPoints > 1 then
         local vecToNextPoint = {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
         local storedRetryCounter = self.retryCounter
@@ -554,7 +596,7 @@ function PathFinderModule:restartAtNextWayPoint()
         self.fallBackMode3 = false  -- disable avoid fruit
         self.targetWayPointId = storedTargetWayPointId
         if self.targetWayPointId ~= nil then
-            self.appendWayPoints = ADGraphManager:pathFromTo(self.targetWayPointId, self.destinationId)
+            self.appendWayPoints = ADGraphManager:pathFromTo(self.targetWayPointId, self.destinationId, nil, self.vehicle)
         end
     end
     self:autoRestart()
