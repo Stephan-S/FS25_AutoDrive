@@ -602,6 +602,61 @@ AutoDrive.settings.enableTrafficDetection = {
     isVehicleSpecific = false
 }
 
+AutoDrive.settings.trafficYieldEnabled = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_trafficYieldEnabled",
+    tooltip = "gui_ad_trafficYieldEnabled_tooltip",
+    translate = true,
+    isVehicleSpecific = false
+}
+
+AutoDrive.settings.trafficYieldDelay = {
+    values = {3, 5, 8, 10, 15, 20, 30},
+    texts = {"3 s", "5 s", "8 s", "10 s", "15 s", "20 s", "30 s"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_trafficYieldDelay",
+    tooltip = "gui_ad_trafficYieldDelay_tooltip",
+    translate = false,
+    isVehicleSpecific = false
+}
+
+AutoDrive.settings.trafficYieldMaxReverse = {
+    values = {20, 30, 40, 50, 60, 80, 100},
+    texts = {"20 m", "30 m", "40 m", "50 m", "60 m", "80 m", "100 m"},
+    default = 4,
+    current = 4,
+    text = "gui_ad_trafficYieldMaxReverse",
+    tooltip = "gui_ad_trafficYieldMaxReverse_tooltip",
+    translate = false,
+    isVehicleSpecific = false
+}
+
+AutoDrive.settings.trafficYieldMargin = {
+    values = {0.3, 0.6, 1.0, 1.5, 2.0},
+    texts = {"0.3 m", "0.6 m", "1.0 m", "1.5 m", "2.0 m"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_trafficYieldMargin",
+    tooltip = "gui_ad_trafficYieldMargin_tooltip",
+    translate = false,
+    isVehicleSpecific = false
+}
+
+AutoDrive.settings.fieldParkWhileWaiting = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_fieldParkWhileWaiting",
+    tooltip = "gui_ad_fieldParkWhileWaiting_tooltip",
+    translate = true,
+    isVehicleSpecific = false
+}
+
 AutoDrive.settings.shovelWidth = {
     values = {0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0},
     texts = {"0m", "0.2m", "0.4m", "0.6m", "0.8m", "1.0m", "1.2m", "1.4m", "1.6m", "1.8m", "2.0m", "2.2m", "2.4m", "2.6m", "2.8m", "3.0m", "3.2m", "3.4m", "3.6m", "3.8m", "4.0m"},

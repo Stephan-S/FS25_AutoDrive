@@ -406,5 +406,19 @@
 		<text name="gui_ad_editorTip_9"								text="1. point est une intersection, 2. point est voisin:" />
 		<text name="gui_ad_editorTip_10"								text="CTRLG: Choix du segment (unique/double sens)" />
 		<text name="gui_ad_editorTip_11"								text="MAJG = Etablir voie de dégagement" />
+		<text name="gui_ad_trafficYieldEnabled" text="Croisement face à face" />
+		<text name="gui_ad_trafficYieldEnabled_tooltip" text="Quand deux véhicules AutoDrive se bloquent face à face sur une route à double sens, l'un recule pendant que l'autre se gare sur le bas-côté, puis chacun reprend sa route" />
+		<text name="gui_ad_trafficYieldDelay" text="Délai avant croisement" />
+		<text name="gui_ad_trafficYieldDelay_tooltip" text="Durée pendant laquelle les deux véhicules doivent être bloqués face à face avant de lancer la manœuvre de croisement" />
+		<text name="gui_ad_trafficYieldMaxReverse" text="Recul maximum au croisement" />
+		<text name="gui_ad_trafficYieldMaxReverse_tooltip" text="Distance maximale que le véhicule qui cède peut parcourir en marche arrière pour laisser de la place" />
+		<text name="AD_trafficYield_giveWay" text="recule pour laisser passer un véhicule en face" />
+		<text name="AD_trafficYield_failed" text="n'a pas trouvé de place pour croiser le véhicule en face" />
+		<text name="AD_trafficYield_giveUp" text="ne peut pas croiser le véhicule en face, aucune place ni embranchement trouvé : intervention nécessaire" />
+		<text name="gui_ad_trafficYieldMargin" text="Marge de croisement" />
+		<text name="gui_ad_trafficYieldMargin_tooltip" text="Espace libre laissé entre les deux attelages quand ils se croisent (la place sur le bas-côté s'adapte à la largeur et à la longueur réelles des deux attelages)" />
+		<text name="gui_ad_fieldParkWhileWaiting" text="Attente dans le champ" />
+		<text name="gui_ad_fieldParkWhileWaiting_tooltip" text="Un déchargeur qui attend l'appel d'une moissonneuse entre dans le champ une fois qu'elle a commencé et se gare le long de la bordure, du côté de la moissonneuse, à au moins 40 m de l'entrée, sur du moissonné, pour ne pas bloquer le passage. Il ne roule jamais dans la culture" />
+		<text name="AD_task_park_in_field" text="Se gare dans le champ" />
 	</texts>
 </l10n>
