@@ -120,6 +120,7 @@ function PathFinderModule:reset()
     self.fruitAreas = {}
     self.goingToNetwork  = false
     self.goingToPipe = false
+    self.noFallback = false -- set by the caller after reset(): never lift field / fruit restrictions, fail instead
     self.chasingVehicle = false
     self.isSecondChasingVehicle = false
     self.pathFinderTime = AutoDrive.getSetting("pathFinderTime")
@@ -200,8 +201,168 @@ function PathFinderModule:startPathPlanningToNetwork(destinationId)
         )
     )
     local closest = self.vehicle:getClosestWayPoint()
+    local fieldExit = self:getFieldExitWayPoint(destinationId)
+    if fieldExit ~= nil then
+        PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:startPathPlanningToNetwork - leaving the field by the destination point %s first", tostring(fieldExit))
+        closest = fieldExit
+    end
     self:startPathPlanningToWayPoint(closest, destinationId)
     self.goingToNetwork = true
+end
+
+PathFinderModule.FIELD_EXIT_MAX_DISTANCE = 500 -- m, destinations considered to leave the field
+
+-- a vehicle on a field leaves it by a destination of the network instead of the closest point, which can
+-- be past the crop or on another field: in harvester mode the field set as first destination, otherwise
+-- the closest destination (up to FIELD_EXIT_MAX_DISTANCE) that leads to the target
+function PathFinderModule:getFieldExitWayPoint(destinationId)
+    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    if not AutoDrive.checkIsOnField(x, y, z) then
+        return nil
+    end
+    local function leadsToDestination(wayPointId)
+        local wayPoint = wayPointId ~= nil and ADGraphManager:getWayPointById(wayPointId) or nil
+        if wayPoint == nil or wayPointId == destinationId then
+            return nil
+        end
+        local distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
+        if distance > PathFinderModule.FIELD_EXIT_MAX_DISTANCE then
+            return nil
+        end
+        local route = ADGraphManager:pathFromTo(wayPointId, destinationId)
+        if route == nil or #route < 2 then
+            return nil
+        end
+        return distance
+    end
+    local stateModule = self.vehicle.ad.stateModule
+    if stateModule:getMode() == AutoDrive.MODE_UNLOAD then
+        local fieldWayPointId = stateModule:getFirstWayPoint()
+        if leadsToDestination(fieldWayPointId) ~= nil then
+            return fieldWayPointId
+        end
+    end
+    -- closest destinations first, the route search only runs until one leads to the target
+    local markers = {}
+    for _, marker in pairs(ADGraphManager:getMapMarkers()) do
+        local wayPoint = marker.id ~= nil and ADGraphManager:getWayPointById(marker.id) or nil
+        if wayPoint ~= nil then
+            local distance = MathUtil.vector2Length(wayPoint.x - x, wayPoint.z - z)
+            if distance <= PathFinderModule.FIELD_EXIT_MAX_DISTANCE then
+                table.insert(markers, {id = marker.id, distance = distance, x = wayPoint.x, z = wayPoint.z})
+            end
+        end
+    end
+    -- destinations of the field the vehicle is on come first (their point is often just off the field edge)
+    local area = PathFinderModule.getConnectedFieldArea(x, z)
+    if area ~= nil then
+        for _, marker in ipairs(markers) do
+            marker.sameField = PathFinderModule.isNearFieldArea(area, marker.x, marker.z)
+        end
+    end
+    table.sort(markers, function(a, b)
+        if a.sameField ~= b.sameField then
+            return a.sameField == true
+        end
+        return a.distance < b.distance
+    end)
+    for _, marker in ipairs(markers) do
+        -- never a destination lying on a neighbouring field
+        local onOtherField = not marker.sameField and AutoDrive.checkIsOnField(marker.x, 0, marker.z)
+        if not onOtherField and leadsToDestination(marker.id) ~= nil then
+            return marker.id
+        end
+    end
+    return nil
+end
+
+-- connected field ground: flood fill of the on-field samples around a position. Two fields count as one
+-- only if their ground touches, a grass strip or a road between them splits them
+PathFinderModule.FIELD_AREA_STEP = 4
+PathFinderModule.FIELD_AREA_MAX_SAMPLES = 60000
+PathFinderModule.FIELD_AREA_CACHE_TIME = 60000
+PathFinderModule.fieldAreaCache = {}
+
+function PathFinderModule.getFieldAreaKey(ix, iz)
+    return (ix + 50000) * 100000 + (iz + 50000)
+end
+
+PathFinderModule.FIELD_EDGE_DISTANCE = 12 -- m, a point this close to the field ground belongs to the field
+
+function PathFinderModule.isNearFieldArea(area, x, z)
+    local step = PathFinderModule.FIELD_AREA_STEP
+    local range = math.ceil(PathFinderModule.FIELD_EDGE_DISTANCE / step)
+    local ix, iz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
+    for dx = -range, range do
+        for dz = -range, range do
+            if (dx * dx + dz * dz) * step * step <= PathFinderModule.FIELD_EDGE_DISTANCE ^ 2 and area.cells[PathFinderModule.getFieldAreaKey(ix + dx, iz + dz)] then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function PathFinderModule.getConnectedFieldArea(x, z)
+    local step = PathFinderModule.FIELD_AREA_STEP
+    local getKey = PathFinderModule.getFieldAreaKey
+    local sx, sz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
+    local seedX, seedZ
+    for r = 0, 2 do
+        for dx = -r, r do
+            for dz = -r, r do
+                if seedX == nil and math.max(math.abs(dx), math.abs(dz)) == r and AutoDrive.checkIsOnField((sx + dx) * step, 0, (sz + dz) * step) then
+                    seedX, seedZ = sx + dx, sz + dz
+                end
+            end
+        end
+        if seedX ~= nil then
+            break
+        end
+    end
+    if seedX == nil then
+        return nil
+    end
+    local seedKey = getKey(seedX, seedZ)
+    local now = g_time or 0
+    local cache = PathFinderModule.fieldAreaCache
+    for i = #cache, 1, -1 do
+        if now - cache[i].time > PathFinderModule.FIELD_AREA_CACHE_TIME or now < cache[i].time then
+            table.remove(cache, i)
+        elseif cache[i].cells[seedKey] then
+            return cache[i]
+        end
+    end
+    local area = {cells = {}, count = 0, capped = false, time = now}
+    local visited = {[seedKey] = true}
+    local queue = {seedX, seedZ}
+    local head = 1
+    while head < #queue do
+        local ix, iz = queue[head], queue[head + 1]
+        head = head + 2
+        area.cells[getKey(ix, iz)] = true
+        area.count = area.count + 1
+        if area.count >= PathFinderModule.FIELD_AREA_MAX_SAMPLES then
+            area.capped = true
+            break
+        end
+        for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+            local nx, nz = ix + d[1], iz + d[2]
+            local key = getKey(nx, nz)
+            if not visited[key] then
+                visited[key] = true
+                if AutoDrive.checkIsOnField(nx * step, 0, nz * step) then
+                    table.insert(queue, nx)
+                    table.insert(queue, nz)
+                end
+            end
+        end
+    end
+    table.insert(cache, area)
+    if #cache > 8 then
+        table.remove(cache, 1)
+    end
+    return area
 end
 
 function PathFinderModule:startPathPlanningToWayPoint(wayPointId, destinationId)
@@ -720,10 +881,10 @@ function PathFinderModule:update(dt)
             d) 'update target location and reinvoke pathfinder if target has moved'
             e) 'try different field exit strategy'
         --]]
-        -- Only allow fallback if we are not heading for a moving vehicle
-        local fallBackModeAllowed1 = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode1)    -- disable restrict to field
-        local fallBackModeAllowed2 = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode2)    -- disable restrict to field border
-        local fallBackModeAllowed3 = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.avoidFruitSetting) and (not self.fallBackMode3)    -- disable avoid fruit
+        -- Only allow fallback if we are not heading for a moving vehicle, and not when the caller asked to keep the restrictions
+        local fallBackModeAllowed1 = (not self.noFallback) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode1)    -- disable restrict to field
+        local fallBackModeAllowed2 = (not self.noFallback) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode2)    -- disable restrict to field border
+        local fallBackModeAllowed3 = (not self.noFallback) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.avoidFruitSetting) and (not self.fallBackMode3)    -- disable avoid fruit
         local increaseStepsAllowed = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.max_pathfinder_steps < PathFinderModule.MAX_PATHFINDER_STEPS_TOTAL * self.pathFinderTime)    -- increase number of steps if possible
 
         -- Only allow auto restart when planning path to network and we can adjust target wayPoint
