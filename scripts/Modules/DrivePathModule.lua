@@ -33,6 +33,9 @@ function ADDrivePathModule:reset(retainLastUsedWaypoint)
     self.atTarget = false
     self.wayPoints = nil
     self.currentWayPoint = 0
+    if ADIntersectionModule ~= nil and self.vehicle.ad ~= nil then
+        ADIntersectionModule.reset(self.vehicle)
+    end
     self.onRoadNetwork = true
     self.minDistanceToNextWp = math.huge
     self.minDistanceTimer:timer(false, 5000, 0)
@@ -318,6 +321,9 @@ function ADDrivePathModule:followWaypoints(dt)
             self.speedLimit = math.min(self.speedLimit, self:getSpeedLimitBySteeringAngle() * 1.5)
         end
 
+        -- intersection section ahead: slow down to look / stop before it
+        self.speedLimit = math.min(self.speedLimit, ADIntersectionModule.getSpeedLimit(self.vehicle))
+
         if self.vehicle.ad.trailerModule:isUnloadingToBunkerSilo() then
             -- drive through bunker silo
             self.speedLimit = math.min(self.vehicle.ad.trailerModule:getBunkerSiloSpeed(), self.speedLimit)
@@ -349,6 +355,11 @@ function ADDrivePathModule:followWaypoints(dt)
     local lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.targetX, y, self.targetZ)
     if self.vehicle.getAISteeringNode ~= nil then
         lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.targetX, y, self.targetZ, self.vehicle:getAISteeringNode())
+    end
+
+    -- intersection section ahead: stop before crossing while a vehicle is coming on the road
+    if ADIntersectionModule.handle(self.vehicle, dt) then
+        return
     end
 
     if self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) then

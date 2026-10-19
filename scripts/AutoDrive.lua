@@ -78,6 +78,7 @@ AutoDrive.FLAG_SUBPRIO = 1
 AutoDrive.FLAG_TRAFFIC_SYSTEM = 2
 AutoDrive.FLAG_TRAFFIC_SYSTEM_CONNECTION = 4
 AutoDrive.FLAG_FIELD_POINT = 8
+AutoDrive.FLAG_INTERSECTION = 16 -- section crossing or joining a road: look for traffic before entering it
 
 -- add this to measured size of vehicles
 AutoDrive.DIMENSION_ADDITION = 0.2
@@ -108,6 +109,8 @@ AutoDrive.colors = {
 	ad_color_subPrioSingleConnection = { 1, 0.531, 0.14, 1 },
 	ad_color_subPrioDualConnection = { 0.389, 0.177, 0, 1 },
 	ad_color_subPrioNode = { 1, 0.531, 0.14, 0.3 },
+	ad_color_intersectionConnection = { 1, 0, 0, 1 },
+	ad_color_intersectionNode = { 1, 0, 0, 1 },
 	ad_color_hoveredNode = { 0, 0, 1, 0.15 },
 	ad_color_previousNode = { 1, 0.2195, 0.6524, 0.5 }, --GOLDHOFER_PINK1
 	ad_color_nextNode = { 1, 0.7, 0, 0.5 },
