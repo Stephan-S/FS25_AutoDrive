@@ -14,6 +14,7 @@ ADIntersectionModule.LOOK_AHEAD = 60          -- m of route checked ahead of the
 ADIntersectionModule.STOP_BEFORE = 1          -- m: the vehicle front stops this far before the first red point
 ADIntersectionModule.APPROACH_DIST = 25       -- m before the stop point: reduced speed to look
 ADIntersectionModule.APPROACH_KMH = 20
+ADIntersectionModule.LOOK_KMH = 8              -- km/h at the edge of the red section, even with the road clear (look before crossing)
 ADIntersectionModule.BRAKE_DECEL = 1.5        -- m/s²
 ADIntersectionModule.COMMIT_DIST = 2          -- m before the stop point: if clear, it goes
 ADIntersectionModule.CLEAR_MS = 2000          -- clear for 2 s after a wait
@@ -476,7 +477,9 @@ function ADIntersectionModule.handle(vehicle, dt)
             c.holding = true
         end
         if toStop < ADIntersectionModule.APPROACH_DIST then
-            c.speed = ADIntersectionModule.APPROACH_KMH
+            local look = ADIntersectionModule.LOOK_KMH / 3.6
+            local v = math.sqrt(look * look + 2 * ADIntersectionModule.BRAKE_DECEL * math.max(0, toStop - ADIntersectionModule.COMMIT_DIST)) * 3.6
+            c.speed = math.min(ADIntersectionModule.APPROACH_KMH, v)
         else
             c.speed = nil
         end
