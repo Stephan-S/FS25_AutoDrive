@@ -30,10 +30,6 @@ ADIntersectionModule.BOX_MAX_LENGTH = 10
 ADIntersectionModule.zones = {}               -- cache: id of the first red point -> zone
 ADIntersectionModule.tracks = {}
 
-function ADIntersectionModule.log(text, ...)
-    print("AutoDrive: [intersection] " .. string.format(text, ...))
-end
-
 function ADIntersectionModule.isIntersectionPoint(wp)
     if wp == nil then
         return false
@@ -357,7 +353,6 @@ local function findIntersection(vehicle)
             if zone == nil then
                 zone = ADIntersectionModule.buildZone(wayPoints, first, last)
                 ADIntersectionModule.zones[key] = zone
-                ADIntersectionModule.log("section %s: %d lane segments watched, %d boxes", key, zone.lanes, #zone.boxes)
             end
             local dist = first < index and -1 or cum
             return { dist = dist, endDist = endDist, key = key, zone = zone }
@@ -444,8 +439,7 @@ function ADIntersectionModule.handle(vehicle, dt)
     end
 
     local toStop = inter.dist - ADIntersectionModule.STOP_BEFORE
-    local danger, reason = ADIntersectionModule.isTrafficComing(vehicle, inter.zone)
-    local name = tostring(vehicle:getFullName())
+    local danger = ADIntersectionModule.isTrafficComing(vehicle, inter.zone)
 
     local function commit()
         if c.holding then
@@ -458,14 +452,10 @@ function ADIntersectionModule.handle(vehicle, dt)
 
     if danger then
         c.clearTime = 0
-        if not c.waited then
-            c.waited = true
-            ADIntersectionModule.log("%s waits: %s", name, tostring(reason))
-        end
+        c.waited = true
         if toStop <= 1 then
             if toStop < -1 and not c.holding then
                 -- already on the red section: too late to stop, go on
-                ADIntersectionModule.log("%s already committed, goes on", name)
                 commit()
                 return false
             end
@@ -479,9 +469,6 @@ function ADIntersectionModule.handle(vehicle, dt)
         end
         local clearLongEnough = not c.waited or g_time - c.clearTime >= ADIntersectionModule.CLEAR_MS
         if toStop <= ADIntersectionModule.COMMIT_DIST and clearLongEnough then
-            if c.waited then
-                ADIntersectionModule.log("%s clear, crossing", name)
-            end
             commit()
             return false
         end
