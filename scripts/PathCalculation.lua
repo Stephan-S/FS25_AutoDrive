@@ -11,6 +11,7 @@ function ADPathCalculator:GetPath(startID, targetID, preferredStartIds, vehicle)
 
     if not ADGraphManager:areWayPointsPrepared() then
         ADPathCalculator.widthCache = {} -- network changed: measure again
+        ADPathCalculator.narrowSections = {}
 		AutoDrive.checkWaypointsLinkedtothemselve(true)		-- find WP linked to themselve, with parameter true issues will be fixed
 		AutoDrive.checkWaypointsMultipleSameOut(true)		-- find WP with multiple same out ID, with parameter true issues will be fixed
         ADGraphManager:prepareWayPoints()
@@ -330,8 +331,82 @@ function ADPathCalculator.isSectionNarrow(a, b, halfWidth)
     end
     local low, high = ADPathCalculator.WIDTH_CHECK_LOW, ADPathCalculator.WIDTH_CHECK_HIGH
     ADPathCalculator.widthHits = 0
+    ADPathCalculator.widthHitNode = nil
     overlapBox(cx, y + (low + high) / 2, cz, 0, math.atan2(dx, dz), 0, halfWidth, (high - low) / 2, length / 2, "widthCheckCallback", ADPathCalculator, ADPathCalculator.widthMask, true, true, true, true)
-    return ADPathCalculator.widthHits > 0
+    if ADPathCalculator.widthHits > 0 then
+        ADPathCalculator.recordNarrowSection(a, b, halfWidth, ADPathCalculator.widthHitNode)
+        return true
+    end
+    return false
+end
+
+-- debug: narrow sections found, drawn in red with the AutoDrive sensor debug channel
+ADPathCalculator.narrowSections = {}
+
+function ADPathCalculator.recordNarrowSection(a, b, halfWidth, hitNode)
+    local hitName, hx, hy, hz = "?", nil, nil, nil
+    if hitNode ~= nil and hitNode ~= 0 then
+        local okName, name = pcall(getName, hitNode)
+        if okName and name ~= nil then
+            hitName = name
+        end
+        local okParent, parent = pcall(getParent, hitNode)
+        if okParent and parent ~= nil and parent ~= 0 then
+            local okParentName, parentName = pcall(getName, parent)
+            if okParentName and parentName ~= nil then
+                hitName = parentName .. "/" .. hitName
+            end
+        end
+        local okPos, x, y, z = pcall(getWorldTranslation, hitNode)
+        if okPos then
+            hx, hy, hz = x, y, z
+        end
+    end
+    table.insert(ADPathCalculator.narrowSections, {a = a, b = b, halfWidth = halfWidth, hitName = hitName, hx = hx, hy = hy, hz = hz})
+end
+
+local function drawRectangle(x, y, z, dirX, dirZ, halfWidth, front, back, r, g, b)
+    local sideX, sideZ = dirZ, -dirX
+    local corners = {
+        {x + dirX * front + sideX * halfWidth, z + dirZ * front + sideZ * halfWidth},
+        {x + dirX * front - sideX * halfWidth, z + dirZ * front - sideZ * halfWidth},
+        {x - dirX * back - sideX * halfWidth, z - dirZ * back - sideZ * halfWidth},
+        {x - dirX * back + sideX * halfWidth, z - dirZ * back + sideZ * halfWidth}
+    }
+    for i = 1, 4 do
+        local c1, c2 = corners[i], corners[i % 4 + 1]
+        ADDrawingManager:addLineTask(c1[1], y, c1[2], c2[1], y, c2[2], 1, r, g, b)
+    end
+end
+
+function ADPathCalculator.debugDraw()
+    local vehicle = AutoDrive.getControlledVehicle()
+    if vehicle == nil or vehicle.components == nil or g_currentMission == nil or g_currentMission.terrainRootNode == nil then
+        return
+    end
+    local vx, vy, vz = getWorldTranslation(vehicle.components[1].node)
+    local dirX, _, dirZ = AutoDrive.localDirectionToWorld(vehicle, 0, 0, 1)
+    local length = vehicle.size ~= nil and vehicle.size.length or 5
+    -- blue: width taken into account for narrow passages
+    local halfWidth = ADPathCalculator.getPassageWidth(vehicle) / 2
+    drawRectangle(vx, vy + 0.3, vz, dirX, dirZ, halfWidth, length / 2, length / 2, 0, 0.4, 1)
+    -- red: sections refused as too narrow, and the object that was hit
+    local maxDistance = AutoDrive.drawDistance or 300
+    for _, section in ipairs(ADPathCalculator.narrowSections) do
+        local a, b = section.a, section.b
+        local cx, cz = (a.x + b.x) / 2, (a.z + b.z) / 2
+        if MathUtil.vector2Length(cx - vx, cz - vz) < maxDistance then
+            local dx, dz = b.x - a.x, b.z - a.z
+            local sectionLength = math.sqrt(dx * dx + dz * dz)
+            if sectionLength > 0.1 then
+                local y = ((type(a.y) == "number" and type(b.y) == "number" and a.y ~= -1 and b.y ~= -1) and (a.y + b.y) / 2 or getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 1, cz)) + ADPathCalculator.WIDTH_CHECK_LOW
+                drawRectangle(cx, y, cz, dx / sectionLength, dz / sectionLength, section.halfWidth, sectionLength / 2, sectionLength / 2, 1, 0, 0)
+            end
+            if section.hx ~= nil then
+                ADDrawingManager:addLineTask(section.hx, section.hy, section.hz, section.hx, section.hy + 4, section.hz, 1, 1, 0, 0)
+            end
+        end
+    end
 end
 
 function ADPathCalculator.isMapBorder(node)
@@ -361,5 +436,6 @@ function ADPathCalculator:widthCheckCallback(transformId)
         return true -- vehicles move, they are not part of the road width
     end
     ADPathCalculator.widthHits = ADPathCalculator.widthHits + 1
+    ADPathCalculator.widthHitNode = transformId
     return false
 end
