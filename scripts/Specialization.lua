@@ -1051,11 +1051,11 @@ function AutoDrive:onDrawEditorMode()
     if (previewDirection or previewSubPrio) and self.ad.sectionWayPoints ~= nil and #self.ad.sectionWayPoints > 2 then
         local sectionPrio = ADGraphManager:getIsPointSubPrio(self.ad.sectionWayPoints[2])   -- 2nd WayPoint is the 1st in section and has the actual Prio
         local sectionIntersection = ADGraphManager:getIsPointIntersection(self.ad.sectionWayPoints[2])
-        -- preview of the next type: normal -> sub prio (orange) -> intersection (red) -> normal
+        -- preview of the next type: sub prio (orange), then intersection (red) twice, then normal
         local nextSingleColor, nextDualColor = AutoDrive.currentColors.ad_color_subPrioSingleConnection, AutoDrive.currentColors.ad_color_subPrioDualConnection
-        if sectionIntersection then
+        if sectionIntersection and sectionPrio then
             nextSingleColor, nextDualColor = AutoDrive.currentColors.ad_color_singleConnection, AutoDrive.currentColors.ad_color_dualConnection
-        elseif sectionPrio then
+        elseif sectionIntersection or sectionPrio then
             nextSingleColor, nextDualColor = AutoDrive.currentColors.ad_color_intersectionConnection, AutoDrive.currentColors.ad_color_intersectionConnection
         end
         local wayPointsDirection = ADGraphManager:getIsWayPointJunction(self.ad.sectionWayPoints[1], self.ad.sectionWayPoints[2])

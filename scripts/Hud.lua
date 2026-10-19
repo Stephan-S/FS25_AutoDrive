@@ -877,7 +877,7 @@ function AutoDrive.handleWayPointSection(vehicle, button, isUp)
                 and not AutoDrive.rightSHIFTmodifierKeyPressed
                 then
                 if vehicle.ad.sectionWayPoints ~= nil and #vehicle.ad.sectionWayPoints > 2 then
-                    -- 2nd WayPoint is the 1st in section and has the actual Prio; normal -> sub prio -> intersection -> normal
+                    -- 2nd WayPoint is the 1st in section and has the actual Prio; normal -> sub prio -> normal + intersection -> sub prio + intersection
                     local sectionWp = ADGraphManager:getWayPointById(vehicle.ad.sectionWayPoints[2])
                     local flags = ADGraphManager:getNextPrioFlags(sectionWp ~= nil and sectionWp.flags or 0)
                     ADGraphManager:setWayPointsFlagsInSection(vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId, flags)

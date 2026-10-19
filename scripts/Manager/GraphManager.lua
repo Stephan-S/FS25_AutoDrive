@@ -1444,7 +1444,7 @@ end
 function ADGraphManager:toggleWayPointAsSubPrio(wayPointId)
     local wayPoint = self:getWayPointById(wayPointId)
     if wayPoint ~= nil then
-        -- 3 types: normal -> sub prio -> intersection -> normal
+        -- normal -> sub prio -> normal + intersection -> sub prio + intersection
         wayPoint.flags = self:getNextPrioFlags(wayPoint.flags)
     end
 
@@ -1465,16 +1465,20 @@ function ADGraphManager:getIsPointIntersection(wayPointId)
     return wayPoint ~= nil and bit32.band(wayPoint.flags, AutoDrive.FLAG_INTERSECTION) > 0
 end
 
--- next road type (normal -> sub prio -> intersection -> normal), other flags are kept
+-- next road type: normal -> sub prio -> normal + intersection -> sub prio + intersection -> normal, other flags are kept
 function ADGraphManager:getNextPrioFlags(flags)
     flags = flags or 0
     local others = bit32.band(flags, bit32.bnot(AutoDrive.FLAG_SUBPRIO + AutoDrive.FLAG_INTERSECTION))
-    if bit32.band(flags, AutoDrive.FLAG_INTERSECTION) > 0 then
-        return others
-    elseif bit32.band(flags, AutoDrive.FLAG_SUBPRIO) > 0 then
+    local subPrio = bit32.band(flags, AutoDrive.FLAG_SUBPRIO) > 0
+    local intersection = bit32.band(flags, AutoDrive.FLAG_INTERSECTION) > 0
+    if not intersection and not subPrio then
+        return others + AutoDrive.FLAG_SUBPRIO
+    elseif not intersection then
         return others + AutoDrive.FLAG_INTERSECTION
+    elseif not subPrio then
+        return others + AutoDrive.FLAG_SUBPRIO + AutoDrive.FLAG_INTERSECTION
     end
-    return others + AutoDrive.FLAG_SUBPRIO
+    return others
 end
 
 function ADGraphManager:setWayPointFlags(wayPointId, flags, sendEvent)
