@@ -116,6 +116,7 @@ source(Utils.getFilename("scripts/Modules/PathFinderModule.lua", g_currentModDir
 source(Utils.getFilename("scripts/Modules/StateModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/RecordingModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/TrainModule.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Modules/IntersectionModule.lua", g_currentModDirectory))
 
 source(Utils.getFilename("scripts/Modes/AbstractMode.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modes/DriveToMode.lua", g_currentModDirectory))
