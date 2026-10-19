@@ -155,13 +155,14 @@ function ADGraphManager:getPathTo(vehicle, waypointId, startPoint)
     end
     if closestWaypoint ~= nil then
         local outCandidates = self:getBestOutPoints(vehicle, closestWaypoint)
-        wp = self:pathFromTo(closestWaypoint, waypointId, outCandidates)
+        wp = self:pathFromTo(closestWaypoint, waypointId, outCandidates, vehicle)
     end
 
     return wp
 end
 
-function ADGraphManager:pathFromTo(startWaypointId, targetWaypointId, preferredNeighbors)
+-- vehicle (optional): sections too narrow for its width are avoided when another route exists
+function ADGraphManager:pathFromTo(startWaypointId, targetWaypointId, preferredNeighbors, vehicle)
     local wp = {}
 
     if
@@ -174,7 +175,7 @@ function ADGraphManager:pathFromTo(startWaypointId, targetWaypointId, preferredN
             if preferredNeighbors == nil then
                 preferredNeighbors = {}
             end
-            wp = ADPathCalculator:GetPath(startWaypointId, targetWaypointId, preferredNeighbors)
+            wp = ADPathCalculator:GetPath(startWaypointId, targetWaypointId, preferredNeighbors, vehicle)
         end
     end
     return wp
