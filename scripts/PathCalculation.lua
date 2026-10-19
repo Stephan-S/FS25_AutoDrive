@@ -283,10 +283,6 @@ function ADPathCalculator.getWheelsWidth(vehicle)
         return nil
     end
     local width = maxX - minX
-    if vehicle.adLastWheelsWidth == nil or math.abs(vehicle.adLastWheelsWidth - width) > 0.1 then
-        vehicle.adLastWheelsWidth = width
-        print(string.format("[AD-Width] %s: width at the tyres %.2f m (vehicle file %.2f m)", tostring(vehicle:getName()), width, vehicle.size ~= nil and vehicle.size.width or 0))
-    end
     return width
 end
 
