@@ -27,6 +27,8 @@ ADFieldPark.BORDER_SEARCH = 25                      -- m looked at around a ring
 ADFieldPark.BORDER_RAY_STEP = 15                    -- degrees between two rays cast to find the border
 ADFieldPark.BORDER_BASE = 12                        -- m between the two border points that give its direction
 ADFieldPark.NOSE_SEARCH = 30                        -- m looked at ahead of the tractor to find the field it waits at
+ADFieldPark.HARVESTER_CLEARANCE = 20                -- m kept between the parked train and the standing crop: room for the harvester to turn on the headland
+ADFieldPark.CLEARANCE_STEP = 4                      -- m between two crop samples around the train
 ADFieldPark.PARALLEL_TOLERANCE = 5                  -- degrees, a parked train within this angle of the border counts as parallel
 ADFieldPark.BORDER_GAPS = {0.5, 1, 1.5, 2, 3, 4}    -- m tried between the footprint (0.5 m wider than the train) and the border
 ADFieldPark.SAMPLE_STEP = 2                         -- m between two ground samples
@@ -125,6 +127,24 @@ function ADFieldPark.isOnField(x, y, z)
     return area == nil or area.capped or PathFinderModule.isInFieldArea(area, x, z)
 end
 
+-- standing crop within ADFieldPark.HARVESTER_CLEARANCE around the footprint: the harvester still works there and
+-- turns on the harvested ground next to it. Small forgotten patches do not count
+function ADFieldPark.hasCropNearby(cx, cz, dx, dz, halfW, halfL)
+    local clearance, step = ADFieldPark.HARVESTER_CLEARANCE, ADFieldPark.CLEARANCE_STEP
+    local cache = {}
+    for along = -(halfL + clearance), halfL + clearance, step do
+        for across = -(halfW + clearance), halfW + clearance, step do
+            -- GIANTS local +x (left) of the heading is (dz, -dx)
+            local x, z = cx + dz * across + dx * along, cz - dx * across + dz * along
+            local crop, fruitTypeIndex = ADFieldPark.hasGrowingCrop(x, z)
+            if crop and not ADFieldPark.isCropIsland(fruitTypeIndex, x, z, cache) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 function ADFieldPark.isGroundFree(cx, cz, dx, dz, halfW, halfL, nearbyWayPoints, py)
     local minH, maxH = math.huge, -math.huge
     -- the whole outline on the field with a margin, on harvested ground (no crop of any kind)
@@ -144,6 +164,9 @@ function ADFieldPark.isGroundFree(cx, cz, dx, dz, halfW, halfL, nearbyWayPoints,
         if ADFieldPark.distanceToFootprint(wp.x, wp.z, cx, cz, dx, dz, halfW, halfL) < ADFieldPark.ROAD_CLEARANCE then
             return nil
         end
+    end
+    if ADFieldPark.hasCropNearby(cx, cz, dx, dz, halfW, halfL) then
+        return nil
     end
     return maxH
 end
@@ -173,6 +196,9 @@ function ADFieldPark.isGoodWaitingPlace(vehicle)
         if not ADFieldPark.isOnField(p[1], py, p[2]) then
             return false
         end
+    end
+    if ADFieldPark.hasCropNearby(cx, cz, dx, dz, halfW, length / 2 + 0.5) then
+        return false
     end
     -- and parked parallel to the border, close to it
     local bx, bz, tx, tz, nx, nz = ADFieldPark.findBorder(cx, cz, py)

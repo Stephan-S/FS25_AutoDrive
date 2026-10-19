@@ -6,6 +6,12 @@ WaitForCallTask.STATE_PATHPLANNING = 2
 WaitForCallTask.STATE_DRIVING = 3
 WaitForCallTask.STATE_WAITING = 4
 WaitForCallTask.STATE_SEARCHING = 5
+WaitForCallTask.STATE_BACKING_OFF = 6
+
+-- no spot in the field yet and the nose in the field (the AutoDrive waiting point can be at the very corner):
+-- back off a little, out of the way of the harvester, a bit more on the next try
+WaitForCallTask.BACK_OFF_DISTANCES = {2, 3}
+WaitForCallTask.BACK_OFF_TIMEOUT = 15000
 
 function WaitForCallTask:new(vehicle)
     local o = WaitForCallTask:create()
@@ -18,6 +24,7 @@ function WaitForCallTask:setUp()
     self.vehicle.ad.specialDrivingModule:stopVehicle()
     self.state = WaitForCallTask.STATE_WAITING
     self.failedPathFinder = 0
+    self.backOffCount = 0
     -- not when Courseplay drives this vehicle: it only passes through and Courseplay takes it over in the field
     local cpDriven = AutoDrive:getIsCPActive(self.vehicle) or self.vehicle.ad.restartCP == true
     if ADFieldPark ~= nil and ADFieldPark.isEnabled() and self.vehicle.ad.trafficYieldModule ~= nil and not cpDriven then
@@ -31,7 +38,12 @@ function WaitForCallTask:update(dt)
         -- let the vehicle come to a stop before looking around
         if self.checkTimer:timer(true, 1000, dt) then
             local module = self.vehicle.ad.trafficYieldModule
-            if ADFieldPark.isGoodWaitingPlace(self.vehicle) then
+            if self:hasLoad() then
+                -- field parking is only for the arrival at the field (empty trailers). After unloading a harvester the
+                -- unloader already stands on the harvested side: stay here
+                module:log("field park: loaded, back from a harvester, staying here")
+                self.state = WaitForCallTask.STATE_WAITING
+            elseif ADFieldPark.isGoodWaitingPlace(self.vehicle) then
                 module:log("field park: already a good waiting place")
                 self.state = WaitForCallTask.STATE_WAITING
             else
@@ -85,6 +97,18 @@ function WaitForCallTask:update(dt)
             pathFinder:update(dt)
             self:hold(dt)
         end
+    elseif self.state == WaitForCallTask.STATE_BACKING_OFF then
+        local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+        self.backOffTime = self.backOffTime + dt
+        if MathUtil.vector2Length(x - self.backOffStart.x, z - self.backOffStart.z) >= self.backOffDistance
+            or self.backOffTime > WaitForCallTask.BACK_OFF_TIMEOUT then
+            self.vehicle.ad.trafficYieldModule:log("field park: backed off %.1f m", MathUtil.vector2Length(x - self.backOffStart.x, z - self.backOffStart.z))
+            self.state = WaitForCallTask.STATE_WAITING
+            self.retryTime = 0
+            self:hold(dt)
+        else
+            self.vehicle.ad.specialDrivingModule:driveReverse(dt, 4, 1, false)
+        end
     elseif self.state == WaitForCallTask.STATE_DRIVING then
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             ADFieldPark.setParked(self.vehicle, self.spots ~= nil and self.spots[self.spotIndex] or nil)
@@ -119,6 +143,7 @@ function WaitForCallTask:planToNextSpot()
         end
         self.state = WaitForCallTask.STATE_WAITING
         self.retryTime = 0
+        self:startBackOff()
         return
     end
     module:log("field park: spot %d found at x=%.0f z=%.0f heading %.0f°%s", self.spotIndex, spot.x, spot.z, math.deg(math.atan2(spot.dirX, spot.dirZ)), spot.queued and " (in line with a parked unloader)" or "")
@@ -133,6 +158,37 @@ function WaitForCallTask:planToNextSpot()
     self.vehicle.ad.pathFinderModule:reset()
     self.vehicle.ad.pathFinderModule:startPathPlanningTo({x = spot.x, y = spot.y, z = spot.z}, {x = spot.dirX, z = spot.dirZ})
     self.state = WaitForCallTask.STATE_PATHPLANNING
+end
+
+-- something in the trailers: the unloader comes from a harvester, not from the road
+function WaitForCallTask:hasLoad()
+    local trailers = AutoDrive.getAllUnits(self.vehicle)
+    if trailers == nil or #trailers == 0 then
+        return false
+    end
+    local fillLevel = AutoDrive.getAllFillLevels(trailers)
+    return fillLevel ~= nil and fillLevel > 0.1
+end
+
+-- backs off straight when the nose of the tractor stands in the field, at most twice
+function WaitForCallTask:startBackOff()
+    local distance = WaitForCallTask.BACK_OFF_DISTANCES[self.backOffCount + 1]
+    if distance == nil then
+        return
+    end
+    local x, py, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    local dx, dz = ADTrafficYieldModule.getDirection(self.vehicle)
+    local front = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+    local noseX, noseZ = x + dx * math.max(front - 0.5, 0), z + dz * math.max(front - 0.5, 0)
+    if not AutoDrive.checkIsOnField(noseX, py, noseZ) then
+        return
+    end
+    self.backOffCount = self.backOffCount + 1
+    self.backOffDistance = distance
+    self.backOffStart = {x = x, z = z}
+    self.backOffTime = 0
+    self.vehicle.ad.trafficYieldModule:log("field park: nose in the field, backing off %d m", distance)
+    self.state = WaitForCallTask.STATE_BACKING_OFF
 end
 
 function WaitForCallTask:hold(dt)
