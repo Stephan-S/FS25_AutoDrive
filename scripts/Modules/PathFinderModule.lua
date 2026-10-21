@@ -83,10 +83,39 @@ PathFinderModule.PP_MAX_EAGER_LOOKAHEAD_STEPS = 10
 PathFinderModule.MIN_FRUIT_VALUE = 50
 PathFinderModule.SLOPE_DETECTION_THRESHOLD = math.rad(20)
 PathFinderModule.NEW_PF_STEP_FACTOR = 20
+-- A*: check fruit along the segment really driven between two cells, with the width of the train,
+-- instead of a square of the turn radius size, so harvested strips narrower than the turn radius stay usable
+PathFinderModule.FRUIT_CHECK_TRAIN_CORRIDOR = true
+PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN = 0.7
+-- smaller grid cells when no path is found: 9 m -> 6 m -> 4.5 m -> 2 m (turns of the final path keep the real radius)
+PathFinderModule.GRID_SCALES = {1, 2 / 3, 1 / 2}
+PathFinderModule.GRID_FINEST_SIZE = 2
+PathFinderModule.GRID_STEPS = #PathFinderModule.GRID_SCALES + 1
+
+function PathFinderModule:getGridScale(step)
+    return PathFinderModule.GRID_SCALES[step] or math.min(1, PathFinderModule.GRID_FINEST_SIZE / self.realTurnRadius)
+end
 --[[
 from Giants Engine:
 AITurnStrategy.SLOPE_DETECTION_THRESHOLD  = 0.5235987755983
 ]]
+
+PathFinderModule.OBSTACLE_HEIGHT_MARGIN = 0.5
+PathFinderModule.OBSTACLE_MIN_HEIGHT = 3
+
+function PathFinderModule.getTrainHeight(vehicle)
+    local height = PathFinderModule.OBSTACLE_MIN_HEIGHT
+    local vehicles = {vehicle}
+    if vehicle.getChildVehicles ~= nil then
+        vehicles = vehicle:getChildVehicles()
+    end
+    for _, v in pairs(vehicles) do
+        if v.size ~= nil and v.size.height ~= nil then
+            height = math.max(height, v.size.height)
+        end
+    end
+    return height
+end
 
 function PathFinderModule:new(vehicle)
     local o = {}
@@ -101,6 +130,7 @@ end
 function PathFinderModule:reset()
     PathFinderModule.debugMsg(self.vehicle, "PFM:reset start")
     self.mask = AutoDrive.collisionMaskTerrain
+    self.blockedZones = nil
     self.steps = 0
     self.grid = {}
     self.wayPoints = {}
@@ -125,7 +155,8 @@ function PathFinderModule:reset()
     self.isSecondChasingVehicle = false
     self.pathFinderTime = AutoDrive.getSetting("pathFinderTime")
     self.max_pathfinder_steps = 0
-    self.vehicleMinHeight = math.max(self.vehicle.size and self.vehicle.size.height and self.vehicle.size.height, 6) -- min height for collision detection 5m
+    -- obstacle check up to the real height of the train + 0.5 m: branches above it are not a wall
+    self.vehicleMinHeight = PathFinderModule.getTrainHeight(self.vehicle) + PathFinderModule.OBSTACLE_HEIGHT_MARGIN
 
     if AutoDrive.getSetting("Pathfinder") == 1 then
         self.PP_UP = 0
@@ -175,6 +206,12 @@ function PathFinderModule:reset()
         self.minTurnRadius = AutoDrive.getDriverRadius(self.vehicle) * 2 / 3
         self.isNewPF = false
     end
+    self.realTurnRadius = self.minTurnRadius
+    self.gridScaleStep = 1
+    self.allowPartialPath = false
+    self.rearFallbackDone = false
+    self.rearFallbackSkippedPrinted = false
+    self.partialPath = false
 end
 
 function PathFinderModule:hasFinished()
@@ -276,95 +313,6 @@ function PathFinderModule:getFieldExitWayPoint(destinationId)
     return nil
 end
 
--- connected field ground: flood fill of the on-field samples around a position. Two fields count as one
--- only if their ground touches, a grass strip or a road between them splits them
-PathFinderModule.FIELD_AREA_STEP = 4
-PathFinderModule.FIELD_AREA_MAX_SAMPLES = 60000
-PathFinderModule.FIELD_AREA_CACHE_TIME = 60000
-PathFinderModule.fieldAreaCache = {}
-
-function PathFinderModule.getFieldAreaKey(ix, iz)
-    return (ix + 50000) * 100000 + (iz + 50000)
-end
-
-PathFinderModule.FIELD_EDGE_DISTANCE = 12 -- m, a point this close to the field ground belongs to the field
-
-function PathFinderModule.isNearFieldArea(area, x, z)
-    local step = PathFinderModule.FIELD_AREA_STEP
-    local range = math.ceil(PathFinderModule.FIELD_EDGE_DISTANCE / step)
-    local ix, iz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
-    for dx = -range, range do
-        for dz = -range, range do
-            if (dx * dx + dz * dz) * step * step <= PathFinderModule.FIELD_EDGE_DISTANCE ^ 2 and area.cells[PathFinderModule.getFieldAreaKey(ix + dx, iz + dz)] then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-function PathFinderModule.getConnectedFieldArea(x, z)
-    local step = PathFinderModule.FIELD_AREA_STEP
-    local getKey = PathFinderModule.getFieldAreaKey
-    local sx, sz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
-    local seedX, seedZ
-    for r = 0, 2 do
-        for dx = -r, r do
-            for dz = -r, r do
-                if seedX == nil and math.max(math.abs(dx), math.abs(dz)) == r and AutoDrive.checkIsOnField((sx + dx) * step, 0, (sz + dz) * step) then
-                    seedX, seedZ = sx + dx, sz + dz
-                end
-            end
-        end
-        if seedX ~= nil then
-            break
-        end
-    end
-    if seedX == nil then
-        return nil
-    end
-    local seedKey = getKey(seedX, seedZ)
-    local now = g_time or 0
-    local cache = PathFinderModule.fieldAreaCache
-    for i = #cache, 1, -1 do
-        if now - cache[i].time > PathFinderModule.FIELD_AREA_CACHE_TIME or now < cache[i].time then
-            table.remove(cache, i)
-        elseif cache[i].cells[seedKey] then
-            return cache[i]
-        end
-    end
-    local area = {cells = {}, count = 0, capped = false, time = now}
-    local visited = {[seedKey] = true}
-    local queue = {seedX, seedZ}
-    local head = 1
-    while head < #queue do
-        local ix, iz = queue[head], queue[head + 1]
-        head = head + 2
-        area.cells[getKey(ix, iz)] = true
-        area.count = area.count + 1
-        if area.count >= PathFinderModule.FIELD_AREA_MAX_SAMPLES then
-            area.capped = true
-            break
-        end
-        for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
-            local nx, nz = ix + d[1], iz + d[2]
-            local key = getKey(nx, nz)
-            if not visited[key] then
-                visited[key] = true
-                if AutoDrive.checkIsOnField(nx * step, 0, nz * step) then
-                    table.insert(queue, nx)
-                    table.insert(queue, nz)
-                end
-            end
-        end
-    end
-    table.insert(cache, area)
-    if #cache > 8 then
-        table.remove(cache, 1)
-    end
-    return area
-end
-
 function PathFinderModule:startPathPlanningToWayPoint(wayPointId, destinationId)
     PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:startPathPlanningToWayPoint destinationId %s"
         , tostring(destinationId)
@@ -397,7 +345,8 @@ function PathFinderModule:startPathPlanningToPipe(combine, chasing)
             tostring(combine:getName())
         )
     )
-    local _, worldY, _ = getWorldTranslation(combine.components[1].node)
+    local combineX, worldY, combineZ = getWorldTranslation(combine.components[1].node)
+    PathFinderModule.startFieldScan(combineX, combineZ)
     local rx, _, rz =  AutoDrive.localDirectionToWorld(combine, 0, 0, 1, combine.ad.ADRootNode)
     if combine.components[2] ~= nil and combine.components[2].node ~= nil then
         rx, _, rz =  AutoDrive.localDirectionToWorld(combine, 0, 0, 1, combine.components[2].node)
@@ -486,6 +435,12 @@ function PathFinderModule:startPathPlanningToPipe(combine, chasing)
     end
 
     self.goingToPipe = true
+    self.pipeCombine = combine
+    -- far from the harvester: aim at its rear first, its own cut track always leads there; the chase takes over close to it
+    if not chasing and combine.ad ~= nil and not combine.ad.isChopper and (self.strictFruit or self.strictField)
+        and AutoDrive.getDistanceBetween(self.vehicle, combine) > PathFinderModule.REAR_FIRST_DISTANCE then
+        self:startRearFallback()
+    end
     if AutoDrive.getDistanceBetween(self.vehicle, combine) < 50 then
         -- shorten path calculation for close combine
         self.max_pathfinder_steps = PathFinderModule.MAX_PATHFINDER_STEPS_COMBINE_TURN
@@ -510,11 +465,695 @@ function PathFinderModule:startPathPlanningToVehicle(targetVehicle, targetDistan
     self:startPathPlanningTo(wpBehind, targetVector)
 
     self.goingToPipe = false
+    self.pipeCombine = nil
     self.chasingVehicle = true
     self.isSecondChasingVehicle = true
     if targetVehicle.ad ~= nil and targetVehicle.ad.pathFinderModule ~= nil and targetVehicle.ad.pathFinderModule.fruitToCheck ~= nil then
         self.fruitToCheck = targetVehicle.ad.pathFinderModule.fruitToCheck
     end
+end
+
+function PathFinderModule:getTrainWidth()
+    local width = 3
+    local units = AutoDrive.getAllUnits(self.vehicle)
+    if units ~= nil then
+        for _, unit in pairs(units) do
+            if unit.size ~= nil and unit.size.width ~= nil then
+                width = math.max(width, unit.size.width)
+            end
+        end
+    end
+    return width
+end
+
+-- corners of the corridor driven from fromCell to cell, same layout as getCorners (start, width, height, opposite)
+function PathFinderModule:getCorridorCorners(fromCell, cell)
+    local a = self:gridLocationToWorldLocation(fromCell)
+    local b = self:gridLocationToWorldLocation(cell)
+    local dx, dz = b.x - a.x, b.z - a.z
+    local length = math.sqrt(dx * dx + dz * dz)
+    if length < 0.01 then
+        return nil
+    end
+    local nx, nz = -dz / length * self.trainHalfWidth, dx / length * self.trainHalfWidth
+    return {
+        {x = a.x - nx, z = a.z - nz},
+        {x = a.x + nx, z = a.z + nz},
+        {x = b.x - nx, z = b.z - nz},
+        {x = b.x + nx, z = b.z + nz}
+    }
+end
+
+-- field outlines of the map, with a bounding box each, read once
+function PathFinderModule.getFieldOutlines()
+    if PathFinderModule.fieldOutlines ~= nil then
+        return PathFinderModule.fieldOutlines
+    end
+    local outlines = {}
+    if g_fieldManager ~= nil and g_fieldManager.fields ~= nil and FieldPointGenerator ~= nil then
+        for _, field in pairs(g_fieldManager.fields) do
+            local points = FieldPointGenerator:getFieldWorldPoints(field)
+            if points ~= nil and #points >= 3 then
+                local outline = {field = field, points = points, minX = math.huge, maxX = -math.huge, minZ = math.huge, maxZ = -math.huge}
+                for _, p in ipairs(points) do
+                    outline.minX = math.min(outline.minX, p.x)
+                    outline.maxX = math.max(outline.maxX, p.x)
+                    outline.minZ = math.min(outline.minZ, p.z)
+                    outline.maxZ = math.max(outline.maxZ, p.z)
+                end
+                table.insert(outlines, outline)
+            end
+        end
+    end
+    if #outlines > 0 then
+        PathFinderModule.fieldOutlines = outlines
+    end
+    return outlines
+end
+
+-- field whose outline contains the position, nil if none
+function PathFinderModule.getFieldAtPosition(x, z)
+    for _, outline in ipairs(PathFinderModule.getFieldOutlines()) do
+        if x >= outline.minX and x <= outline.maxX and z >= outline.minZ and z <= outline.maxZ then
+            local inside = false
+            local points = outline.points
+            local j = #points
+            for i = 1, #points do
+                local pi, pj = points[i], points[j]
+                if ((pi.z > z) ~= (pj.z > z)) and (x < (pj.x - pi.x) * (z - pi.z) / (pj.z - pi.z) + pi.x) then
+                    inside = not inside
+                end
+                j = i
+            end
+            if inside then
+                return outline.field
+            end
+        end
+    end
+    return nil
+end
+
+-- connected field ground: flood fill of the on-field samples around a position. Two fields count as one
+-- only if their ground touches, a grass strip or a road between them splits them
+PathFinderModule.FIELD_AREA_STEP = 4
+PathFinderModule.FIELD_AREA_MAX_SAMPLES = 60000
+PathFinderModule.FIELD_AREA_CACHE_TIME = 600000
+PathFinderModule.fieldAreaCache = {}
+
+function PathFinderModule.getFieldAreaKey(ix, iz)
+    return (ix + 50000) * 100000 + (iz + 50000)
+end
+
+function PathFinderModule.isInFieldArea(area, x, z)
+    local step = PathFinderModule.FIELD_AREA_STEP
+    local ix, iz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
+    if area.cells[PathFinderModule.getFieldAreaKey(ix, iz)] then
+        return true
+    end
+    -- position on the field edge, the nearest sample is off the field: look at the samples around it
+    if not AutoDrive.checkIsOnField(ix * step, 0, iz * step) then
+        for dx = -1, 1 do
+            for dz = -1, 1 do
+                if area.cells[PathFinderModule.getFieldAreaKey(ix + dx, iz + dz)] then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+PathFinderModule.FIELD_EDGE_DISTANCE = 12 -- m, a point this close to the field ground belongs to the field
+
+function PathFinderModule.isNearFieldArea(area, x, z)
+    local step = PathFinderModule.FIELD_AREA_STEP
+    local range = math.ceil(PathFinderModule.FIELD_EDGE_DISTANCE / step)
+    local ix, iz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
+    for dx = -range, range do
+        for dz = -range, range do
+            if (dx * dx + dz * dz) * step * step <= PathFinderModule.FIELD_EDGE_DISTANCE ^ 2 and area.cells[PathFinderModule.getFieldAreaKey(ix + dx, iz + dz)] then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function PathFinderModule.getConnectedFieldArea(x, z)
+    local step = PathFinderModule.FIELD_AREA_STEP
+    local getKey = PathFinderModule.getFieldAreaKey
+    local sx, sz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
+    local seedX, seedZ
+    for r = 0, 2 do
+        for dx = -r, r do
+            for dz = -r, r do
+                if seedX == nil and math.max(math.abs(dx), math.abs(dz)) == r and AutoDrive.checkIsOnField((sx + dx) * step, 0, (sz + dz) * step) then
+                    seedX, seedZ = sx + dx, sz + dz
+                end
+            end
+        end
+        if seedX ~= nil then
+            break
+        end
+    end
+    if seedX == nil then
+        return nil
+    end
+    local seedKey = getKey(seedX, seedZ)
+    local now = g_time or 0
+    local cache = PathFinderModule.fieldAreaCache
+    for i = #cache, 1, -1 do
+        if now - cache[i].time > PathFinderModule.FIELD_AREA_CACHE_TIME or now < cache[i].time then
+            table.remove(cache, i)
+        elseif cache[i].cells[seedKey] then
+            return cache[i]
+        end
+    end
+    local area = {cells = {}, count = 0, capped = false, time = now}
+    local visited = {[seedKey] = true}
+    local queue = {seedX, seedZ}
+    local head = 1
+    while head < #queue do
+        local ix, iz = queue[head], queue[head + 1]
+        head = head + 2
+        area.cells[getKey(ix, iz)] = true
+        area.count = area.count + 1
+        if area.count >= PathFinderModule.FIELD_AREA_MAX_SAMPLES then
+            area.capped = true
+            break
+        end
+        for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+            local nx, nz = ix + d[1], iz + d[2]
+            local key = getKey(nx, nz)
+            if not visited[key] then
+                visited[key] = true
+                if AutoDrive.checkIsOnField(nx * step, 0, nz * step) then
+                    table.insert(queue, nx)
+                    table.insert(queue, nz)
+                end
+            end
+        end
+    end
+    table.insert(cache, area)
+    if #cache > 8 then
+        table.remove(cache, 1)
+    end
+    return area
+end
+
+-- field restriction for one position: normal mode = only on a field, strict mode = anywhere but on another field
+PathFinderModule.OFF_FIELD_NEAR_ENDS = 12
+PathFinderModule.OFF_FIELD_MAX_DISTANCE = 8
+
+-- grass strip along a field: field ground within OFF_FIELD_MAX_DISTANCE
+function PathFinderModule:isNearFieldGround(x, z)
+    self.nearFieldCache = self.nearFieldCache or {}
+    local key = string.format("%d|%d", math.floor(x), math.floor(z))
+    local cached = self.nearFieldCache[key]
+    if cached ~= nil then
+        return cached
+    end
+    local result = false
+    for _, d in ipairs({PathFinderModule.OFF_FIELD_MAX_DISTANCE / 2, PathFinderModule.OFF_FIELD_MAX_DISTANCE}) do
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            if AutoDrive.checkIsOnField(x + math.cos(a) * d, 0, z + math.sin(a) * d) then
+                result = true
+                break
+            end
+        end
+        if result then
+            break
+        end
+    end
+    self.nearFieldCache[key] = result
+    return result
+end
+function PathFinderModule:isFieldPositionAllowed(x, z, isOnField)
+    if isOnField == nil then
+        isOnField = PathFinderModule.getMapOnFieldAt(x, z)
+    end
+    if not self.strictField then
+        return isOnField
+    end
+    if not isOnField then
+        -- finer grids find gaps on the grass between trees AutoDrive does not always see: stay on field ground,
+        -- except around the start and the target (the vehicle may wait on the grass beside the field)
+        -- strict: the field ground only, whatever the grid, except around the start and the target
+        local near = PathFinderModule.OFF_FIELD_NEAR_ENDS
+        local nearStart = self.startX ~= nil and MathUtil.vector2Length(x - self.startX, z - self.startZ) < near
+        local nearTarget = self.target ~= nil and MathUtil.vector2Length(x - self.target.x, z - self.target.z) < near
+        return nearStart or nearTarget
+    end
+    if self.allowedAreas ~= nil and next(self.allowedAreas) ~= nil then
+        local capped = false
+        for area, _ in pairs(self.allowedAreas) do
+            if PathFinderModule.isInFieldArea(area, x, z) then
+                return true
+            end
+            capped = capped or area.capped
+        end
+        if not capped then
+            return false
+        end
+    end
+    if self.allowedFields ~= nil and next(self.allowedFields) ~= nil then
+        local field = PathFinderModule.getFieldAtPosition(x, z)
+        if field ~= nil then
+            return self.allowedFields[field] == true
+        end
+        -- cultivated ground outside every field outline: allowed if it lies on one of our farmlands
+    end
+    return self.allowedFarmlands ~= nil and self.allowedFarmlands[g_farmlandManager:getFarmlandIdAtWorldPosition(x, z)] == true
+end
+
+-- side of the train along the field border (strict): the grass beside the field is allowed, only the ground of another field is refused,
+-- the centre line of the route is checked by isFieldPositionAllowed. Returns allowed, onOtherField
+function PathFinderModule:isTrainSideAllowed(x, z)
+    local isOnField = PathFinderModule.getMapOnFieldAt(x, z)
+    if self.strictField and not isOnField then
+        return true, false
+    end
+    return self:isFieldPositionAllowed(x, z, isOnField), isOnField
+end
+
+-- small patches of standing crop left in a harvested field are ignored: a fruit hit only counts
+-- if at least PathFinderModule.ISLAND_MIN_RATIO of the area around the cell holds this fruit too
+PathFinderModule.ISLAND_CHECK_HALF_SIZE = 10
+PathFinderModule.ISLAND_CHECK_SAMPLES = 10
+PathFinderModule.ISLAND_MIN_RATIO = 0.08
+-- one line in the log for each route found in strict mode, to see what was checked when a route crosses a crop
+function PathFinderModule:printStrictSummary(kind)
+    if not (self.strictFruit or self.strictField) then
+        return
+    end
+    local fruitName = "all"
+    if self.fruitToCheck ~= nil and not self.strictFruit then
+        local fruitType = g_fruitTypeManager:getFruitTypeByIndex(self.fruitToCheck)
+        fruitName = fruitType ~= nil and fruitType.name or tostring(self.fruitToCheck)
+    end
+    local name = self.vehicle ~= nil and self.vehicle.getName ~= nil and self.vehicle:getName() or "?"
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule strict check: path found (%s) to %.0f,%.0f, crop checked %s, cells refused for crop %d, avoid fruit %s, restrict to field %s, fruit fallback %s, to the pipe %s, field map %d cells (%d read for this search)", kind, self.target ~= nil and self.target.x or 0, self.target ~= nil and self.target.z or 0, fruitName, self.strictFruitRefusals or 0,
+        tostring(self.avoidFruitSetting), tostring(AutoDrive.getSetting("restrictToField", self.vehicle)),
+        tostring(self.fallBackMode3), tostring(self.goingToPipe), PathFinderModule.fieldMapCount, PathFinderModule.fieldMapReads - (self.mapReadsAtStart or 0))
+end
+
+function PathFinderModule:isFruitIsland(fruitTypeIndex, x, z)
+    local key = string.format("%s_%d_%d", tostring(fruitTypeIndex), math.floor(x / 8), math.floor(z / 8))
+    if self.islandCache ~= nil and self.islandCache[key] ~= nil then
+        return self.islandCache[key]
+    end
+    -- from the field map: share of this crop in the square around the position
+    if true then
+        local half = PathFinderModule.ISLAND_CHECK_HALF_SIZE
+        local ratio = PathFinderModule.getMapCropRatio(fruitTypeIndex, x - half, z - half, x + half, z - half, x - half, z + half)
+        local isIslandMap = ratio < PathFinderModule.ISLAND_MIN_RATIO
+        if self.islandCache ~= nil then
+            self.islandCache[key] = isIslandMap
+        end
+        return isIslandMap
+    end
+    local half = PathFinderModule.ISLAND_CHECK_HALF_SIZE
+    local samples = PathFinderModule.ISLAND_CHECK_SAMPLES
+    local step = 2 * half / samples
+    local hits = 0
+    for i = 0, samples - 1 do
+        for j = 0, samples - 1 do
+            local sx = x - half + i * step
+            local sz = z - half + j * step
+            if AutoDrive.getFruitValue(fruitTypeIndex, sx, sz, sx + step, sz, sx, sz + step) > 0 then
+                hits = hits + 1
+            end
+        end
+    end
+    local isIsland = hits < samples * samples * PathFinderModule.ISLAND_MIN_RATIO
+    if self.islandCache ~= nil then
+        self.islandCache[key] = isIsland
+    end
+    return isIsland
+end
+
+-- zones the pathfinder must avoid although overlapBox finds nothing there (learned by ADDrivePathModule:learnBlockedPlace:
+-- an obstacle the front sensor stopped on, which the route search does not see). {x, z, radius}
+-- box as given to overlapBox (center, rotation around Y, half extents along local X and Z)
+function PathFinderModule:boxHitsBlockedZone(cx, cz, ry, halfX, halfZ)
+    local cosA, sinA = math.cos(ry), math.sin(ry)
+    for _, zones in ipairs({self.blockedZones or {}, PathFinderModule.learnedZones}) do
+        for _, zone in ipairs(zones) do
+            local dx, dz = zone.x - cx, zone.z - cz
+            local lx = dx * cosA - dz * sinA
+            local lz = dx * sinA + dz * cosA
+            if math.abs(lx) < halfX + zone.radius and math.abs(lz) < halfZ + zone.radius then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- places where the front sensor stopped a vehicle on a calculated route: kept for the whole session, for all vehicles
+PathFinderModule.learnedZones = {}
+PathFinderModule.LEARNED_ZONE_RADIUS = 4
+PathFinderModule.LEARNED_ZONE_DELAY = 3000
+
+function PathFinderModule.addLearnedZone(x, z, vehicleName)
+    for _, zone in ipairs(PathFinderModule.learnedZones) do
+        if MathUtil.vector2Length(zone.x - x, zone.z - z) < zone.radius then
+            return
+        end
+    end
+    table.insert(PathFinderModule.learnedZones, {x = x, z = z, radius = PathFinderModule.LEARNED_ZONE_RADIUS})
+    AutoDrive.debugPrint(nil, AutoDrive.DC_PATHINFO, "PathFinderModule: %s: blocked zone added at %.0f,%.0f (front sensor blocked), %d zone(s)", tostring(vehicleName), x, z, #PathFinderModule.learnedZones)
+end
+
+PathFinderModule.FRUIT_MAX_RATIO = 0.10
+PathFinderModule.FRUIT_SLICE_LENGTH = 4
+PathFinderModule.SMOOTH_FRUIT_MARGIN = 1
+PathFinderModule.ZIGZAG_MAX_KEPT = 2
+PathFinderModule.OFF_FIELD_EXTRA_MARGIN = 1.5
+
+-- field map: standing crop kept in memory in 2 m cells (4 samples each, 1 m apart), shared by all vehicles.
+-- A cell is read once from the density map, then kept; around a working harvester the cells are forgotten
+-- every second and read again when needed. Every cell is read again after MAP_TTL anyway.
+PathFinderModule.MAP_CELL = 2
+PathFinderModule.MAP_TTL = 1800000
+PathFinderModule.MAP_REFRESH_INTERVAL = 1000
+PathFinderModule.MAP_HARVESTER_MARGIN = 8
+PathFinderModule.MAP_SAMPLE_OFFSETS = {{-0.5, -0.5}, {0.5, -0.5}, {-0.5, 0.5}, {0.5, 0.5}}
+PathFinderModule.fieldMap = {}
+PathFinderModule.fieldMapCount = 0
+PathFinderModule.fieldMapReads = 0
+PathFinderModule.fieldMapRefreshTime = -math.huge
+
+-- standing crop at one position: fruit type index, 0 if none (cut, withered, grass and meadow count as none)
+function PathFinderModule.readCropAt(x, z)
+    local fruitTypeIndex, growthState = FSDensityMapUtil.getFruitTypeIndexAtWorldPos(x, z)
+    if fruitTypeIndex == nil or fruitTypeIndex == 0 or growthState == nil or growthState == 0 then
+        return 0
+    end
+    if fruitTypeIndex == FruitType.MEADOW or fruitTypeIndex == FruitType.GRASS then
+        return 0
+    end
+    local fruit = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
+    if fruit == nil or fruit:getIsCut(growthState) or fruit:getIsWithered(growthState) then
+        return 0
+    end
+    -- the stubble behind the harvester can still answer with the crop above: confirm with the same reading as
+    -- the checks of this morning (fruit area of a 0.5 m square, cut or withered counts as none)
+    if PathFinderModule.getFruitRatio(fruitTypeIndex, x - 0.25, z - 0.25, x + 0.25, z - 0.25, x - 0.25, z + 0.25) <= 0 then
+        return 0
+    end
+    return fruitTypeIndex
+end
+
+function PathFinderModule.getMapCell(ix, iz)
+    local key = (ix + 50000) * 100000 + (iz + 50000)
+    local cell = PathFinderModule.fieldMap[key]
+    local now = g_time or 0
+    if cell ~= nil and now >= cell.t and now - cell.t < PathFinderModule.MAP_TTL then
+        return cell
+    end
+    if cell == nil then
+        PathFinderModule.fieldMapCount = PathFinderModule.fieldMapCount + 1
+    end
+    cell = {t = now, field = {}}
+    local cx, cz = ix * PathFinderModule.MAP_CELL, iz * PathFinderModule.MAP_CELL
+    for k, offset in ipairs(PathFinderModule.MAP_SAMPLE_OFFSETS) do
+        cell[k] = PathFinderModule.readCropAt(cx + offset[1], cz + offset[2])
+        cell.field[k] = AutoDrive.checkIsOnField(cx + offset[1], 0, cz + offset[2]) == true
+        cell.onField = cell.onField or cell.field[k]
+    end
+    if g_currentMission ~= nil and g_currentMission.terrainRootNode ~= nil then
+        cell.y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 0, cz)
+    end
+    PathFinderModule.fieldMapReads = PathFinderModule.fieldMapReads + 1
+    PathFinderModule.fieldMap[key] = cell
+    return cell
+end
+
+-- crop at a position from the map (nearest of the 4 samples of its cell)
+function PathFinderModule.getMapCropAt(x, z)
+    local size = PathFinderModule.MAP_CELL
+    local ix, iz = math.floor(x / size + 0.5), math.floor(z / size + 0.5)
+    local cell = PathFinderModule.getMapCell(ix, iz)
+    local k = 1
+    if x >= ix * size then
+        k = k + 1
+    end
+    if z >= iz * size then
+        k = k + 2
+    end
+    return cell[k]
+end
+
+-- field ground at a position from the map (nearest of the 4 samples of its cell)
+function PathFinderModule.getMapOnFieldAt(x, z)
+    local size = PathFinderModule.MAP_CELL
+    local ix, iz = math.floor(x / size + 0.5), math.floor(z / size + 0.5)
+    local cell = PathFinderModule.getMapCell(ix, iz)
+    local k = 1
+    if x >= ix * size then
+        k = k + 1
+    end
+    if z >= iz * size then
+        k = k + 2
+    end
+    return cell.field[k]
+end
+
+-- share of standing crop in the parallelogram c1, c2 = c1 + u, c4 = c1 + v, sampled every meter.
+-- fruitFilter nil: every crop counts. Returns ratio and the crop found most
+function PathFinderModule.getMapCropRatio(fruitFilter, c1X, c1Z, c2X, c2Z, c4X, c4Z)
+    local uX, uZ = c2X - c1X, c2Z - c1Z
+    local vX, vZ = c4X - c1X, c4Z - c1Z
+    local nu = math.max(1, math.ceil(math.sqrt(uX * uX + uZ * uZ)))
+    local nv = math.max(1, math.ceil(math.sqrt(vX * vX + vZ * vZ)))
+    local hits, found = 0, nil
+    for i = 0, nu - 1 do
+        local fu = (i + 0.5) / nu
+        for j = 0, nv - 1 do
+            local fv = (j + 0.5) / nv
+            local crop = PathFinderModule.getMapCropAt(c1X + uX * fu + vX * fv, c1Z + uZ * fu + vZ * fv)
+            if crop ~= 0 and (fruitFilter == nil or crop == fruitFilter) then
+                hits = hits + 1
+                found = crop
+            end
+        end
+    end
+    return hits / (nu * nv), found
+end
+
+-- crop filter of this search: every crop in strict mode or to the network, else the crop of the field
+function PathFinderModule:getCropFilter()
+    if self.goingToNetwork or self.strictFruit then
+        return nil
+    end
+    return self.fruitToCheck
+end
+
+-- the harvesters cut the crop: read the map again around each one working (every MAP_REFRESH_INTERVAL)
+function PathFinderModule.refreshFieldMap()
+    local now = g_time or 0
+    if now - PathFinderModule.fieldMapRefreshTime < PathFinderModule.MAP_REFRESH_INTERVAL and now >= PathFinderModule.fieldMapRefreshTime then
+        return
+    end
+    PathFinderModule.fieldMapRefreshTime = now
+    if PathFinderModule.fieldMapCount == 0 or g_currentMission == nil or g_currentMission.vehicleSystem == nil then
+        return
+    end
+    local size = PathFinderModule.MAP_CELL
+    for _, vehicle in pairs(g_currentMission.vehicleSystem.vehicles) do
+        if vehicle.spec_combine ~= nil and vehicle.components ~= nil and vehicle.rootNode ~= nil and vehicle.getLastSpeed ~= nil and vehicle:getLastSpeed() > 0.5 then
+            local x, _, z = getWorldTranslation(vehicle.rootNode)
+            local vehicleSize = vehicle.size or {}
+            local radius = math.max(vehicleSize.width or 6, vehicleSize.length or 10, 12) / 2 + PathFinderModule.MAP_HARVESTER_MARGIN
+            local r = math.ceil(radius / size)
+            local cx, cz = math.floor(x / size + 0.5), math.floor(z / size + 0.5)
+            for ix = cx - r, cx + r do
+                for iz = cz - r, cz + r do
+                    local key = (ix + 50000) * 100000 + (iz + 50000)
+                    local cell = PathFinderModule.fieldMap[key]
+                    if cell ~= nil then
+                        cell.t = -math.huge
+                        PathFinderModule.getMapCell(ix, iz)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- whole field recorded at once when an unloader goes to a harvester: flood fill over the field ground from the
+-- harvester, a ring of cells around the field included, spread over the frames (MAP_SCAN_BUDGET ms each)
+PathFinderModule.MAP_SCAN_BUDGET = 3
+PathFinderModule.MAP_SCAN_MAX_CELLS = 400000
+PathFinderModule.MAP_DRAW_RADIUS = 40
+PathFinderModule.showFieldMap = false
+PathFinderModule.fieldScan = nil
+PathFinderModule.scannedCells = {}
+PathFinderModule.searchCells = {}
+
+local function mapClock()
+    if getTimeSec ~= nil then
+        return getTimeSec() * 1000
+    end
+    return os.clock() * 1000
+end
+
+function PathFinderModule.startFieldScan(x, z)
+    local size = PathFinderModule.MAP_CELL
+    local ix, iz = math.floor(x / size + 0.5), math.floor(z / size + 0.5)
+    local key = (ix + 50000) * 100000 + (iz + 50000)
+    local scannedAt = PathFinderModule.scannedCells[key]
+    local now = g_time or 0
+    if PathFinderModule.fieldScan ~= nil and PathFinderModule.fieldScan.visited[key] then
+        return
+    end
+    if scannedAt ~= nil and now >= scannedAt and now - scannedAt < PathFinderModule.MAP_TTL then
+        return
+    end
+    local scan = {visited = {[key] = true}, queue = {{ix, iz}}, head = 1, tail = 1, count = 0, startTime = mapClock(), startX = x, startZ = z}
+    PathFinderModule.fieldScan = scan
+    AutoDrive.debugPrint(nil, AutoDrive.DC_PATHINFO, "PathFinderModule field map: scanning the field at %.0f,%.0f", x, z)
+end
+
+function PathFinderModule.updateFieldScan()
+    local scan = PathFinderModule.fieldScan
+    if scan == nil then
+        return
+    end
+    local now = g_time or 0
+    local stopAt = mapClock() + PathFinderModule.MAP_SCAN_BUDGET
+    local done = 0
+    while scan.head <= scan.tail do
+        local item = scan.queue[scan.head]
+        scan.queue[scan.head] = nil
+        scan.head = scan.head + 1
+        local ix, iz = item[1], item[2]
+        local key = (ix + 50000) * 100000 + (iz + 50000)
+        local cell = PathFinderModule.fieldMap[key]
+        if cell ~= nil and (now < cell.t or now - cell.t >= PathFinderModule.MAP_TTL or cell.field == nil) then
+            cell.t = -math.huge
+        end
+        cell = PathFinderModule.getMapCell(ix, iz)
+        PathFinderModule.scannedCells[key] = now
+        scan.count = scan.count + 1
+        if cell.onField and scan.count < PathFinderModule.MAP_SCAN_MAX_CELLS then
+            for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+                local nx, nz = ix + d[1], iz + d[2]
+                local nkey = (nx + 50000) * 100000 + (nz + 50000)
+                if not scan.visited[nkey] then
+                    scan.visited[nkey] = true
+                    scan.tail = scan.tail + 1
+                    scan.queue[scan.tail] = {nx, nz}
+                end
+            end
+        end
+        done = done + 1
+        if done % 20 == 0 and mapClock() >= stopAt then
+            return
+        end
+    end
+    local crop = 0
+    for key, _ in pairs(scan.visited) do
+        local cell = PathFinderModule.fieldMap[key]
+        if cell ~= nil and (cell[1] ~= 0 or cell[2] ~= 0 or cell[3] ~= 0 or cell[4] ~= 0) then
+            crop = crop + 1
+        end
+    end
+    AutoDrive.debugPrint(nil, AutoDrive.DC_PATHINFO, "PathFinderModule field map: field scanned, %d cells of 2 m (%.1f ha), crop %d cells, in %.1f s", scan.count, scan.count * 4 / 10000, crop, (mapClock() - scan.startTime) / 1000)
+    PathFinderModule.fieldScan = nil
+end
+
+-- cells looked at by the last search, kept for the display (reason: libre, champ, culture, obstacle/pente, vehicule)
+function PathFinderModule.addSearchCell(x, z, reason)
+    local cells = PathFinderModule.searchCells
+    if #cells < 8000 then
+        cells[#cells + 1] = {x = x, z = z, reason = reason, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 0, z)}
+    end
+end
+
+PathFinderModule.SEARCH_COLORS = {
+    ["free"] = {0, 1, 1},
+    ["field"] = {0, 0, 1},
+    ["crop"] = {1, 0, 1},
+    ["obstacle/slope"] = {1, 1, 0},
+    ["vehicle"] = {1, 0.5, 0}
+}
+
+function PathFinderModule.toggleFieldMap()
+    PathFinderModule.showFieldMap = not PathFinderModule.showFieldMap
+    return "AutoDrive field map: " .. (PathFinderModule.showFieldMap and "shown" or "hidden")
+end
+
+-- the map around the player: on field, green crosses = free, red = crop; posts = cells of the last search
+function PathFinderModule.drawFieldMap()
+    if not PathFinderModule.showFieldMap or drawDebugLine == nil or PathFinderModule.fieldMapCount == 0 then
+        return
+    end
+    local node = nil
+    local vehicle = AutoDrive.getControlledVehicle and AutoDrive.getControlledVehicle()
+    if vehicle ~= nil and vehicle.rootNode ~= nil then
+        node = vehicle.rootNode
+    elseif g_localPlayer ~= nil and g_localPlayer.rootNode ~= nil then
+        node = g_localPlayer.rootNode
+    end
+    if node == nil then
+        return
+    end
+    local px, _, pz = getWorldTranslation(node)
+    local size = PathFinderModule.MAP_CELL
+    local r = math.floor(PathFinderModule.MAP_DRAW_RADIUS / size)
+    local cx, cz = math.floor(px / size + 0.5), math.floor(pz / size + 0.5)
+    local h = size * 0.35
+    for ix = cx - r, cx + r do
+        for iz = cz - r, cz + r do
+            local cell = PathFinderModule.fieldMap[(ix + 50000) * 100000 + (iz + 50000)]
+            if cell ~= nil and cell.onField and cell.y ~= nil then
+                local x, z, y = ix * size, iz * size, cell.y + 0.15
+                local red, green = 0, 1
+                if cell[1] ~= 0 or cell[2] ~= 0 or cell[3] ~= 0 or cell[4] ~= 0 then
+                    red, green = 1, 0
+                end
+                drawDebugLine(x - h, y, z - h, red, green, 0, x + h, y, z + h, red, green, 0, false)
+                drawDebugLine(x - h, y, z + h, red, green, 0, x + h, y, z - h, red, green, 0, false)
+            end
+        end
+    end
+    local radius = PathFinderModule.MAP_DRAW_RADIUS
+    for _, c in ipairs(PathFinderModule.searchCells) do
+        if math.abs(c.x - px) < radius and math.abs(c.z - pz) < radius then
+            local color = PathFinderModule.SEARCH_COLORS[c.reason] or {1, 1, 1}
+            local y = c.y
+            drawDebugLine(c.x, y, c.z, color[1], color[2], color[3], c.x, y + 1.5, c.z, color[1], color[2], color[3], false)
+        end
+    end
+end
+
+-- share of the area covered by standing crop (cut or withered crop counts as none)
+function PathFinderModule.getFruitRatio(fruitTypeIndex, c1X, c1Z, c2X, c2Z, c3X, c3Z)
+    if fruitTypeIndex == FruitType.GRASS or fruitTypeIndex == FruitType.MEADOW then
+        return 0
+    end
+    local fruitValue, _, totalPixels, growthState = FSDensityMapUtil.getFruitArea(fruitTypeIndex, c1X, c1Z, c2X, c2Z, c3X, c3Z, true, true)
+    local fruit = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
+    if fruit ~= nil and growthState ~= nil and (fruit:getIsCut(growthState) or fruit:getIsWithered(growthState)) then
+        return 0
+    end
+    if fruitValue == nil or totalPixels == nil or totalPixels <= 0 then
+        return 0
+    end
+    return fruitValue / totalPixels
+end
+
+function PathFinderModule:isOffFieldReduced(x, z, isOnField)
+    if self.gridScaleStep == nil or self.gridScaleStep <= 1 then
+        return false
+    end
+    if isOnField == nil then
+        isOnField = PathFinderModule.getMapOnFieldAt(x, z)
+    end
+    return not isOnField
 end
 
 PathFinderModule.START_DISTANCES_SHORTER = {5, 3, 1.5}
@@ -545,6 +1184,9 @@ function PathFinderModule:getFreeStartDistance(vehicleWorldX, vehicleWorldZ, dir
         local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 1, cz)
         self.collisionhits = 0
         overlapBox(cx, y + height / 2 + 0.3, cz, 0, angleRad, 0, halfWidth, height / 2, length / 2, "collisionTestCallback", self, self.mask, true, true, true, true)
+        if self:boxHitsBlockedZone(cx, cz, angleRad, halfWidth, length / 2) then
+            self.collisionhits = self.collisionhits + 1
+        end
         if self.collisionhits == 0 then
             if distance ~= maxDistance then
                 PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:getFreeStartDistance obstacle ahead, start %.1f m in front instead of %.1f m", distance, maxDistance)
@@ -569,6 +1211,10 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
         )
     )
     ADScheduler:addPathfinderVehicle(self.vehicle)
+    self.minTurnRadius = self.realTurnRadius or self.minTurnRadius
+    self.gridScaleStep = 1
+    self.gridScaleFailPrinted = false
+    self.partialPath = false
     if math.abs(targetVector.x) < 0.001 then
         targetVector.x = 0.001
     end
@@ -604,6 +1250,7 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     self.max_pathfinder_steps = PathFinderModule.MAX_PATHFINDER_STEPS_TOTAL * self.pathFinderTime
 
     self.fruitToCheck = nil
+    self.trainHalfWidth = self:getTrainWidth() / 2 + PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN
 
     self.start = {x = self.startX, z = self.startZ}
     self.startCell = {x = 0, z = 0}
@@ -651,6 +1298,7 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     self.endIsOnField = AutoDrive.checkIsOnField(targetX, vehicleWorldY, targetZ)
     self.restrictToField = AutoDrive.getSetting("restrictToField", self.vehicle) and self.startIsOnField and self.endIsOnField
     self.goingToPipe = false
+    self.pipeCombine = nil
     self.chasingVehicle = false
     self.isSecondChasingVehicle = false
     self.goingToNetwork = false
@@ -659,6 +1307,38 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     self.targetBlocked = false --self.targetCell.hasCollision or self.targetCell.isRestricted --> always false TODO: how to use this ?
     self.blockedByOtherVehicle = false
     self.avoidFruitSetting = AutoDrive.getSetting("avoidFruit", self.vehicle)
+    -- strict settings are never dropped by the fallback modes, whatever the trip
+    self.strictField = AutoDrive.getSetting("restrictToField", self.vehicle) == "strict"
+    self.strictFruit = self.avoidFruitSetting == "strict"
+    if self.strictField then
+        -- strict: never drive on another field, wherever the trip starts or ends. Ground that is not a field (grass, verges) stays allowed
+        self.restrictToField = true
+        -- the field is identified by the map's field outline, a field can lie on several farmlands
+        self.allowedFields = {}
+        self.allowedFarmlands = {}
+        for _, pos in ipairs({{x = vehicleWorldX, z = vehicleWorldZ, onField = self.startIsOnField}, {x = targetX, z = targetZ, onField = self.endIsOnField}}) do
+            if pos.onField then
+                local field = PathFinderModule.getFieldAtPosition(pos.x, pos.z)
+                if field ~= nil then
+                    self.allowedFields[field] = true
+                end
+                self.allowedFarmlands[g_farmlandManager:getFarmlandIdAtWorldPosition(pos.x, pos.z)] = true
+            end
+        end
+        -- the field ground actually connected to the start and to the target, outlines and farmlands do not always match the worked field
+        self.allowedAreas = {}
+        for _, pos in ipairs({{x = vehicleWorldX, z = vehicleWorldZ}, {x = targetX, z = targetZ}}) do
+            local area = PathFinderModule.getConnectedFieldArea(pos.x, pos.z)
+            if area ~= nil then
+                self.allowedAreas[area] = true
+                PathFinderModule.debugMsg(self.vehicle, "PFM:startPathPlanningTo strict field area xz %.1f,%.1f samples %d capped %s", pos.x, pos.z, area.count, tostring(area.capped))
+            end
+        end
+    end
+    self.islandCache = {}
+    self.strictFruitRefusals = 0
+    self.mapReadsAtStart = PathFinderModule.fieldMapReads
+    PathFinderModule.searchCells = {}
     -- self.targetFieldId = g_farmlandManager:getFarmlandIdAtWorldPosition(targetX, targetZ)   -- only has ID if vector target is onField
     -- self.targetFieldId = nil
     -- if self.restrictToField and self.targetFieldId ~= nil and self.targetFieldId > 0 then
@@ -740,6 +1420,525 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     )
 end
 
+function PathFinderModule:printTrip(kind)
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: path (%s, cells %.1f m) start %.0f,%.0f -> target %.0f,%.0f", kind, self.minTurnRadius or 0,
+        self.startX or 0, self.startZ or 0, self.target ~= nil and self.target.x or 0, self.target ~= nil and self.target.z or 0)
+end
+
+function PathFinderModule:getLogName()
+    return self.vehicle ~= nil and self.vehicle.getName ~= nil and self.vehicle:getName() or "?"
+end
+
+-- no path found: same start, target and restrictions, but a finer grid
+function PathFinderModule:shrinkGrid()
+    local oldSize = self.minTurnRadius
+    self.gridScaleStep = self.gridScaleStep + 1
+    local scale = self:getGridScale(self.gridScaleStep)
+    self.minTurnRadius = self.realTurnRadius * scale
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: no path with %.1f m cells, trying %.1f m (%s)", oldSize, self.minTurnRadius, self:getDiagText())
+
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(self.targetVector.z, self.targetVector.x))
+    self.vectorX = {x =   math.cos(angleRad) * self.minTurnRadius, z = math.sin(angleRad) * self.minTurnRadius}
+    self.vectorZ = {x = - math.sin(angleRad) * self.minTurnRadius, z = math.cos(angleRad) * self.minTurnRadius}
+
+    local vehicleWorldX, _, vehicleWorldZ = getWorldTranslation(self.vehicle.components[1].node)
+    local vehicleRx, _, vehicleRz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local vehicleVector = {x = vehicleRx, z = vehicleRz}
+    self.startCell.direction = self:worldDirectionToGridDirection(vehicleVector)
+
+    local vehicleBehindX, _, vehicleBehindZ = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, -self.minTurnRadius)
+    self.behindStartCell = self:worldLocationToGridLocation(vehicleWorldX + vehicleBehindX, vehicleWorldZ + vehicleBehindZ)
+    self.behindStartCell.direction = self:worldDirectionToGridDirection({x = vehicleBehindX, z = vehicleBehindZ}, vehicleVector)
+    self.behind = {x = vehicleWorldX + vehicleBehindX, z = vehicleWorldZ + vehicleBehindZ}
+
+    local targetCell = self:worldLocationToGridLocation(self.target.x, self.target.z)
+    self.targetCell = {x = AutoDrive.round(targetCell.x), z = AutoDrive.round(targetCell.z), direction = self.PP_UP}
+    self.targetAhead = {x = self.target.x + self.vectorX.x, z = self.target.z + self.vectorX.z}
+    self.targetAheadCell = self:worldLocationToGridLocation(self.targetAhead.x, self.targetAhead.z)
+
+    -- smaller cells cover less ground per step
+    self.max_pathfinder_steps = math.floor(self.max_pathfinder_steps / scale * self:getGridScale(self.gridScaleStep - 1))
+    self:autoRestart()
+end
+
+-- straight stretch a -> b: obstacles, blocked zones, crops and field limit, as the shortcut check does
+-- inner: optional unit vector towards the turn centre, the trailer cuts inside a turn
+-- narrow: corridor of the train only (used to verify a whole path, hedges and trees along it are normal)
+-- crop along a -> b, judged in short slices: a local bite into the crop must not vanish in the average of a long stretch
+function PathFinderModule:isFruitStretchClear(a, b, halfWidth)
+    local vectorX, vectorZ = b.x - a.x, b.z - a.z
+    local length = math.sqrt(vectorX * vectorX + vectorZ * vectorZ)
+    if length < 0.05 then
+        return true
+    end
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-vectorZ, vectorX))
+    local leftAngle = AutoDrive.normalizeAngle(angleRad + math.rad(-90))
+    local rightAngle = AutoDrive.normalizeAngle(angleRad + math.rad(90))
+    local slices = math.max(1, math.ceil(length / PathFinderModule.FRUIT_SLICE_LENGTH))
+    local cosL, sinL = math.cos(leftAngle), math.sin(leftAngle)
+    local cosR, sinR = math.cos(rightAngle), math.sin(rightAngle)
+    for k = 0, slices - 1 do
+        local sx, sz = a.x + vectorX * k / slices, a.z + vectorZ * k / slices
+        local ex, ez = a.x + vectorX * (k + 1) / slices, a.z + vectorZ * (k + 1) / slices
+        local c1X, c1Z = sx - cosL * halfWidth, sz + sinL * halfWidth
+        local c2X, c2Z = ex - cosL * halfWidth, ez + sinL * halfWidth
+        local c4X, c4Z = sx - cosR * halfWidth, sz + sinR * halfWidth
+        local filter = self:getCropFilter()
+        if filter ~= nil or self.goingToNetwork or self.strictFruit then
+            local ratio, found = PathFinderModule.getMapCropRatio(filter, c1X, c1Z, c2X, c2Z, c4X, c4Z)
+            -- same rule as the grid cells: the train may run along the crop edge, not into it
+            if ratio > PathFinderModule.CELL_MAX_RATIO then
+                local fruitType = found ~= nil and g_fruitTypeManager:getFruitTypeByIndex(found) or nil
+                return false, "crop " .. tostring(fruitType ~= nil and fruitType.name or "")
+            end
+        end
+    end
+    return true
+end
+
+function PathFinderModule:isStretchClear(a, b, inner, narrow, obstaclesOnly)
+    local vectorX, vectorZ = b.x - a.x, b.z - a.z
+    local length = math.sqrt(vectorX * vectorX + vectorZ * vectorZ)
+    if length < 0.05 then
+        return true
+    end
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-vectorZ, vectorX))
+    local leftAngle = AutoDrive.normalizeAngle(angleRad + math.rad(-90))
+    local rightAngle = AutoDrive.normalizeAngle(angleRad + math.rad(90))
+    local halfWidth = self.trainHalfWidth or 3
+    local midX, midZ = a.x + vectorX / 2, a.z + vectorZ / 2
+    -- same corridor as the shortcut check of the grid path, at least the train width
+    local boxHalf = math.max(self.minTurnRadius * PathFinderModule.GRID_SIZE_FACTOR + 1.5, halfWidth + 0.5)
+    if narrow then
+        boxHalf = halfWidth + 0.5
+    end
+    -- trees on the grass are not always seen: wider corridor off the field in reduced grids
+    if self:isOffFieldReduced(midX, midZ) then
+        boxHalf = boxHalf + PathFinderModule.OFF_FIELD_EXTRA_MARGIN
+    end
+    local boxX, boxZ = midX, midZ
+    if inner ~= nil then
+        boxHalf = boxHalf + PathFinderModule.CORNER_INNER_MARGIN / 2
+        boxX = boxX + inner.x * PathFinderModule.CORNER_INNER_MARGIN / 2
+        boxZ = boxZ + inner.z * PathFinderModule.CORNER_INNER_MARGIN / 2
+    end
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, boxX, 1, boxZ)
+
+    self.collisionhits = 0
+    overlapBox(boxX, y + self.vehicleMinHeight / 2, boxZ, 0, angleRad, 0, length / 2 + 1, self.vehicleMinHeight / 2, boxHalf, "collisionTestCallback", self, self.mask, true, true, true, true)
+    if self.collisionhits > 0 or self:boxHitsBlockedZone(boxX, boxZ, angleRad, length / 2 + 1, boxHalf) then
+        return false, "obstacle"
+    end
+    if obstaclesOnly then
+        return true
+    end
+    if self:checkSlopeAngle(a.x, a.z, b.x, b.z) then
+        return false, "slope"
+    end
+
+    if self.avoidFruitSetting and not self.fallBackMode3 then
+        local clear, reason = self:isFruitStretchClear(a, b, halfWidth)
+        if not clear then
+            return false, reason
+        end
+    end
+
+    if self.restrictToField and not (self.fallBackMode1 or self.fallBackMode2) then
+        local sideHalf = halfWidth - PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN
+        local sideX, sideZ = math.cos(leftAngle) * sideHalf, -math.sin(leftAngle) * sideHalf
+        for _, t in ipairs({0, 0.5, 1}) do
+            local px, pz = a.x + vectorX * t, a.z + vectorZ * t
+            for _, sign in ipairs({1, -1}) do
+                local allowed, onOtherField = self:isTrainSideAllowed(px + sideX * sign, pz + sideZ * sign)
+                if not allowed then
+                    return false, onOtherField and "field edge (other field)" or "field edge (off the field)"
+                end
+            end
+        end
+    end
+    return true
+end
+
+PathFinderModule.PARTIAL_MIN_GAIN = 10
+
+function PathFinderModule:partialAllowed()
+    return self.allowPartialPath and (self.strictFruit or self.strictField) and not self.partialPath and self.isNewPF
+end
+
+-- a partial route must bring the vehicle at least PARTIAL_MIN_GAIN closer to the target
+function PathFinderModule:partialGain(endPoint)
+    local startDistance = MathUtil.vector2Length(self.startX - self.target.x, self.startZ - self.target.z)
+    local endDistance = MathUtil.vector2Length(endPoint.x - self.target.x, endPoint.z - self.target.z)
+    return startDistance - endDistance
+end
+
+-- refused route: keep its clean beginning, up to the first refused stretch
+function PathFinderModule:usePartialPath(badIndex)
+    -- a partial route can be shortened again
+    if not (self:partialAllowed() or self.partialPath) or badIndex == nil or badIndex < 2 then
+        return false
+    end
+    local points = {}
+    for i = 1, badIndex do
+        points[i] = self.wayPoints[i]
+    end
+    local gain = self:partialGain(points[#points])
+    if gain < PathFinderModule.PARTIAL_MIN_GAIN then
+        return false
+    end
+    self.wayPoints = points
+    self.partialPath = true
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path to %.0f,%.0f (%.0f m closer), new search on arrival", points[#points].x, points[#points].z, gain)
+    return true
+end
+
+-- end of a partial route to a harvester: never waiting face to face with it, against its way
+PathFinderModule.PARTIAL_MAX_HEADING_ANGLE = math.rad(120)
+PathFinderModule.PARTIAL_HEADING_LENGTH = 3
+
+function PathFinderModule:isPartialEndFacingCombine(index)
+    local wps = self.wayPoints
+    if not self.goingToPipe or self.pipeCombine == nil or self.pipeCombine.components == nil or index < 2 then
+        return false
+    end
+    local b = wps[index]
+    local a = nil
+    for j = index - 1, 1, -1 do
+        a = wps[j]
+        if MathUtil.vector2Length(b.x - a.x, b.z - a.z) >= PathFinderModule.PARTIAL_HEADING_LENGTH then
+            break
+        end
+    end
+    local dx, dz = b.x - a.x, b.z - a.z
+    local length = math.sqrt(dx * dx + dz * dz)
+    if length < 0.5 then
+        return false
+    end
+    local rx, _, rz = AutoDrive.localDirectionToWorld(self.pipeCombine, 0, 0, 1)
+    return (dx * rx + dz * rz) / length < math.cos(PathFinderModule.PARTIAL_MAX_HEADING_ANGLE)
+end
+
+-- shortens the partial route to its last point not facing the harvester; false: no usable point, wait
+function PathFinderModule:trimPartialEnd()
+    local wps = self.wayPoints
+    for i = #wps, 2, -1 do
+        if self:partialGain(wps[i]) < PathFinderModule.PARTIAL_MIN_GAIN then
+            return false
+        end
+        if not self:isPartialEndFacingCombine(i) then
+            if i < #wps then
+                for j = #wps, i + 1, -1 do
+                    table.remove(wps, j)
+                end
+                PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: end of the partial path faces the harvester, stopping earlier at %.0f,%.0f", wps[i].x, wps[i].z)
+            end
+            return self:keepPartialStopMargin()
+        end
+    end
+    return false
+end
+
+-- a partial route stops with margin: PARTIAL_STOP_MARGIN meters back along the route, and the train standing there
+-- (its width + 1 m each side) touches no crop. Returns false if nothing worth driving is left
+PathFinderModule.PARTIAL_STOP_MARGIN = 10
+function PathFinderModule:isPartialStopClear(i)
+    local wps = self.wayPoints
+    local a, b = wps[i - 1], wps[i]
+    local dx, dz = b.x - a.x, b.z - a.z
+    local l = math.sqrt(dx * dx + dz * dz)
+    if l < 0.05 then
+        return true
+    end
+    dx, dz = dx / l, dz / l
+    local half = (self.trainHalfWidth or 2) + 1
+    local back = math.max(AutoDrive.getTractorTrainLength(self.vehicle, true, false), 8)
+    local c1X, c1Z = b.x - dz * half - dx * back, b.z + dx * half - dz * back
+    local c2X, c2Z = b.x - dz * half + dx * 2, b.z + dx * half + dz * 2
+    local c4X, c4Z = b.x + dz * half - dx * back, b.z - dx * half - dz * back
+    return PathFinderModule.getMapCropRatio(nil, c1X, c1Z, c2X, c2Z, c4X, c4Z) <= 0
+end
+
+function PathFinderModule:keepPartialStopMargin()
+    local wps = self.wayPoints
+    local removed = 0
+    while #wps > 2 do
+        local last, before = wps[#wps], wps[#wps - 1]
+        if removed >= PathFinderModule.PARTIAL_STOP_MARGIN and self:isPartialStopClear(#wps) then
+            break
+        end
+        removed = removed + MathUtil.vector2Length(last.x - before.x, last.z - before.z)
+        table.remove(wps, #wps)
+    end
+    if #wps < 2 or self:partialGain(wps[#wps]) < PathFinderModule.PARTIAL_MIN_GAIN then
+        PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path too short with the margin, waiting")
+        return false
+    end
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path stopped %.0f m earlier (margin), at %.0f,%.0f", removed, wps[#wps].x, wps[#wps].z)
+    return true
+end
+
+-- behind the harvester: on its own cut track, the chase takes over from there
+PathFinderModule.REAR_FALLBACK_GAP = 8
+PathFinderModule.REAR_FIRST_DISTANCE = 40
+
+function PathFinderModule:startRearFallback()
+    local combine = self.pipeCombine
+    if self.rearFallbackDone or not self.goingToPipe or combine == nil or combine.components == nil or not (self.strictFruit or self.strictField) then
+        return false
+    end
+    -- only to catch a harvester that drives: behind a stopped one the trailer cannot reach the pipe, nothing takes over there
+    local stopped = (combine.lastSpeedReal or 0) < 0.0002
+        or (combine.ad ~= nil and combine.ad.noMovementTimer ~= nil and combine.ad.noMovementTimer.elapsedTime > 1000)
+    if stopped then
+        if not self.rearFallbackSkippedPrinted then
+            self.rearFallbackSkippedPrinted = true
+            PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: harvester stopped, aiming at the pipe directly (not behind)")
+        end
+        return false
+    end
+    local x, y, z = getWorldTranslation(combine.components[1].node)
+    local rx, _, rz = AutoDrive.localDirectionToWorld(combine, 0, 0, 1)
+    local back = (combine.size ~= nil and combine.size.length or 10) / 2 + PathFinderModule.REAR_FALLBACK_GAP + AutoDrive.getTractorTrainLength(self.vehicle, true, false) / 2
+    local target = {x = x - rx * back, y = y, z = z - rz * back}
+    local allowPartial = self.allowPartialPath
+    local fruitToCheck = self.fruitToCheck
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: going behind the harvester (%.0f,%.0f)", target.x, target.z)
+    self:startPathPlanningTo(target, {x = rx, z = rz})
+    self.goingToPipe = true
+    self.pipeCombine = combine
+    self.fruitToCheck = fruitToCheck
+    self.allowPartialPath = allowPartial
+    self.rearFallbackDone = true
+    return true
+end
+
+-- no route at the finest grid: route to the explored cell closest to the target
+function PathFinderModule:usePartialGridPath()
+    if not self:partialAllowed() or self.closedset == nil or self.nodeGoal == nil then
+        return false
+    end
+    local best, bestDistance = nil, math.huge
+    for node, _ in pairs(self.closedset) do
+        if node ~= self.nodeBehindStart and self.came_from[node] ~= nil then
+            local distance = MathUtil.vector2Length(node.x - self.nodeGoal.x, node.z - self.nodeGoal.z)
+            if distance < bestDistance then
+                best, bestDistance = node, distance
+            end
+        end
+    end
+    if best == nil or best == self.nodeStart then
+        return false
+    end
+    local endPoint = self:gridLocationToWorldLocation(best)
+    if self:partialGain(endPoint) < PathFinderModule.PARTIAL_MIN_GAIN then
+        return false
+    end
+    self.path = self:unwind_path({}, self.came_from, best)
+    table.insert(self.path, best)
+    self.partialPath = true
+    self.completelyBlocked = false
+    self.isFinished = true
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: no complete path, partial path to %.0f,%.0f, new search on arrival", endPoint.x, endPoint.z)
+    return true
+end
+
+-- the first meters (at the vehicle) and the last meters (next to the target) are not judged
+PathFinderModule.VERIFY_SKIP_START = 12
+PathFinderModule.START_CROP_RADIUS = 4
+PathFinderModule.VERIFY_SKIP_END = 15
+function PathFinderModule:findBlockedStretch()
+    local wps = self.wayPoints
+    if wps == nil then
+        return nil
+    end
+    -- distances along the route: the first and last meters are not judged (start turn, approach)
+    local total = 0
+    for i = 1, #wps - 1 do
+        total = total + MathUtil.vector2Length(wps[i + 1].x - wps[i].x, wps[i + 1].z - wps[i].z)
+    end
+    local skipFrom, skipTo = PathFinderModule.VERIFY_SKIP_START, total - PathFinderModule.VERIFY_SKIP_END
+    if self.partialPath then
+        -- a partial route stops before the target: its end is where the vehicle waits, it is judged too
+        skipTo = total
+    end
+    local done = 0
+    for i = 1, #wps - 1 do
+        local a, b = wps[i], wps[i + 1]
+        local dx, dz = b.x - a.x, b.z - a.z
+        local length = math.sqrt(dx * dx + dz * dz)
+        local from = math.max(0, skipFrom - done)
+        local to = math.min(length, skipTo - done)
+        -- start turn: crop and field edge not judged, obstacles still are
+        local startTo = math.min(length, skipFrom - done, skipTo - done)
+        if startTo > 0.5 then
+            local pb = {x = a.x + dx * startTo / length, z = a.z + dz * startTo / length}
+            if not self:isStretchClear(a, pb, nil, true, true) then
+                return i, "obstacle"
+            end
+        end
+        done = done + length
+        if to - from > 0.5 then
+            local pa = {x = a.x + dx * from / length, z = a.z + dz * from / length}
+            local pb = {x = a.x + dx * to / length, z = a.z + dz * to / length}
+            local clear, reason = self:isStretchClear(pa, pb, nil, true)
+            if not clear then
+                return i, reason
+            end
+        end
+    end
+    return nil
+end
+
+PathFinderModule.CORNER_MIN_ANGLE = math.rad(8)
+PathFinderModule.CORNER_MAX_ANGLE = math.rad(150)
+PathFinderModule.CORNER_MAX_MERGE = 4
+PathFinderModule.CORNER_ARC_STEP = 2.5
+PathFinderModule.CORNER_INNER_MARGIN = 1.5
+-- a corner that could not be rounded to the real turn radius and turns more than this cannot be driven by the train
+PathFinderModule.CORNER_SHARP_ANGLE = math.rad(30)
+
+-- the finer grid makes corners tighter than the vehicle can turn: replace them by arcs of the real radius
+-- a corner too short for its arc is merged with the next corners turning the same way; no room -> corner kept
+function PathFinderModule:roundCornersToTurnRadius()
+    local wps = self.wayPoints
+    if wps == nil or #wps < 3 then
+        return
+    end
+    local radius = self.realTurnRadius or self.minTurnRadius
+    local function unit(from, to)
+        local dx, dz = to.x - from.x, to.z - from.z
+        local l = math.sqrt(dx * dx + dz * dz)
+        if l < 0.01 then
+            return nil
+        end
+        return {x = dx / l, z = dz / l}, l
+    end
+    local function newPoint(x, z, template)
+        local p = {x = x, z = z, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z)}
+        if template ~= nil then
+            p.direction = template.direction
+        end
+        return p
+    end
+
+    local out = {wps[1]}
+    local last = wps[1]
+    local rounded, kept, sharp = 0, 0, 0
+    local i = 2
+    while i <= #wps - 1 do
+        local d1 = unit(wps[i - 1], wps[i])
+        local done = false
+        if d1 ~= nil then
+            local turnSign = nil
+            for k = i, math.min(i + PathFinderModule.CORNER_MAX_MERGE - 1, #wps - 1) do
+                local d2 = unit(wps[k], wps[k + 1])
+                if d2 == nil then
+                    break
+                end
+                local cross = d1.x * d2.z - d1.z * d2.x
+                local dot = math.max(-1, math.min(1, d1.x * d2.x + d1.z * d2.z))
+                local theta = math.acos(dot)
+                -- every merged corner must turn the same way
+                local localCross = 0
+                local dPrev = unit(wps[k - 1], wps[k])
+                if dPrev ~= nil then
+                    localCross = dPrev.x * d2.z - dPrev.z * d2.x
+                end
+                if math.abs(localCross) > 0.01 then
+                    local sign = localCross > 0 and 1 or -1
+                    if turnSign == nil then
+                        turnSign = sign
+                    elseif sign ~= turnSign then
+                        break
+                    end
+                end
+                if theta < PathFinderModule.CORNER_MIN_ANGLE then
+                    if k == i then
+                        break
+                    end
+                elseif theta > PathFinderModule.CORNER_MAX_ANGLE then
+                    break
+                else
+                    -- virtual corner: incoming line through wps[i] (d1) crosses the outgoing line through wps[k] (d2)
+                    local denom = d1.x * d2.z - d1.z * d2.x
+                    if math.abs(denom) > 0.001 then
+                        local wx, wz = wps[k].x - wps[i].x, wps[k].z - wps[i].z
+                        local s = (wx * d2.z - wz * d2.x) / denom
+                        local vx, vz = wps[i].x + d1.x * s, wps[i].z + d1.z * s
+                        local tangent = radius * math.tan(theta / 2)
+                        local t1 = {x = vx - d1.x * tangent, z = vz - d1.z * tangent}
+                        local t2 = {x = vx + d2.x * tangent, z = vz + d2.z * tangent}
+                        local nextPoint = wps[k + 1]
+                        -- the arc must start after the last kept point and end before the next point (half way if more corners follow)
+                        local beforeOk = ((t1.x - last.x) * d1.x + (t1.z - last.z) * d1.z) >= 0
+                        local _, outLength = unit({x = vx, z = vz}, nextPoint)
+                        local outRoom = outLength or 0
+                        if k + 1 < #wps then
+                            outRoom = outRoom * 0.5
+                        end
+                        local afterOk = ((nextPoint.x - vx) * d2.x + (nextPoint.z - vz) * d2.z) > 0 and tangent <= outRoom
+                        if beforeOk and afterOk then
+                            local perpX, perpZ = -d1.z, d1.x
+                            if cross < 0 then
+                                perpX, perpZ = d1.z, -d1.x
+                            end
+                            local cx, cz = t1.x + perpX * radius, t1.z + perpZ * radius
+                            local a0 = math.atan2(t1.z - cz, t1.x - cx)
+                            local sweep = (cross > 0 and 1 or -1) * theta
+                            local steps = math.max(2, math.ceil(theta * radius / PathFinderModule.CORNER_ARC_STEP))
+                            local arc = {newPoint(t1.x, t1.z, wps[i])}
+                            for n = 1, steps do
+                                local a = a0 + sweep * n / steps
+                                arc[#arc + 1] = newPoint(cx + math.cos(a) * radius, cz + math.sin(a) * radius, wps[k])
+                            end
+                            local clear = self:isStretchClear(last, arc[1]) and self:isStretchClear(arc[#arc], nextPoint)
+                            for n = 2, #arc do
+                                if not clear then
+                                    break
+                                end
+                                local midX, midZ = (arc[n - 1].x + arc[n].x) / 2, (arc[n - 1].z + arc[n].z) / 2
+                                local toCentreX, toCentreZ = cx - midX, cz - midZ
+                                local toCentreLength = math.sqrt(toCentreX * toCentreX + toCentreZ * toCentreZ)
+                                local inner = {x = toCentreX / toCentreLength, z = toCentreZ / toCentreLength}
+                                clear = self:isStretchClear(arc[n - 1], arc[n], inner)
+                            end
+                            if clear then
+                                for _, p in ipairs(arc) do
+                                    out[#out + 1] = p
+                                end
+                                last = arc[#arc]
+                                rounded = rounded + 1
+                                i = k + 1
+                                done = true
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if not done then
+            local d2 = unit(wps[i], wps[i + 1])
+            if d1 ~= nil and d2 ~= nil then
+                local theta = math.acos(math.max(-1, math.min(1, d1.x * d2.x + d1.z * d2.z)))
+                if theta >= PathFinderModule.CORNER_MIN_ANGLE then
+                    kept = kept + 1
+                end
+                if theta > PathFinderModule.CORNER_SHARP_ANGLE then
+                    sharp = sharp + 1
+                end
+            end
+            out[#out + 1] = wps[i]
+            last = wps[i]
+            i = i + 1
+        end
+    end
+    out[#out + 1] = wps[#wps]
+    self.wayPoints = out
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: corners rounded at %.1f m: %d, corners kept (no room): %d, too sharp (> %.0f deg): %d", radius, rounded, kept, math.deg(PathFinderModule.CORNER_SHARP_ANGLE), sharp)
+    return kept, sharp
+end
+
 function PathFinderModule:restartAtNextWayPoint()
     self.targetWayPointId = self.appendWayPoints[2].id
     local targetNode = ADGraphManager:getWayPointById(self.targetWayPointId)
@@ -787,6 +1986,10 @@ end
 
 function PathFinderModule:abort()
     PathFinderModule.debugMsg(self.vehicle, "PFM:abort start")
+    if self.strictField or self.strictFruit then
+        -- no route respecting crop / field is not a stuck vehicle: no reversing out, the task plans again
+        self.completelyBlocked = false
+    end
     self.isFinished = true
     self.dubinsDone = true
     self.smoothDone = true
@@ -845,6 +2048,7 @@ function PathFinderModule:update(dt)
     if self.startCell == nil then
         self:abort()
     end
+    PathFinderModule.refreshFieldMap()
 
     self.delayTime = math.max(0, self.delayTime - dt)
     if self.delayTime > 0 then
@@ -923,16 +2127,28 @@ function PathFinderModule:update(dt)
             d) 'update target location and reinvoke pathfinder if target has moved'
             e) 'try different field exit strategy'
         --]]
-        -- Only allow fallback if we are not heading for a moving vehicle, and not when the caller asked to keep the restrictions
-        local fallBackModeAllowed1 = (not self.noFallback) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode1)    -- disable restrict to field
-        local fallBackModeAllowed2 = (not self.noFallback) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode2)    -- disable restrict to field border
-        local fallBackModeAllowed3 = (not self.noFallback) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.avoidFruitSetting) and (not self.fallBackMode3)    -- disable avoid fruit
+        -- Only allow fallback if we are not heading for a moving vehicle
+        -- and never when driving to a harvester pipe: keep restrictToField and avoidFruit, the calling task retries later
+        local keepRestrictions = self.goingToPipe or self.noFallback
+        local fallBackModeAllowed1 = (not keepRestrictions) and (not self.strictField) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode1)    -- disable restrict to field
+        local fallBackModeAllowed2 = (not keepRestrictions) and (not self.strictField) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode2)    -- disable restrict to field border
+        local fallBackModeAllowed3 = (not keepRestrictions) and (not self.strictFruit) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.avoidFruitSetting) and (not self.fallBackMode3)    -- disable avoid fruit
         local increaseStepsAllowed = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.max_pathfinder_steps < PathFinderModule.MAX_PATHFINDER_STEPS_TOTAL * self.pathFinderTime)    -- increase number of steps if possible
 
         -- Only allow auto restart when planning path to network and we can adjust target wayPoint
         local retryAllowed = self.destinationId ~= nil and self.retryCounter < self.PATHFINDER_MAX_RETRIES
+        local smallerGridAllowed = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and self.gridScaleStep ~= nil and self.gridScaleStep < PathFinderModule.GRID_STEPS
 
-        if fallBackModeAllowed1 then
+        if not smallerGridAllowed and self.gridScaleStep ~= nil then
+            PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: no path with %.1f m cells (%s)", self.minTurnRadius, self:getDiagText())
+        end
+        if smallerGridAllowed then
+            self:shrinkGrid()
+        elseif self:startRearFallback() then
+            -- no clean route to the pipe: go behind the harvester, on its own harvested track
+        elseif self:usePartialGridPath() then
+            -- drives to the explored cell closest to the target, the task plans again on arrival
+        elseif fallBackModeAllowed1 then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "PathFinderModule:update - error - retryAllowed: no -> fallBackModeAllowed1: yes -> going fallback now -> disable restrict to field #self.grid %d", table.count(self.grid))
             PathFinderModule.debugVehicleMsg(self.vehicle,
                 string.format("PFM update - error - retryAllowed: no -> fallBackModeAllowed1: yes -> going fallback now -> disable restrict to field #self.grid %d",
@@ -1059,8 +2275,9 @@ function PathFinderModule:update(dt)
 
             local current
             local add_neighbor_fn = function(neighbor, cost)
-                if self:isDriveableAstar(neighbor) then
-                    if not self.closedset[neighbor] then
+                -- closed cells are never reopened, skip them before the expensive checks
+                if not self.closedset[neighbor] and self:isDriveableAstar(neighbor) then
+                    do
                         if not cost then cost = self:get_cost(current, neighbor) end
                         local tentative_g_score = self.g_score[current] + cost
                         local openset_idx = self.openset[neighbor]
@@ -1070,6 +2287,7 @@ function PathFinderModule:update(dt)
                             self.h_score[neighbor] = self.h_score[neighbor] or self:estimate_cost(neighbor, self.nodeGoal)
                             self.f_score[neighbor] = tentative_g_score + self.h_score[neighbor]
                             self.openset[neighbor] = true
+                            self:pushOpenNode(neighbor, self.f_score[neighbor])
                         end
                     end
                 end
@@ -1105,6 +2323,11 @@ function PathFinderModule:update(dt)
                         )
                     end
 
+                    self:printStrictSummary("grid")
+                    self:printTrip("grid")
+                    if self.gridScaleStep ~= nil and self.gridScaleStep > 1 then
+                        PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: path found with %.1f m cells", self.minTurnRadius)
+                    end
                     self.isFinished = true
                     return  -- found path
                 end
@@ -1353,7 +2576,7 @@ function PathFinderModule:checkGridCell(cell)
     local worldPos = self:gridLocationToWorldLocation(cell)
     --Try going through the checks in a way that fast checks happen before slower ones which might then be skipped
 
-    cell.isOnField = AutoDrive.checkIsOnField(worldPos.x, 0, worldPos.z)
+    cell.isOnField = PathFinderModule.getMapOnFieldAt(worldPos.x, worldPos.z)
     if self.restrictToField and (self.fallBackMode1 and not self.fallBackMode2) then
         -- limit cells to field border only possible if started on field
         cell.bordercells = cell.incoming.bordercells + 1      -- by default we assume the new cell is not on field, so increase the counter
@@ -1424,7 +2647,7 @@ function PathFinderModule:checkGridCell(cell)
         local shapeDefinition = self:getShapeDefByDirectionType(cell)   --> return shape for the cell according to direction, on ground level, self.vehicleMinHeight
         local ignoreObstaclesUpToHeight = 0.2
         local shapes = overlapBox(shapeDefinition.x, shapeDefinition.y + ignoreObstaclesUpToHeight, shapeDefinition.z, 0, shapeDefinition.angleRad, 0, shapeDefinition.widthX, shapeDefinition.height - ignoreObstaclesUpToHeight, shapeDefinition.widthZ, "collisionTestCallbackIgnore", nil, self.mask, true, true, true, true)
-        cell.hasCollision = cell.hasCollision or (shapes > 0)
+        cell.hasCollision = cell.hasCollision or (shapes > 0) or self:boxHitsBlockedZone(shapeDefinition.x, shapeDefinition.z, shapeDefinition.angleRad, shapeDefinition.widthX, shapeDefinition.widthZ)
         if cell.hasCollision then
             if self.vehicle ~= nil and self.vehicle.ad ~= nil and self.vehicle.ad.debug ~= nil and AutoDrive.debugVehicleMsg ~= nil then
                 PathFinderModule.debugVehicleMsg(self.vehicle,
@@ -1614,20 +2837,70 @@ function PathFinderModule:cellDistance(cell)
     return MathUtil.vector2Length(self.targetCell.x - cell.x, self.targetCell.z - cell.z)
 end
 
+PathFinderModule.CELL_MAX_RATIO = 0.10
+
+-- crop of a grid cell, read from the field map: one share for every crop at once
 function PathFinderModule:checkForFruitInArea(cell, corners)
+    if self.goingToNetwork then
+        -- on the way to network, check all fruit types
+        self.fruitToCheck = nil
+    end
+    local filter = self.fruitToCheck
+    if self.strictFruit then
+        filter = nil
+    end
+    local ratio, found = PathFinderModule.getMapCropRatio(filter, corners[1].x, corners[1].z, corners[2].x, corners[2].z, corners[3].x, corners[3].z)
+    if found ~= nil and (self.fruitToCheck == nil or self.fruitToCheck < 1) and not self.goingToNetwork then
+        self.fruitToCheck = found
+    end
+    local hasFruit = ratio > PathFinderModule.CELL_MAX_RATIO
+    if hasFruit and self.isNewPF then
+        local center = cell.worldPos or self:gridLocationToWorldLocation(cell)
+        if self:isFruitIsland(filter, center.x, center.z) then
+            hasFruit = false
+        end
+    end
+    local wasRestricted = cell.isRestricted
+    cell.isRestricted = cell.isRestricted or hasFruit
+    if not wasRestricted and cell.isRestricted then
+        self.strictFruitRefusals = (self.strictFruitRefusals or 0) + 1
+    end
+    cell.hasFruit = hasFruit
+    cell.fruitValue = ratio
+    --Allow fruit in the last few grid cells
+    if (self:cellDistance(cell) <= 3 and self.goingToPipe) then
+        cell.isRestricted = false or wasRestricted
+    end
+    -- the vehicle already stands there: crop in the start cell (or within START_CROP_RADIUS) does not block the way out,
+    -- any further the search has to follow the cut strip
+    local nearStart = false
+    if hasFruit and not wasRestricted and self.startX ~= nil then
+        local center = cell.worldPos or self:gridLocationToWorldLocation(cell)
+        nearStart = MathUtil.vector2Length(center.x - self.startX, center.z - self.startZ) < PathFinderModule.START_CROP_RADIUS
+    end
+    if hasFruit and not wasRestricted and (nearStart or (self.startCell ~= nil and cell.x ~= nil and cell.z ~= nil
+        and cell.x == self.startCell.x and cell.z == self.startCell.z)) then
+        cell.isRestricted = false
+        cell.hasFruit = false
+    end
+end
+
+-- previous check, density map read for each crop type (kept for reference, not used)
+function PathFinderModule:checkForFruitInAreaDensity(cell, corners)
 
     if self.goingToNetwork then
         -- on the way to network, check all fruit types
         self.fruitToCheck = nil
     end
-    if self.fruitToCheck == nil then
+    if self.fruitToCheck == nil or self.strictFruit then
+        -- strict: every standing crop counts, not only the one found in the combine tank
         for _, fruitType in pairs(g_fruitTypeManager:getFruitTypes()) do
             if not (fruitType == g_fruitTypeManager:getFruitTypeByName("MEADOW")) then
                 local fruitTypeIndex = fruitType.index
                 self:checkForFruitTypeInArea(cell, fruitTypeIndex, corners)
             end
             --stop if cell is already restricted and/or fruit type is now known
-            if cell.isRestricted ~= false or self.fruitToCheck ~= nil then
+            if cell.isRestricted ~= false or (self.fruitToCheck ~= nil and not self.strictFruit) then
                 break
             end
         end
@@ -1643,8 +2916,18 @@ function PathFinderModule:checkForFruitTypeInArea(cell, fruitTypeIndex, corners)
     if (self.fruitToCheck == nil or self.fruitToCheck < 1) and (fruitValue > PathFinderModule.MIN_FRUIT_VALUE) then
         self.fruitToCheck = fruitTypeIndex
     end
+    if fruitValue > PathFinderModule.MIN_FRUIT_VALUE and self.isNewPF then
+        -- Dubins cells carry their own world position, their x/z are not grid coordinates
+        local center = cell.worldPos or self:gridLocationToWorldLocation(cell)
+        if self:isFruitIsland(fruitTypeIndex, center.x, center.z) then
+            fruitValue = 0
+        end
+    end
     local wasRestricted = cell.isRestricted
     cell.isRestricted = cell.isRestricted or (fruitValue > PathFinderModule.MIN_FRUIT_VALUE)
+    if not wasRestricted and cell.isRestricted then
+        self.strictFruitRefusals = (self.strictFruitRefusals or 0) + 1
+    end
 
     cell.hasFruit = (fruitValue > PathFinderModule.MIN_FRUIT_VALUE)
     cell.fruitValue = fruitValue
@@ -1856,8 +3139,13 @@ function PathFinderModule:getShapeDefByDirectionType_New(cell)
 
     shapeDefinition.x = worldPos.x
     shapeDefinition.z = worldPos.z
-    shapeDefinition.widthX = self.minTurnRadius / 2
-    shapeDefinition.widthZ = self.minTurnRadius / 2
+    -- a small cell is narrower than the vehicle: the obstacle check covers at least the train width
+    local halfSize = math.max(self.minTurnRadius / 2, (self.trainHalfWidth or 0) + 0.5)
+    if self:isOffFieldReduced(worldPos.x, worldPos.z, cell.isOnField) then
+        halfSize = math.max(halfSize, (self.trainHalfWidth or 0) + 0.5 + PathFinderModule.OFF_FIELD_EXTRA_MARGIN)
+    end
+    shapeDefinition.widthX = halfSize
+    shapeDefinition.widthZ = halfSize
 
     local corners = self:getCornersFromShapeDefinition(shapeDefinition)
     if corners ~= nil then
@@ -2208,6 +3496,19 @@ function PathFinderModule:smoothResultingPPPath_Refined()
 
                 local corner4X = node.x - math.cos(rightAngle) * sideLength
                 local corner4Z = node.z + math.sin(rightAngle) * sideLength
+                -- fruit check of the shortcut: same corridor as the grid search (train width + margin), not the whole cell,
+                -- or a strip along standing crop is never straightened and the route zigzags
+                local fruitSide = self.trainHalfWidth or sideLength
+                -- shortcuts keep a margin from the crop: the vehicle drives in the free strip, not along the crop edge
+                if self.trainHalfWidth ~= nil then
+                    fruitSide = self.trainHalfWidth + PathFinderModule.SMOOTH_FRUIT_MARGIN
+                end
+                local fruitCornerX = node.x - math.cos(leftAngle) * fruitSide
+                local fruitCornerZ = node.z + math.sin(leftAngle) * fruitSide
+                local fruitCorner2X = nodeAhead.x - math.cos(leftAngle) * fruitSide
+                local fruitCorner2Z = nodeAhead.z + math.sin(leftAngle) * fruitSide
+                local fruitCorner4X = node.x - math.cos(rightAngle) * fruitSide
+                local fruitCorner4Z = node.z + math.sin(rightAngle) * fruitSide
                 local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, nodeAhead.x, 1, nodeAhead.z)
 
                 if not hasCollision then
@@ -2219,6 +3520,7 @@ function PathFinderModule:smoothResultingPPPath_Refined()
                         local shapes = overlapBox(worldPos.x + vectorX / 2, y + self.vehicleMinHeight / 2, worldPos.z + vectorZ / 2, 0, angleRad, 0, length / 2 + 2.5, self.vehicleMinHeight / 2, sideLength + 1.5, "Ignore", nil, self.mask, true, true, true, true)
                         hasCollision = hasCollision or (shapes > 0)
                     end
+                    hasCollision = hasCollision or self:boxHitsBlockedZone(worldPos.x + vectorX / 2, worldPos.z + vectorZ / 2, angleRad, length / 2 + 2.5, sideLength + 1.5)
 
                     if hasCollision then
                         if self.vehicle ~= nil and self.vehicle.ad ~= nil and self.vehicle.ad.debug ~= nil and AutoDrive.debugVehicleMsg ~= nil then
@@ -2262,51 +3564,41 @@ function PathFinderModule:smoothResultingPPPath_Refined()
                     local cornerWide4X = node.x - math.cos(rightAngle) * sideLength * 4
                     local cornerWide4Z = node.z + math.sin(rightAngle) * sideLength * 4
 
-                    if self.goingToNetwork then
-                        -- check for all fruit types
-                        for _, fruitType in pairs(g_fruitTypeManager:getFruitTypes()) do
-                            if not (fruitType == g_fruitTypeManager:getFruitTypeByName("MEADOW")) then
-                                local fruitTypeIndex = fruitType.index
-                                local fruitValue = 0
-                                if self.isSecondChasingVehicle then
-                                    fruitValue = AutoDrive.getFruitValue(fruitTypeIndex, cornerWideX, cornerWideZ, cornerWide2X, cornerWide2Z, cornerWide4X, cornerWide4Z)
-                                else
-                                    fruitValue = AutoDrive.getFruitValue(fruitTypeIndex, cornerX, cornerZ, corner2X, corner2Z, corner4X, corner4Z)
-                                end
-                                hasCollision = hasCollision or (fruitValue > 50)
-                                if hasCollision then
-
-                                    if self.vehicle ~= nil and self.vehicle.ad ~= nil and self.vehicle.ad.debug ~= nil and AutoDrive.debugVehicleMsg ~= nil then
-                                        PathFinderModule.debugVehicleMsg(self.vehicle,
-                                            string.format("PFM smoothResultingPPPath_Refined hasCollision %d",
-                                                7
-                                            )
-                                        )
-                                    end
-                                    break
-                                end
-                            end
-                        end
+                    local ratio
+                    if self.isSecondChasingVehicle then
+                        ratio = PathFinderModule.getMapCropRatio(self:getCropFilter(), cornerWideX, cornerWideZ, cornerWide2X, cornerWide2Z, cornerWide4X, cornerWide4Z)
                     else
-                        -- check only for fruit type detected on field
-                        if self.fruitToCheck ~= nil then
-                            local fruitValue = 0
-                            if self.isSecondChasingVehicle then
-                                fruitValue = AutoDrive.getFruitValue(self.fruitToCheck, cornerWideX, cornerWideZ, cornerWide2X, cornerWide2Z, cornerWide4X, cornerWide4Z)
-                            else
-                                fruitValue = AutoDrive.getFruitValue(self.fruitToCheck, cornerX, cornerZ, corner2X, corner2Z, corner4X, corner4Z)
-                            end
-                            hasCollision = hasCollision or (fruitValue > 50)
+                        ratio = PathFinderModule.getMapCropRatio(self:getCropFilter(), fruitCornerX, fruitCornerZ, fruitCorner2X, fruitCorner2Z, fruitCorner4X, fruitCorner4Z)
+                    end
+                    if self:getCropFilter() ~= nil or self.goingToNetwork or self.strictFruit then
+                        hasCollision = hasCollision or ratio > PathFinderModule.FRUIT_MAX_RATIO
+                    end
+                end
 
-                            if hasCollision then
-                                if self.vehicle ~= nil and self.vehicle.ad ~= nil and self.vehicle.ad.debug ~= nil and AutoDrive.debugVehicleMsg ~= nil then
-                                    PathFinderModule.debugVehicleMsg(self.vehicle,
-                                        string.format("PFM smoothResultingPPPath_Refined hasCollision %d",
-                                            8
-                                        )
-                                    )
-                                end
-                            end
+                -- same crop rule as the final check (slices of FRUIT_SLICE_LENGTH), with the margin: a shortcut the check would refuse is not made
+                if not hasCollision and self.avoidFruitSetting and not self.fallBackMode3 and self.trainHalfWidth ~= nil and not self.isSecondChasingVehicle then
+                    hasCollision = not self:isFruitStretchClear(node, nodeAhead, fruitSide)
+                end
+
+                -- restrict to field: the shortcut must stay on the field too, checked on both sides of the train
+                if not hasCollision and self.restrictToField and not (self.fallBackMode1 or self.fallBackMode2) then
+                    local halfWidth = (self.trainHalfWidth or 3) - PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN
+                    local sideX, sideZ = math.cos(leftAngle) * halfWidth, -math.sin(leftAngle) * halfWidth
+                    for _, t in ipairs({0, 0.5, 1}) do
+                        local px, pz = node.x + vectorX * t, node.z + vectorZ * t
+                        if not self:isTrainSideAllowed(px + sideX, pz + sideZ) or not self:isTrainSideAllowed(px - sideX, pz - sideZ) then
+                            hasCollision = true
+                            break
+                        end
+                    end
+
+                    if hasCollision then
+                        if self.vehicle ~= nil and self.vehicle.ad ~= nil and self.vehicle.ad.debug ~= nil and AutoDrive.debugVehicleMsg ~= nil then
+                            PathFinderModule.debugVehicleMsg(self.vehicle,
+                                string.format("PFM smoothResultingPPPath_Refined hasCollision %d",
+                                    10
+                                )
+                            )
                         end
                     end
                 end
@@ -2369,6 +3661,59 @@ function PathFinderModule:smoothResultingPPPath_Refined()
         end
 
         self.wayPoints = self.filteredWPs
+        -- the cells can be wider than a free strip: a path found on the grid may still cross crop or an obstacle
+        if self.gridScaleStep ~= nil and not self.chasingVehicle and not self.isSecondChasingVehicle then
+            local badIndex, reason = self:findBlockedStretch()
+            if badIndex ~= nil then
+                local p = self.wayPoints[badIndex]
+                if self.gridScaleStep < PathFinderModule.GRID_STEPS then
+                    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: path in %.1f m cells refused (%s at %.0f,%.0f), finer search", self.minTurnRadius, tostring(reason), p.x, p.z)
+                    self.isFinished = false
+                    self:shrinkGrid()
+                    return
+                end
+                if (self.strictFruit or self.strictField) and self:usePartialPath(badIndex) then
+                    -- the clean beginning of the route is kept, the task plans again on arrival
+                elseif self.strictFruit or self.strictField then
+                    -- strict: better wait and plan again than drive through the crop, the calling task retries
+                    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: no clean path (%s at %.0f,%.0f), strict: waiting and new try", tostring(reason), p.x, p.z)
+                    self:abort()
+                    self.smoothStep = 3
+                    return
+                else
+                    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: path in %.1f m cells kept despite %s at %.0f,%.0f (no better one)", self.minTurnRadius, tostring(reason), p.x, p.z)
+                end
+            end
+            if self.partialPath and not self:trimPartialEnd() then
+                PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path without a clean stop point (facing the harvester), waiting and new try")
+                self:abort()
+                self.smoothStep = 3
+                return
+            end
+        end
+        if self.gridScaleStep ~= nil and self.gridScaleStep > 1 then
+            local kept, sharp = self:roundCornersToTurnRadius()
+            kept, sharp = kept or 0, sharp or 0
+            -- a corner too sharp for the train cannot be driven: finer grid, and on the finest one no route (strict)
+            if sharp > 0 and self.gridScaleStep < PathFinderModule.GRID_STEPS then
+                PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: %d corner(s) too sharp in %.1f m cells, finer search", sharp, self.minTurnRadius)
+                self.isFinished = false
+                self:shrinkGrid()
+                return
+            elseif sharp > 0 and (self.strictFruit or self.strictField) then
+                PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: %d corner(s) too sharp for the train even in %.1f m cells, strict: waiting and new try", sharp, self.minTurnRadius)
+                self:abort()
+                self.smoothStep = 3
+                return
+            end
+            -- zigzag: the points of a coarse grid fall badly in the free strip, a finer grid follows it
+            if kept > PathFinderModule.ZIGZAG_MAX_KEPT and self.gridScaleStep < PathFinderModule.GRID_STEPS then
+                PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: zigzag in %.1f m cells (%d corners), finer search", self.minTurnRadius, kept)
+                self.isFinished = false
+                self:shrinkGrid()
+                return
+            end
+        end
 
         self.smoothDone = true
 
@@ -2687,13 +4032,14 @@ function PathFinderModule:isDriveableAstar(cell)
     local worldPos = self:gridLocationToWorldLocation(cell)
     --Try going through the checks in a way that fast checks happen before slower ones which might then be skipped
 
-    cell.isOnField = AutoDrive.checkIsOnField(worldPos.x, 0, worldPos.z)
+    cell.isOnField = PathFinderModule.getMapOnFieldAt(worldPos.x, worldPos.z)
 
     -- check the most probable restrictions on field first to prevent unneccessary checks
     if not cell.isRestricted and self.restrictToField and not (self.fallBackMode1 or self.fallBackMode2) then
         -- in fallBackMode1 we ignore the field restriction
-        cell.isRestricted = cell.isRestricted or (not cell.isOnField)
-        if not cell.isOnField then
+        local fieldAllowed = self:isFieldPositionAllowed(worldPos.x, worldPos.z, cell.isOnField)
+        cell.isRestricted = cell.isRestricted or (not fieldAllowed)
+        if not fieldAllowed then
             PathFinderModule.debugMsg(self.vehicle, "PFM:isDriveableAstar not cell.isOnField xz %d,%d "
                 , cell.x, cell.z
             )
@@ -2708,8 +4054,12 @@ function PathFinderModule:isDriveableAstar(cell)
 
     if not cell.isRestricted and self.avoidFruitSetting and not self.fallBackMode3 then
         -- check for fruit
-        self:checkForFruitInArea(cell, corners) -- set cell.isRestricted if fruit found
-        table.insert(self.fruitAreas, corners)
+        local fruitCorners = corners
+        if PathFinderModule.FRUIT_CHECK_TRAIN_CORRIDOR and cell.pathFrom ~= nil and not self.isSecondChasingVehicle then
+            fruitCorners = self:getCorridorCorners(cell.pathFrom, cell) or corners
+        end
+        self:checkForFruitInArea(cell, fruitCorners) -- set cell.isRestricted if fruit found
+        table.insert(self.fruitAreas, fruitCorners)
         if cell.isRestricted then
             PathFinderModule.debugMsg(self.vehicle, "PFM:isDriveableAstar cell.isRestricted xz %d,%d fruit found %s"
                 , cell.x, cell.z
@@ -2737,6 +4087,7 @@ function PathFinderModule:isDriveableAstar(cell)
         self.collisionhits = 0
         local shapes = overlapBox(cell.shapeDefinition.x, cell.shapeDefinition.y + cell.shapeDefinition.height / 2, cell.shapeDefinition.z, 0, cell.shapeDefinition.angleRad, 0, cell.shapeDefinition.widthX, cell.shapeDefinition.height / 2, cell.shapeDefinition.widthZ, "collisionTestCallback", self, self.mask, true, true, true, true)
         cell.hasCollision = cell.hasCollision or (self.collisionhits > 0)
+            or self:boxHitsBlockedZone(cell.shapeDefinition.x, cell.shapeDefinition.z, cell.shapeDefinition.angleRad, cell.shapeDefinition.widthX, cell.shapeDefinition.widthZ)
         cell.isRestricted = cell.isRestricted or cell.hasCollision
         if cell.hasCollision then
             PathFinderModule.debugMsg(self.vehicle, "PFM:isDriveableAstar cell.hasCollision xz %d,%d collision"
@@ -2760,7 +4111,47 @@ function PathFinderModule:isDriveableAstar(cell)
             )
         end
     end
+    if cell.isRestricted then
+        local diag = self.diag or {}
+        self.diag = diag
+        local reason = "vehicle"
+        if cell.isOnField ~= nil and self.restrictToField and not (self.fallBackMode1 or self.fallBackMode2) and not self:isFieldPositionAllowed(worldPos.x, worldPos.z, cell.isOnField) then
+            reason = "field"
+        elseif cell.hasFruit then
+            reason = "crop"
+        elseif cell.hasCollision then
+            reason = "obstacle/slope"
+        end
+        diag[reason] = (diag[reason] or 0) + 1
+        PathFinderModule.addSearchCell(worldPos.x, worldPos.z, reason)
+    else
+        self.diagFree = (self.diagFree or 0) + 1
+        PathFinderModule.addSearchCell(worldPos.x, worldPos.z, "free")
+    end
     return not(cell.isRestricted)
+end
+
+-- one line: why the cells of the last search were refused
+function PathFinderModule:getDiagText()
+    local diag = self.diag or {}
+    local best = math.huge
+    if self.closedset ~= nil and self.nodeGoal ~= nil then
+        for node, _ in pairs(self.closedset) do
+            if node.x ~= nil and node.z ~= nil then
+                best = math.min(best, MathUtil.vector2Length(node.x - self.nodeGoal.x, node.z - self.nodeGoal.z))
+            end
+        end
+    end
+    local targetCrop = -1
+    if self.target ~= nil then
+        targetCrop = PathFinderModule.getMapCropRatio(nil, self.target.x - 5, self.target.z - 5, self.target.x + 5, self.target.z - 5, self.target.x - 5, self.target.z + 5)
+    end
+    local text = string.format("free %d, refused: field %d, crop %d, obstacle/slope %d, vehicle %d, field map %d cells, step %d/%d, target %.0f,%.0f crop around %.0f %%, closest cell %.0f cells away, blocked %s",
+        self.diagFree or 0, diag["field"] or 0, diag["crop"] or 0, diag["obstacle/slope"] or 0, diag["vehicle"] or 0, PathFinderModule.fieldMapCount,
+        self.steps or 0, self.max_pathfinder_steps or 0, self.target ~= nil and self.target.x or 0, self.target ~= nil and self.target.z or 0, targetCrop * 100, best, tostring(self.completelyBlocked))
+    self.diag = {}
+    self.diagFree = 0
+    return text
 end
 
  -- Cost of two adjacent nodes
@@ -2779,20 +4170,60 @@ end
 -- current = self:pop_best_node(self.openset, self.f_score)
 -- return: node / nil
 -- self.openset, f_score
-function PathFinderModule:pop_best_node(set, score)
-    local best, node = math.huge, nil
-
-    for k, v in pairs(set) do
-        local s = score[k]
-
-        if s < best then
-            best  = s or math.huge
-            node = k
+-- the open set is mirrored in a binary heap (self.openHeap) ordered by f score,
+-- entries whose score changed or which were already taken are skipped
+function PathFinderModule:pushOpenNode(node, f)
+    local heap = self.openHeap
+    local i = #heap + 1
+    heap[i] = {f = f, node = node}
+    while i > 1 do
+        local parent = math.floor(i / 2)
+        if heap[parent].f <= heap[i].f then
+            break
         end
+        heap[parent], heap[i] = heap[i], heap[parent]
+        i = parent
     end
-    if not node then return end
-    set[node] = nil
-    return node
+end
+
+function PathFinderModule:popOpenEntry()
+    local heap = self.openHeap
+    local count = #heap
+    if count == 0 then
+        return nil
+    end
+    local top = heap[1]
+    heap[1] = heap[count]
+    heap[count] = nil
+    count = count - 1
+    local i = 1
+    while true do
+        local left, right, smallest = i * 2, i * 2 + 1, i
+        if left <= count and heap[left].f < heap[smallest].f then
+            smallest = left
+        end
+        if right <= count and heap[right].f < heap[smallest].f then
+            smallest = right
+        end
+        if smallest == i then
+            break
+        end
+        heap[smallest], heap[i] = heap[i], heap[smallest]
+        i = smallest
+    end
+    return top
+end
+
+function PathFinderModule:pop_best_node(set, score)
+    local entry = self:popOpenEntry()
+    while entry ~= nil do
+        local node = entry.node
+        if set[node] and score[node] == entry.f then
+            set[node] = nil
+            return node
+        end
+        entry = self:popOpenEntry()
+    end
 end
 
 -- {}, self.came_from, self.nodeGoal
@@ -2932,6 +4363,7 @@ function PathFinderModule:get_neighbors(node, fromNode, add_neighbor_fn)
             local tnode = self:get_node(x + offset[1], z + offset[2])
             tnode.direction = offset.direction
             tnode.from_node = fromNode
+            tnode.pathFrom = node
             add_neighbor_fn(tnode)
         end
     end
@@ -2974,6 +4406,7 @@ function PathFinderModule:setupNew(behindStartCell, startCell, targetCell, userd
     )
     self.cachedNodes = {}
     self.openset = {}
+    self.openHeap = {}
     self.closedset = {}
     self.came_from = {}
     self.g_score = {}
@@ -3002,6 +4435,7 @@ function PathFinderModule:setupNew(behindStartCell, startCell, targetCell, userd
     self.came_from[self.nodeStart] = self.nodeBehindStart
 
     self.openset[self.nodeStart] = true
+    self:pushOpenNode(self.nodeStart, self.f_score[self.nodeStart])
     self.closedset[self.nodeBehindStart] = true
     self:isDriveableAstar(self.nodeStart)
     self:setBlockedGoal()
@@ -3037,7 +4471,9 @@ function PathFinderModule:appendWayPointsNew()
         end
     end
 
-    if self.appendWayPoints ~= nil then
+    if self.partialPath then
+        self.smoothStep = 3
+    elseif self.appendWayPoints ~= nil then
         for i = 1, #self.appendWayPoints, 1 do
             self.wayPoints[#self.wayPoints + 1] = self.appendWayPoints[i]
         end
@@ -3061,12 +4497,13 @@ function PathFinderModule:isDriveableDubins(cell)
 
     --Try going through the checks in a way that fast checks happen before slower ones which might then be skipped
 
-    cell.isOnField = AutoDrive.checkIsOnField(cell.worldPos.x, 0, cell.worldPos.z)
+    cell.isOnField = PathFinderModule.getMapOnFieldAt(cell.worldPos.x, cell.worldPos.z)
 
     -- check the most probable restrictions on field first to prevent unneccessary checks
     if not cell.isRestricted and self.restrictToField and not (self.fallBackMode1 or self.fallBackMode2) then
-        cell.isRestricted = cell.isRestricted or (not cell.isOnField)
-        if not cell.isOnField then
+        local fieldAllowed = self:isFieldPositionAllowed(cell.worldPos.x, cell.worldPos.z, cell.isOnField)
+        cell.isRestricted = cell.isRestricted or (not fieldAllowed)
+        if not fieldAllowed then
             PathFinderModule.debugMsg(self.vehicle, "PFM:isDriveableDubins not cell.isOnField xz %d,%d "
                 , cell.x, cell.z
             )
@@ -3116,6 +4553,7 @@ function PathFinderModule:isDriveableDubins(cell)
         self.collisionhits = 0
         local shapes = overlapBox(cell.worldPos.x, cell.worldPos.y + cell.height / 2, cell.worldPos.z, 0, cell.t, 0, sizeMax, cell.height / 2, sizeMax, "collisionTestCallback", self, self.mask, true, true, true, true)
         cell.hasCollision = cell.hasCollision or (self.collisionhits > 0)
+            or self:boxHitsBlockedZone(cell.worldPos.x, cell.worldPos.z, cell.t, sizeMax, sizeMax)
         cell.isRestricted = cell.isRestricted or cell.hasCollision
         if cell.hasCollision then
             PathFinderModule.debugMsg(self.vehicle, "PFM:isDriveableDubins cell.hasCollision xz %d,%d collision"
@@ -3172,14 +4610,15 @@ function PathFinderModule:getDubinsPath()
             , #self.dubins.outPath
             )
             if self.dubins.outPath and #self.dubins.outPath > 0 then
-                local fromCell = nil
+                local cells = {}
                 for i, wayPoint in ipairs(self.dubins.outPath) do
                     local cell = get_node(wayPoint.x, wayPoint.z)
                     cell.worldPos = {x = wayPoint.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, wayPoint.x, 1, wayPoint.z), z = wayPoint.z}
                     cell.t = wayPoint.t
                     cell.height = self.vehicleMinHeight
-                    cell.incomming = fromCell
-                    fromCell = cell
+                    -- samples are 1 m apart, check the slope against the one 5 samples back
+                    cell.incoming = cells[i - 5]
+                    cells[i] = cell
                     if not self:isDriveableDubins(cell) then
                         result = ADDubins.EDUBNOPATH
                         break
@@ -3193,7 +4632,7 @@ function PathFinderModule:getDubinsPath()
     end
 
     self.dubins.outPath = {}
-    result = self.dubins:dubins_shortest_path(ADDubins.DubinsPath, self.q0, self.q1, self.minTurnRadius)
+    result = self.dubins:dubins_shortest_path(ADDubins.DubinsPath, self.q0, self.q1, self.realTurnRadius or self.minTurnRadius)
     PathFinderModule.debugMsg(self.vehicle, "PFM:getDubinsPath dubins_shortest_path result %d"
         , result
     )
@@ -3204,6 +4643,8 @@ function PathFinderModule:getDubinsPath()
                 , #self.dubins.outPath
                 , result
             )
+            self:printStrictSummary("direct curve")
+            self:printTrip("direct curve")
             self.dubinsPath = self.dubins.outPath
             return self.dubinsPath
         end
@@ -3211,7 +4652,7 @@ function PathFinderModule:getDubinsPath()
 
     for i = 1, 6, 1 do
         self.dubins.outPath = {}
-        result = self.dubins:dubins_path(ADDubins.DubinsPath, self.q0, self.q1, self.minTurnRadius, i)
+        result = self.dubins:dubins_path(ADDubins.DubinsPath, self.q0, self.q1, self.realTurnRadius or self.minTurnRadius, i)
         PathFinderModule.debugMsg(self.vehicle, "PFM:getDubinsPath dubins_path i %d result %d"
             , i
             , result

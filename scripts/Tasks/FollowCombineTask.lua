@@ -18,6 +18,18 @@ FollowCombineTask.MAX_REVERSE_TIME = 30000
 FollowCombineTask.MAX_TURN_TIME = 60000
 FollowCombineTask.MAX_STUCK_TIME = 60000
 FollowCombineTask.WAIT_BEFORE_FINISH_TIME = 8000
+-- straight line to the chase point: checked every LINE_CHECK_INTERVAL, the chase is given up after LINE_BLOCKED_TIME blocked
+FollowCombineTask.LINE_CHECK_INTERVAL = 500
+FollowCombineTask.LINE_BLOCKED_TIME = 2000
+-- checked from the vehicle itself: the crop just in front of the hood counts
+FollowCombineTask.LINE_SKIP_START = 0
+FollowCombineTask.LINE_SKIP_END = 3
+FollowCombineTask.LINE_WIDTH_MARGIN = 0.5
+-- combine turn: the unloader waits until the combine is aligned again and drives forward, a stop alone does not end the turn
+FollowCombineTask.TURN_END_FORWARD_TIME = 3000
+FollowCombineTask.TURN_END_MAX_HEADING_CHANGE = 5
+FollowCombineTask.TURN_HEADING_SAMPLE_TIME = 2000
+FollowCombineTask.TURN_STOPPED_SPEED = 0.0002 -- lastSpeedReal (m/ms) below which the combine counts as stopped
 
 function FollowCombineTask:new(vehicle, combine)
     local o = FollowCombineTask:create()
@@ -40,6 +52,13 @@ function FollowCombineTask:new(vehicle, combine)
     o.angleToCombineHeading = vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombineHeading()
     o.angleToCombine = vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombine()
     o.trailers = nil
+    o.lineCheckTimer = 0
+    o.lineClear = true
+    o.lineBlockedTimer = AutoDriveTON:new()
+    o.lineBlocked = false
+    o.combineInTurn = false
+    o.turnHeadingSamples = {}
+    o.turnHeadingSampleTimer = 0
     o.combineRootVehicle = o.combine:getRootVehicle()
     o.activeUnloading = AutoDrive.getSetting("activeUnloading", o.combineRootVehicle)
     FollowCombineTask.setStateNames(o)
@@ -61,6 +80,7 @@ function FollowCombineTask:update(dt)
     end
 
     self:updateStates(dt)
+    self:updateCombineTurn(dt)
 
     if self.lastState ~= self.state then
         FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update %s -> %s", tostring(self:getStateName(self.lastState)), tostring(self:getStateName()))
@@ -147,7 +167,7 @@ function FollowCombineTask:update(dt)
             return
         end
 
-        if (not self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:isUnloaderOnCorrectSide(self.chaseSide)) and (not AutoDrive.combineIsTurning(self.combine)) then
+        if (not self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:isUnloaderOnCorrectSide(self.chaseSide)) and (not self.combineInTurn) then
             if self.lastChaseSide ~= CombineUnloaderMode.CHASEPOS_REAR then
                 FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - switching chase side from side to elsewhere - let's wait for passby next")
                 self.state = FollowCombineTask.STATE_WAIT_FOR_PASS_BY
@@ -159,7 +179,7 @@ function FollowCombineTask:update(dt)
         if self.combine.ad.isReverseAttached then
             movingDirection = -self.combine.movingDirection
         end
-        if AutoDrive.combineIsTurning(self.combine) then
+        if self.combineInTurn then
             -- harvester turns
             --print("Waiting for turn now - 1- t:" ..  tostring(AutoDrive.combineIsTurning(self.combine)) .. " anglewrongtimer: " .. tostring(self.angleWrongTimer.elapsedTime > 10000))      
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - combineIsTurning")
@@ -179,9 +199,10 @@ function FollowCombineTask:update(dt)
             return
         end
 
-        if AutoDrive.combineIsTurning(self.combine) then
+        if self.combineInTurn then
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_TURN - combineIsTurning")
-            if self.combine.ad.isHarvester and (self.distanceToCombine < ((self.vehicle.size.length + self.combine.size.length) / 2 + 10)) then
+            if self.combine.ad.isHarvester and (self.distanceToCombine < ((self.vehicle.size.length + self.combine.size.length) / 2 + 10))
+                and FollowCombineTask.isCombineReversing(self.combine) then
                 -- harvester
                 -- if combine drive reverse to turn -> reverse to keep distance
                 self:reverse(dt)
@@ -247,16 +268,12 @@ function FollowCombineTask:update(dt)
 
         -- check if we could continue
         local combineSensors = self.combine.ad.sensors or self.combineRootVehicle.ad.sensors
-        if not AutoDrive.combineIsTurning(self.combine) and 
+        -- the turn ends only when the combine is aligned again and drives forward (no more 15 s escape)
+        if not self.combineInTurn and
             (
-                (
-                    combineSensors.frontSensorFruit:pollInfo() and 
-                    (
-                        self.combine.ad.isChopper -- chopper
-                        or self.combine.ad.driveForwardTimer.elapsedTime > 8000 -- Harvester moves
-                    ) 
-                ) 
-                or self.waitForTurnTimer.elapsedTime > 15000 -- turn longer than 15 sec
+                combineSensors.frontSensorFruit:pollInfo() or
+                self.combine.ad.isChopper or
+                self.combine.ad.driveForwardTimer.elapsedTime > 8000
             ) then
             if (self.angleToCombineHeading + self.angleToCombine) < 180 and self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:isUnloaderOnCorrectSide(self.chaseSide) then
                 FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_TURN - combine turn finished - Heading looks good - start chasing again")
@@ -460,6 +477,33 @@ function FollowCombineTask:reverse(dt)
 end
 
 function FollowCombineTask:followChasePoint(dt)
+    if self.combineInTurn then
+        -- combine turning: no line check, a blocked line must not end the chase during the turn
+        self.lineCheckTimer = 0
+        self.lineClear = true
+        self.lineBlockedTimer:timer(false, FollowCombineTask.LINE_BLOCKED_TIME, dt)
+    else
+        self.lineCheckTimer = self.lineCheckTimer - dt
+    end
+    if self.lineCheckTimer < 0 then
+        self.lineCheckTimer = FollowCombineTask.LINE_CHECK_INTERVAL
+        local clear, reason = FollowCombineTask.isChaseLineClear(self.vehicle, self.combine, self.chasePos, self.chaseSide)
+        if not clear and self.lineClear then
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: straight line to the harvester blocked (%s), stopping", tostring(reason))
+        end
+        self.lineClear = clear
+    end
+    self.lineBlockedTimer:timer(not self.lineClear, FollowCombineTask.LINE_BLOCKED_TIME, dt)
+    if not self.lineClear then
+        if self.lineBlockedTimer:done() then
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: still blocked, chase given up, path search")
+            self.lineBlocked = true
+            self.state = FollowCombineTask.STATE_FINISHED
+        end
+        self.vehicle.ad.specialDrivingModule:stopVehicle()
+        self.vehicle.ad.specialDrivingModule:update(dt)
+        return
+    end
     if self:shouldWaitForChasePos(dt) then
         FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:followChasePoint getAngleToChasePos %.0f -> stopVehicle", self:getAngleToChasePos())
         self.vehicle.ad.specialDrivingModule:stopVehicle()
@@ -476,6 +520,177 @@ function FollowCombineTask:followChasePoint(dt)
         end
         self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.chasePos, combineSpeed, false, acc, totalSpeedLimit)
     end
+end
+
+function FollowCombineTask.getCombineHeading(combine)
+    local dx, _, dz = localDirectionToWorld(combine.components[1].node, 0, 0, 1)
+    if combine.ad ~= nil and combine.ad.isReverseAttached then
+        dx, dz = -dx, -dz
+    end
+    return math.deg(math.atan2(dx, dz))
+end
+
+-- latched turn state: starts when the original detection (AutoDrive.combineIsTurning) sees a turn,
+-- ends only when the combine drives forward for TURN_END_FORWARD_TIME with a steady heading
+function FollowCombineTask:updateCombineTurn(dt)
+    local heading = FollowCombineTask.getCombineHeading(self.combine)
+    self.turnHeadingSampleTimer = self.turnHeadingSampleTimer - dt
+    if self.turnHeadingSampleTimer <= 0 then
+        self.turnHeadingSampleTimer = 500
+        table.insert(self.turnHeadingSamples, heading)
+        local maxSamples = FollowCombineTask.TURN_HEADING_SAMPLE_TIME / 500 + 1
+        while #self.turnHeadingSamples > maxSamples do
+            table.remove(self.turnHeadingSamples, 1)
+        end
+    end
+    if AutoDrive.combineIsTurning(self.combine) then
+        if not self.combineInTurn then
+            -- the original detection also says "turning" when less than 20 m of crop is left in front, while the
+            -- combine still harvests straight on: the turn only starts when it really stops, reverses or turns
+            local reason = FollowCombineTask.getTurnStartReason(self.combine, heading, self.turnHeadingSamples)
+            if reason == nil then
+                return
+            end
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: harvester turning (%s), waiting", reason)
+        end
+        self.combineInTurn = true
+        return
+    end
+    if not self.combineInTurn then
+        return
+    end
+    local forward = self.combine.ad.driveForwardTimer.elapsedTime >= FollowCombineTask.TURN_END_FORWARD_TIME
+    local steady = #self.turnHeadingSamples > FollowCombineTask.TURN_HEADING_SAMPLE_TIME / 500
+    if steady then
+        local diff = math.abs(heading - self.turnHeadingSamples[1]) % 360
+        if diff > 180 then
+            diff = 360 - diff
+        end
+        steady = diff <= FollowCombineTask.TURN_END_MAX_HEADING_CHANGE
+    end
+    if forward and steady then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: harvester turn finished (aligned and driving forward), resuming")
+        self.combineInTurn = false
+    end
+end
+
+-- combine driving backwards
+function FollowCombineTask.isCombineReversing(combine)
+    local movingDirection = combine.movingDirection or 1
+    if combine.ad ~= nil and combine.ad.isReverseAttached then
+        movingDirection = -movingDirection
+    end
+    return (combine.lastSpeedReal or 0) * movingDirection <= -0.00005
+end
+
+-- why the turn really starts, nil while the combine still drives straight on
+function FollowCombineTask.getTurnStartReason(combine, heading, samples)
+    if AutoDrive:getIsCPTurning(combine) then
+        return "Courseplay en virage"
+    end
+    local rootVehicle = combine.getRootVehicle ~= nil and combine:getRootVehicle() or nil
+    if rootVehicle ~= nil and rootVehicle.getAIFieldWorkerIsTurning ~= nil and rootVehicle:getAIFieldWorkerIsTurning() then
+        return "helper turning"
+    end
+    if FollowCombineTask.isCombineReversing(combine) then
+        return "reversing"
+    end
+    if (combine.lastSpeedReal or 0) < FollowCombineTask.TURN_STOPPED_SPEED then
+        return "stopped"
+    end
+    if samples ~= nil and #samples > 0 then
+        local diff = math.abs(heading - samples[1]) % 360
+        if diff > 180 then
+            diff = 360 - diff
+        end
+        if diff > FollowCombineTask.TURN_END_MAX_HEADING_CHANGE then
+            return string.format("turned by %.0f deg", diff)
+        end
+    end
+    return nil
+end
+
+function FollowCombineTask.getLogName(vehicle)
+    return vehicle ~= nil and vehicle.getName ~= nil and vehicle:getName() or "?"
+end
+
+-- the chase drives straight to the chase point without a route: the straight line must be free of
+-- buildings, trees and learned blocked zones (vehicles are ignored), never leave the field nor drive onto another
+-- field, nor cross standing crop, whatever the setting. Returns clear, reason
+function FollowCombineTask.isChaseLineClear(vehicle, combine, chasePos, chaseSide)
+    if vehicle == nil or combine == nil or chasePos == nil then
+        return true
+    end
+    local vx, _, vz = getWorldTranslation(vehicle.components[1].node)
+    local dirX, dirZ = chasePos.x - vx, chasePos.z - vz
+    local length = math.sqrt(dirX * dirX + dirZ * dirZ)
+    local checkLength = length - FollowCombineTask.LINE_SKIP_START - FollowCombineTask.LINE_SKIP_END
+    if checkLength < 1 then
+        return true
+    end
+    dirX, dirZ = dirX / length, dirZ / length
+    local a = {x = vx + dirX * FollowCombineTask.LINE_SKIP_START, z = vz + dirZ * FollowCombineTask.LINE_SKIP_START}
+    local b = {x = a.x + dirX * checkLength, z = a.z + dirZ * checkLength}
+    local pathFinder = vehicle.ad.pathFinderModule
+    local halfWidth = pathFinder:getTrainWidth() / 2 + FollowCombineTask.LINE_WIDTH_MARGIN
+    local height = PathFinderModule.getTrainHeight(vehicle) + PathFinderModule.OBSTACLE_HEIGHT_MARGIN
+
+    -- obstacles: same box as the pathfinder's route check
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-dirZ, dirX))
+    local midX, midZ = (a.x + b.x) / 2, (a.z + b.z) / 2
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, midX, 1, midZ)
+    local probe = {hits = 0}
+    probe.callback = FollowCombineTask.lineCollisionCallback
+    overlapBox(midX, y + height / 2, midZ, 0, angleRad, 0, checkLength / 2, height / 2, halfWidth, "callback", probe, AutoDrive.collisionMaskTerrain, true, true, true, true)
+    if probe.hits > 0 then
+        return false, "obstacle"
+    end
+    if pathFinder:boxHitsBlockedZone(midX, midZ, angleRad, checkLength / 2, halfWidth) then
+        return false, "blocked zone"
+    end
+
+    local cx, _, cz = getWorldTranslation(combine.components[1].node)
+    local combineField = PathFinderModule.getFieldAtPosition(cx, cz)
+    local sideX, sideZ = -dirZ * (halfWidth - FollowCombineTask.LINE_WIDTH_MARGIN), dirX * (halfWidth - FollowCombineTask.LINE_WIDTH_MARGIN)
+    local slices = math.max(1, math.ceil(checkLength / 4))
+    for k = 0, slices do
+        local px, pz = a.x + (b.x - a.x) * k / slices, a.z + (b.z - a.z) * k / slices
+        for _, side in ipairs({-1, 1}) do
+            local sx, sz = px + sideX * side, pz + sideZ * side
+            if not AutoDrive.checkIsOnField(sx, 0, sz) then
+                return false, "off the field"
+            end
+            if combineField ~= nil then
+                local field = PathFinderModule.getFieldAtPosition(sx, sz)
+                if field ~= nil and field ~= combineField then
+                    return false, "other field"
+                end
+            end
+        end
+        -- standing crop: same rule as the route check, more than FRUIT_MAX_RATIO of a 4 m stretch at the train width
+        if k < slices then
+            local ex, ez = a.x + (b.x - a.x) * (k + 1) / slices, a.z + (b.z - a.z) * (k + 1) / slices
+            for _, fruitType in pairs(g_fruitTypeManager:getFruitTypes()) do
+                if fruitType.index ~= FruitType.MEADOW and fruitType.index ~= FruitType.GRASS then
+                    if PathFinderModule.getFruitRatio(fruitType.index, px + sideX, pz + sideZ, ex + sideX, ez + sideZ, px - sideX, pz - sideZ) > PathFinderModule.FRUIT_MAX_RATIO then
+                        return false, "crop " .. tostring(fruitType.name)
+                    end
+                end
+            end
+        end
+    end
+    return true
+end
+
+function FollowCombineTask.lineCollisionCallback(probe, transformId)
+    if transformId ~= 0 and transformId ~= g_currentMission.terrainRootNode then
+        -- vehicles are left to the chase as before (combine, other unloaders), only fixed objects count
+        local object = g_currentMission:getNodeObject(transformId)
+        if object == nil or object.rootVehicle == nil then
+            probe.hits = probe.hits + 1
+        end
+    end
+    return true
 end
 
 function FollowCombineTask:shouldWaitForChasePos(dt)

@@ -12,6 +12,8 @@ EmptyHarvesterTask.REVERSE_TIME = 30000
 EmptyHarvesterTask.MAX_STUCK_TIME = 60000
 EmptyHarvesterTask.WAITING_TIME = 7000
 EmptyHarvesterTask.WAITING_FOR_PIPE = 1000
+-- stop retrying the path to the pipe after this many failures in a row
+EmptyHarvesterTask.MAX_PATHFINDER_FAILURES = 6
 
 function EmptyHarvesterTask:new(vehicle, combine)
     local o = EmptyHarvesterTask:create()
@@ -27,6 +29,7 @@ function EmptyHarvesterTask:new(vehicle, combine)
     o.trailers = nil
     o.trailerCount = 0
     o.tractorTrainLength = 0
+    o.pathFinderFailures = 0
     EmptyHarvesterTask.setStateNames(o)
     return o
 end
@@ -73,7 +76,8 @@ function EmptyHarvesterTask:update(dt)
             self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
             if self.wayPoints == nil or #self.wayPoints == 0 then
                 -- If the target/pipe location is blocked, we can issue a notification and stop the task - Otherwise we pause a moment and retry
-                if self.vehicle.ad.pathFinderModule:isTargetBlocked() then
+                self.pathFinderFailures = self.pathFinderFailures + 1
+                if self.vehicle.ad.pathFinderModule:isTargetBlocked() or self.pathFinderFailures >= EmptyHarvesterTask.MAX_PATHFINDER_FAILURES then
                     self:finished(ADTaskModule.DONT_PROPAGATE)
                     self.vehicle:stopAutoDrive()
                     AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_cannot_find_path; %s", 5000, self.vehicle.ad.stateModule:getName(), self.combine.ad.stateModule:getName())

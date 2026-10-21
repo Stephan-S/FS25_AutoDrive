@@ -79,6 +79,19 @@ function CombineUnloaderMode:monitorTasks(dt)
         CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:monitorTasks() - detected stuck vehicle - try reversing out of it now")
         self.vehicle.ad.specialDrivingModule:releaseVehicle()
         self.vehicle.ad.taskModule:abortAllTasks()
+        self.reverseCount = (self.reverseCount or 0) + 1
+        if self.reverseCount > CombineUnloaderMode.MAX_REVERSE_COUNT and self.combine ~= nil then
+            -- already reversed twice for this harvester: stop here and let another unloader take it
+            CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:monitorTasks() - reversed %d times - hand over to another unloader", self.reverseCount - 1)
+            self.vehicle.ad.skipHarvester = self.combine
+            self.vehicle.ad.skipHarvesterUntil = g_time + CombineUnloaderMode.HAND_OVER_TIME
+            ADHarvestManager:unregisterAsUnloader(self.vehicle)
+            self.reverseCount = 0
+            self.failedPathFinder = 0
+            self.followingUnloader = nil
+            self:setToWaitForCall()
+            return
+        end
         self.activeTask = ReverseFromBadLocationTask:new(self.vehicle)
         self.state = self.STATE_REVERSE_FROM_BAD_LOCATION
         self.vehicle.ad.taskModule:addTask(self.activeTask)
@@ -89,6 +102,10 @@ function CombineUnloaderMode:monitorTasks(dt)
         self.failedPathFinder = 0
     end
 end
+
+-- after this many reversals the unloader gives the harvester up to another unloader, for HAND_OVER_TIME ms
+CombineUnloaderMode.MAX_REVERSE_COUNT = 2
+CombineUnloaderMode.HAND_OVER_TIME = 120000
 
 function CombineUnloaderMode:notifyAboutFailedPathfinder()
     CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:notifyAboutFailedPathfinder self.failedPathFinder %s ADGraphManager:getDistanceFromNetwork(self.vehicle) > 20 %s", tostring(self.failedPathFinder), tostring(ADGraphManager:getDistanceFromNetwork(self.vehicle) > 20))
@@ -232,6 +249,7 @@ function CombineUnloaderMode:getNextTask()
         -- check if we should wait / pull up to combines pipe
         nextTask = FollowCombineTask:new(self.vehicle, self.combine)
         self.state = self.STATE_ACTIVE_UNLOAD_COMBINE
+        self.reverseCount = 0
         self.breadCrumbs = Queue:new()
         self.lastBreadCrumb = nil
     elseif self.state == self.STATE_DRIVE_TO_PIPE or self.state == self.STATE_REVERSE_FROM_BAD_LOCATION then
@@ -258,6 +276,10 @@ function CombineUnloaderMode:getNextTask()
         CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getNextTask - STATE_ACTIVE_UNLOAD_COMBINE")
         if filledToUnload then
             nextTask = self:getTaskAfterUnload(filledToUnload)
+        elseif self.lastTask ~= nil and self.lastTask.lineBlocked and not self.lastTask.combineInTurn then
+            -- chase given up on a blocked straight line: plan a route to the combine
+            nextTask = CatchCombinePipeTask:new(self.vehicle, self.combine)
+            self.state = self.STATE_DRIVE_TO_COMBINE
         else
             nextTask = HandleHarvesterTurnTask:new(self.vehicle, self.combine)
             self.state = self.STATE_DRIVE_TO_COMBINE

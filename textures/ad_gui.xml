@@ -15,6 +15,7 @@
         <slice id="arrowExpand" uvs="1798px 0px 128px 128px"/>
         <slice id="avoidFruit_1" uvs="1812px 132px 128px 128px"/>
         <slice id="avoidFruit_2" uvs="1812px 264px 128px 128px"/>
+        <slice id="avoidFruit_3" uvs="1812px 264px 128px 128px"/>
         <slice id="combine" uvs="0px 396px 128px 128px"/>
         <slice id="enableTrafficDetection_1" uvs="132px 396px 128px 128px"/>
         <slice id="enableTrafficDetection_2" uvs="264px 396px 128px 128px"/>
@@ -76,6 +77,7 @@
         <slice id="plusSign" uvs="1716px 792px 128px 128px"/>
         <slice id="restrictToField_1" uvs="1848px 792px 128px 128px"/>
         <slice id="restrictToField_2" uvs="0px 924px 128px 128px"/>
+        <slice id="restrictToField_3" uvs="0px 924px 128px 128px"/>
         <slice id="rotateTargets_1" uvs="132px 924px 128px 128px"/>
         <slice id="rotateTargets_2" uvs="264px 924px 128px 128px"/>
         <slice id="rotateTargets_3" uvs="396px 924px 128px 128px"/>

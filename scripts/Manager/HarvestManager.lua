@@ -334,7 +334,9 @@ function ADHarvestManager:getClosestIdleUnloader(harvester)
         local distance = AutoDrive.getDistanceBetween(unloader, harvester)
         --local distanceMatch = distance <= ADHarvestManager.MAX_SEARCH_RANGE and AutoDrive.getSetting("findDriver")
         local targetsMatch = unloader.ad.stateModule:getFirstMarker() == harvester.ad.stateModule:getFirstMarker()
-        if targetsMatch then --if distanceMatch or targetsMatch then
+        -- an unloader that gave this harvester up after reversing twice is not called back by it for a while
+        local handedOver = unloader.ad.skipHarvester == harvester and unloader.ad.skipHarvesterUntil ~= nil and g_time < unloader.ad.skipHarvesterUntil
+        if targetsMatch and not handedOver then --if distanceMatch or targetsMatch then
             if closestUnloader == nil or distance < closestDistance then
                 closestUnloader = unloader
                 closestDistance = distance

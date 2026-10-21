@@ -120,6 +120,7 @@
 		<text name="gui_ad_drive"										text="Kør" />
 		<text name="gui_ad_off"										text="Fra" />
 		<text name="gui_ad_yes"										text="Ja" />
+		<text name="gui_ad_strict"										text="Strict" />
 		<text name="gui_ad_no"											text="Nej" />
 		<text name="gui_ad_FS22"										text="FS 22" />
 		<text name="gui_ad_FS19"										text="FS 19" />

@@ -32,6 +32,9 @@ function ADCollisionDetectionModule:hasDetectedObstable(dt)
         )
     end
 
+    -- kept to tell a static obstacle from AD traffic (blocked places learned by the pathfinder)
+    self.lastAdTrafficOnRoute = detectAdTrafficOnRoute
+    self.lastReverseSectionBlocked = not self.reverseSectionClear:done()
     self.detectedObstable = detectObstacle or detectAdTrafficOnRoute or not self.reverseSectionClear:done()
     return self.detectedObstable
 end

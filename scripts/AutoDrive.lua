@@ -176,6 +176,7 @@ function AutoDrive:loadMap(name)
 	Logging.info("[AD] Start register later loaded mods end")
 
 	addConsoleCommand('restartMySavegame', 'Restart my savegame', 'restartMySavegame', self)
+	addConsoleCommand('adFieldMap', 'AutoDrive: show / hide the field map of the pathfinder', 'toggleFieldMap', PathFinderModule)
 
 	if g_server ~= nil then
 		AutoDrive.AutoDriveSync = AutoDriveSync.new(g_server ~= nil, g_client ~= nil)
@@ -732,6 +733,8 @@ function AutoDrive:update(dt)
 	ADMessagesManager:update(dt)
 	ADTriggerManager:update(dt)
 	ADRoutesManager:update(dt)
+	PathFinderModule.refreshFieldMap()
+	PathFinderModule.updateFieldScan()
 
     if AutoDrive.devOnUpdate then
         AutoDrive.devOnUpdate(dt)
@@ -739,6 +742,7 @@ function AutoDrive:update(dt)
 end
 
 function AutoDrive:draw()
+	PathFinderModule.drawFieldMap()
 	ADDrawingManager:draw()
 	ADMessagesManager:draw()
 end

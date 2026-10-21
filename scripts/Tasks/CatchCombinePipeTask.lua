@@ -15,6 +15,19 @@ CatchCombinePipeTask.MIN_COMBINE_DISTANCE = 25
 CatchCombinePipeTask.MAX_REVERSE_TIME = 5000
 CatchCombinePipeTask.MAX_STUCK_TIME = 60000
 CatchCombinePipeTask.MAX_COUNT_NEW_PATHFINDING = 20
+-- waiting for a route while the harvester comes towards the unloader: get out of its way
+CatchCombinePipeTask.STATE_CLEAR_WAY = {}
+CatchCombinePipeTask.STATE_WAIT_PASS_BY = {}
+CatchCombinePipeTask.CLEAR_WAY_DISTANCE = 40      -- m in front of the harvester watched
+CatchCombinePipeTask.CLEAR_WAY_MARGIN = 2         -- m added on each side of the cutting width
+CatchCombinePipeTask.CLEAR_WAY_MIN_SPEED = 0.0005 -- harvester speed (lastSpeedReal) counted as driving forward
+CatchCombinePipeTask.CLEAR_WAY_MAX_REVERSE = 20   -- m
+CatchCombinePipeTask.CLEAR_WAY_REVERSE_SPEED = 6  -- km/h
+CatchCombinePipeTask.CLEAR_WAY_TIMEOUT = 25000    -- ms
+CatchCombinePipeTask.CLEAR_WAY_STUCK_TIME = 3000  -- ms without moving while reversing
+CatchCombinePipeTask.CLEAR_WAY_REAR_CHECK = 3     -- m behind the last unit that must be field ground without crop
+CatchCombinePipeTask.PASS_BY_TIMEOUT = 30000      -- ms
+CatchCombinePipeTask.PASS_BY_BEHIND = 5           -- m: the unloader is behind the harvester, it has passed
 
 function CatchCombinePipeTask:new(vehicle, combine)
     local o = CatchCombinePipeTask:create()
@@ -41,7 +54,14 @@ function CatchCombinePipeTask:setUp()
 
     if angleToCombineHeading < 35 and angleToCombine < 90 and AutoDrive.getDistanceBetween(self.vehicle, self.combine) < 60
         and not self.combine.ad.isFixedPipeChopper then
-        self:finished()
+        -- close and aligned: chase straight away, but only if the straight line is free, otherwise plan a route
+        local chasePos, chaseSide = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getPipeChasePosition()
+        local clear, reason = FollowCombineTask.isChaseLineClear(self.vehicle, self.combine, chasePos, chaseSide)
+        if clear then
+            self:finished()
+        else
+            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "CatchCombinePipeTask: harvester close but the straight line is blocked (%s), path search", tostring(reason))
+        end
     end
     self.trailers, _ = AutoDrive.getAllUnits(self.vehicle)
     AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, true)
@@ -72,6 +92,20 @@ function CatchCombinePipeTask:update(dt)
         local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
         self.reverseStartLocation = {x = x, y = y, z = z}
         self.state = CatchCombinePipeTask.STATE_REVERSING
+        return
+    end
+
+    if (self.state == CatchCombinePipeTask.STATE_PATHPLANNING or self.state == CatchCombinePipeTask.STATE_DELAY_PATHPLANNING)
+        and self:isInCombinePath() then
+        self:startClearWay()
+        return
+    end
+
+    if self.state == CatchCombinePipeTask.STATE_CLEAR_WAY then
+        self:updateClearWay(dt)
+        return
+    elseif self.state == CatchCombinePipeTask.STATE_WAIT_PASS_BY then
+        self:updateWaitPassBy(dt)
         return
     end
 
@@ -107,7 +141,6 @@ function CatchCombinePipeTask:update(dt)
                 return
             end
             if self:startNewPathFinding() then
-                self.vehicle.ad.pathFinderModule:addDelayTimer(6000)
                 self.state = CatchCombinePipeTask.STATE_PATHPLANNING
                 return
             end
@@ -178,6 +211,128 @@ end
 function CatchCombinePipeTask:abort()
 end
 
+-- tractor and towed units of the unloader
+function CatchCombinePipeTask:getTrainUnits()
+    local units = {self.vehicle}
+    local all = AutoDrive.getAllUnits(self.vehicle)
+    if all ~= nil then
+        for _, unit in ipairs(all) do
+            if unit ~= self.vehicle and unit.components ~= nil then
+                table.insert(units, unit)
+            end
+        end
+    end
+    return units
+end
+
+-- the harvester drives forward and a unit of the unloader stands in its way: in front of it, within its cutting width
+function CatchCombinePipeTask:isInCombinePath()
+    local combine = self.combine
+    if combine == nil or combine.ad == nil or combine.ad.ADRootNode == nil then
+        return false
+    end
+    local movingDirection = combine.movingDirection or 1
+    if combine.ad.isReverseAttached then
+        movingDirection = -movingDirection
+    end
+    if (combine.lastSpeedReal or 0) * movingDirection < CatchCombinePipeTask.CLEAR_WAY_MIN_SPEED then
+        return false
+    end
+    local laneHalf = math.max(AutoDrive.getFrontToolWidth(combine) or 0, combine.size.width) / 2 + CatchCombinePipeTask.CLEAR_WAY_MARGIN
+    for _, unit in ipairs(self:getTrainUnits()) do
+        local x, y, z = getWorldTranslation(unit.components[1].node)
+        local diffX, _, diffZ = AutoDrive.worldToLocal(combine, x, y, z, combine.ad.ADRootNode)
+        local unitHalfWidth = unit.size ~= nil and unit.size.width / 2 or 1.5
+        if diffZ > 0 and diffZ < CatchCombinePipeTask.CLEAR_WAY_DISTANCE and math.abs(diffX) < laneHalf + unitHalfWidth then
+            return true
+        end
+    end
+    return false
+end
+
+-- ground behind the last unit: field ground without standing crop, across the width of the train
+function CatchCombinePipeTask:isRearClear()
+    local units = self:getTrainUnits()
+    local last = units[#units]
+    local dx, _, dz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local x, _, z = getWorldTranslation(last.components[1].node)
+    local back = (last.size ~= nil and last.size.length / 2 or 3) + CatchCombinePipeTask.CLEAR_WAY_REAR_CHECK
+    local half = self.vehicle.ad.pathFinderModule:getTrainWidth() / 2
+    local rx, rz = x - dx * back, z - dz * back
+    for _, side in ipairs({0, -1, 1}) do
+        local px, pz = rx - dz * half * side, rz + dx * half * side
+        if not AutoDrive.checkIsOnField(px, 0, pz) or PathFinderModule.getMapCropAt(px, pz) ~= 0 then
+            return false
+        end
+    end
+    return true
+end
+
+function CatchCombinePipeTask:startClearWay()
+    if self.state == CatchCombinePipeTask.STATE_PATHPLANNING then
+        self.vehicle.ad.pathFinderModule:reset()
+    end
+    local x, _, z = getWorldTranslation(self.vehicle.components[1].node)
+    self.clearWayStart = {x = x, z = z}
+    self.clearWayTime = 0
+    self.clearWayStuckTime = 0
+    self.clearWayLast = {x = x, z = z}
+    if self:isRearClear() then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "CatchCombinePipeTask: the harvester is coming towards the unloader, reversing out of its way")
+        self.state = CatchCombinePipeTask.STATE_CLEAR_WAY
+    else
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "CatchCombinePipeTask: the harvester is coming towards the unloader, cannot reverse (crop or field edge behind), waiting")
+        self.passByTime = 0
+        self.state = CatchCombinePipeTask.STATE_WAIT_PASS_BY
+    end
+end
+
+function CatchCombinePipeTask:updateClearWay(dt)
+    local x, _, z = getWorldTranslation(self.vehicle.components[1].node)
+    local reversed = MathUtil.vector2Length(x - self.clearWayStart.x, z - self.clearWayStart.z)
+    self.clearWayTime = self.clearWayTime + dt
+    if MathUtil.vector2Length(x - self.clearWayLast.x, z - self.clearWayLast.z) > 0.3 then
+        self.clearWayLast = {x = x, z = z}
+        self.clearWayStuckTime = 0
+    else
+        self.clearWayStuckTime = self.clearWayStuckTime + dt
+    end
+    local reason = nil
+    if not self:isInCombinePath() then
+        reason = "out of its way"
+    elseif reversed >= CatchCombinePipeTask.CLEAR_WAY_MAX_REVERSE then
+        reason = "maximum reverse distance"
+    elseif not self:isRearClear() then
+        reason = "crop or field edge behind"
+    elseif self.clearWayTime > CatchCombinePipeTask.CLEAR_WAY_TIMEOUT or self.clearWayStuckTime > CatchCombinePipeTask.CLEAR_WAY_STUCK_TIME then
+        reason = "reverse blocked"
+    end
+    if reason ~= nil then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "CatchCombinePipeTask: reversing stopped after %.0f m (%s), waiting for the harvester to pass", reversed, reason)
+        self.passByTime = 0
+        self.state = CatchCombinePipeTask.STATE_WAIT_PASS_BY
+        self.vehicle.ad.specialDrivingModule:stopVehicle()
+        self.vehicle.ad.specialDrivingModule:update(dt)
+        return
+    end
+    self.vehicle.ad.specialDrivingModule:driveReverse(dt, CatchCombinePipeTask.CLEAR_WAY_REVERSE_SPEED, 1, self.vehicle.ad.trailerModule:canBeHandledInReverse())
+end
+
+function CatchCombinePipeTask:updateWaitPassBy(dt)
+    self.vehicle.ad.specialDrivingModule:stopVehicle()
+    self.vehicle.ad.specialDrivingModule:update(dt)
+    self.passByTime = self.passByTime + dt
+    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    local _, _, diffZ = AutoDrive.worldToLocal(self.combine, x, y, z, self.combine.ad.ADRootNode)
+    local passed = diffZ < -CatchCombinePipeTask.PASS_BY_BEHIND
+    if passed or (not self:isInCombinePath() and self.passByTime > 2000) or self.passByTime > CatchCombinePipeTask.PASS_BY_TIMEOUT then
+        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "CatchCombinePipeTask: %s, new path search",
+            passed and "the harvester has passed" or (self.passByTime > CatchCombinePipeTask.PASS_BY_TIMEOUT and "waited too long" or "out of its way"))
+        self.waitForCheckTimer.elapsedTime = 4000
+        self.state = CatchCombinePipeTask.STATE_DELAY_PATHPLANNING
+    end
+end
+
 function CatchCombinePipeTask:finished(propagate)
     CatchCombinePipeTask.debugMsg(self.vehicle, "CatchCombinePipeTask:finished()")
     self.vehicle.ad.taskModule:setCurrentTaskFinished(propagate)
@@ -212,6 +367,8 @@ function CatchCombinePipeTask:startNewPathFinding()
         self.vehicle.ad.pathFinderModule:reset()
         self.vehicle.ad.pathFinderModule:startPathPlanningToPipe(self.combine, false)
         -- use false to enable pathfinder fallback
+        -- no clean route in strict: drive part of the way, this task plans again on arrival
+        self.vehicle.ad.pathFinderModule.allowPartialPath = true
         self.combinesStartLocation = {}
         self.combinesStartLocation.x, self.combinesStartLocation.y, self.combinesStartLocation.z = getWorldTranslation(self.combine.components[1].node)
         return true

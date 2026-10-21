@@ -120,6 +120,7 @@
 		<text name="gui_ad_drive"										text="Continua" />
 		<text name="gui_ad_off"										text="Spento" />
 		<text name="gui_ad_yes"										text="Si" />
+		<text name="gui_ad_strict"										text="Strict" />
 		<text name="gui_ad_no"											text="No" />
 		<text name="gui_ad_FS22"										text="FS 22" />
 		<text name="gui_ad_FS19"										text="FS 19" />

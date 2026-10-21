@@ -120,6 +120,7 @@
 		<text name="gui_ad_drive"										text="继续驾驶" />
 		<text name="gui_ad_off"										text="Off" />
 		<text name="gui_ad_yes"										text="是" />
+		<text name="gui_ad_strict"										text="Strict" />
 		<text name="gui_ad_no"											text="否" />
 		<text name="gui_ad_FS22"										text="FS 22" />
 		<text name="gui_ad_FS19"										text="FS 19" />

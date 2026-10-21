@@ -120,6 +120,7 @@
 		<text name="gui_ad_drive"										text="Motorista a caminho" />
 		<text name="gui_ad_off"										text="Off" />
 		<text name="gui_ad_yes"										text="Sim" />
+		<text name="gui_ad_strict"										text="Strict" />
 		<text name="gui_ad_no"											text="Não" />
 		<text name="gui_ad_FS22"										text="FS 22" />
 		<text name="gui_ad_FS19"										text="FS 19" />
