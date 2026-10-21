@@ -351,7 +351,9 @@ function ADDrivePathModule:followWaypoints(dt)
         lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.targetX, y, self.targetZ, self.vehicle:getAISteeringNode())
     end
 
-    if self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) then
+    local obstacleDetected = self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt)
+    self:learnBlockedPlace(dt, obstacleDetected)
+    if obstacleDetected then
         if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:followWaypoints - stopVehicle")
         end
@@ -862,4 +864,55 @@ function ADDrivePathModule:checkForReverseSection()
         , tostring(isReverse), tostring(isLastForwardSection), tostring(isLastReverseSection))
     end
     return isReverse, isLastForwardSection, isLastReverseSection
+end
+
+-- front sensor keeps the vehicle stopped on a calculated route: the place becomes a forbidden zone for all later route searches
+function ADDrivePathModule:learnBlockedPlace(dt, obstacleDetected)
+    local wp = self:getCurrentWayPoint()
+    local blocked = obstacleDetected and self.vehicle.isServer and wp ~= nil and wp.isPathFinderPoint and self:isBlockedByStaticObstacle()
+    if not blocked then
+        self.learnZoneTimer = 0
+        return
+    end
+    if self.learnZoneTimer ~= nil and self.learnZoneTimer < 0 then
+        return
+    end
+    self.learnZoneTimer = (self.learnZoneTimer or 0) + dt
+    if self.learnZoneTimer < PathFinderModule.LEARNED_ZONE_DELAY then
+        return
+    end
+    -- once per stop
+    self.learnZoneTimer = -1
+    if self:isVehicleInFront() then
+        return
+    end
+    local length = self.vehicle.size ~= nil and self.vehicle.size.length or 5
+    local bx, _, bz = AutoDrive.localToWorld(self.vehicle, 0, 0, length / 2 + 1)
+    PathFinderModule.addLearnedZone(bx, bz, self.vehicle:getName())
+end
+
+-- front short sensor blocked, but not by AD traffic or a reverse section
+function ADDrivePathModule:isBlockedByStaticObstacle()
+    local ad = self.vehicle.ad
+    if self:getIsReversing() then
+        return false
+    end
+    local cdm = ad.collisionDetectionModule
+    if cdm.lastAdTrafficOnRoute or cdm.lastReverseSectionBlocked then
+        return false
+    end
+    return ad.sensors ~= nil and ad.sensors.frontSensorDynamicShort ~= nil and ad.sensors.frontSensorDynamicShort:pollInfo() == true
+end
+
+function ADDrivePathModule:isVehicleInFront()
+    local ad = self.vehicle.ad
+    local excludedList = {}
+    local activeTask = ad.taskModule:getActiveTask()
+    if activeTask ~= nil and activeTask.getExcludedVehiclesForCollisionCheck ~= nil then
+        excludedList = activeTask:getExcludedVehiclesForCollisionCheck()
+    end
+    local box = ad.sensors.frontSensorDynamicLong:getBoxShape()
+    local boundingBox = {box.topLeft, box.topRight, box.downRight, box.downLeft}
+    boundingBox[1].y = box.y
+    return AutoDrive:checkForVehicleCollision(self.vehicle, boundingBox, excludedList) == true
 end

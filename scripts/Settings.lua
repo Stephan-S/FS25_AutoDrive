@@ -557,8 +557,9 @@ AutoDrive.settings.showNextPath = {
 }
 
 AutoDrive.settings.avoidFruit = {
-    values = {false, true},
-    texts = {"gui_ad_no", "gui_ad_yes"},
+    -- "strict": same as yes, but the pathfinder never drops it as a fallback
+    values = {false, true, "strict"},
+    texts = {"gui_ad_no", "gui_ad_yes", "gui_ad_strict"},
     default = 2,
     current = 2,
     text = "gui_ad_avoidFruit",
@@ -824,8 +825,9 @@ AutoDrive.settings.activeUnloading = {
 }
 
 AutoDrive.settings.restrictToField = {
-    values = {false, true},
-    texts = {"gui_ad_no", "gui_ad_yes"},
+    -- "strict": same as yes, but the pathfinder never drops it as a fallback
+    values = {false, true, "strict"},
+    texts = {"gui_ad_no", "gui_ad_yes", "gui_ad_strict"},
     default = 1,
     current = 1,
     text = "gui_ad_restrictToField",

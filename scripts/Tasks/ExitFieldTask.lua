@@ -30,21 +30,9 @@ function ExitFieldTask:update(dt)
         if self.vehicle.ad.pathFinderModule:hasFinished() then
             self.wayPoints = self.vehicle.ad.pathFinderModule:getPath()
             if self.wayPoints == nil or #self.wayPoints == 0 then
-                self.failedPathFinder = self.failedPathFinder + 1
-                if self.failedPathFinder > 5 then
-                    self.failedPathFinder = 0
-                    self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:notifyAboutFailedPathfinder()
-                    self:selectNextStrategy()
-                elseif self.vehicle.ad.pathFinderModule:isTargetBlocked() then
-                    -- If the selected field exit isn't reachable, try the next strategy and restart without delay
-                    self:startPathPlanning()
-                elseif self.vehicle.ad.pathFinderModule:timedOut() or self.vehicle.ad.pathFinderModule:isBlocked() then
-                    -- Add some delay to give the situation some room to clear itself
-                    self:startPathPlanning()
-                    self.vehicle.ad.pathFinderModule:addDelayTimer(10000)
-                else
-                    self:startPathPlanning()
-                    self.vehicle.ad.pathFinderModule:addDelayTimer(10000)
+                -- no clean path to this network point: try the next one right away
+                if not self:startPathPlanning() then
+                    return
                 end
             else
                 self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
@@ -85,47 +73,105 @@ function ExitFieldTask:finished()
     self.vehicle.ad.taskModule:setCurrentTaskFinished()
 end
 
-function ExitFieldTask:startPathPlanning()
-    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:startPathPlanning")
-    local closest, closestDistance = self.vehicle:getClosestWayPoint()
-    if self.nextExitStrategy == ExitFieldTask.STRATEGY_CLOSEST then
-        local closestNode = ADGraphManager:getWayPointById(closest)
-        local wayPoints = ADGraphManager:pathFromTo(closest, self.vehicle.ad.stateModule:getSecondWayPoint())
-        if wayPoints ~= nil and #wayPoints > 1 then
-            if closestDistance > AutoDrive.getDriverRadius(self.vehicle) then
-                -- initiate pathFinder only if distance to closest wayPoint is enought to find a path
-                local vecToNextPoint = {x = wayPoints[2].x - closestNode.x, z = wayPoints[2].z - closestNode.z}
-                self.vehicle.ad.pathFinderModule:reset()
-                self.vehicle.ad.pathFinderModule:startPathPlanningTo(closestNode, vecToNextPoint)
-                return true
-            else
-                -- close to network, set task finished
-                self:finished()
-            end
-        else
-            AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_cannot_find_path;", 5000, self.vehicle.ad.stateModule:getName())
-            self.vehicle.ad.taskModule:abortAllTasks()
-            self.vehicle.ad.taskModule:addTask(StopAndDisableADTask:new(self.vehicle))
-        end
-    else
-        local targetNode = ADGraphManager:getWayPointById(self.vehicle.ad.stateModule:getFirstWayPoint())
-        local wayPoints = ADGraphManager:pathFromTo(self.vehicle.ad.stateModule:getFirstWayPoint(), self.vehicle.ad.stateModule:getSecondWayPoint())
-        if wayPoints ~= nil and #wayPoints > 1 then
-            local vecToNextPoint = {x = wayPoints[2].x - targetNode.x, z = wayPoints[2].z - targetNode.z}
-            if AutoDrive.getSetting("exitField", self.vehicle) == 1 and #wayPoints > 6 then
-                targetNode = wayPoints[5]
-                vecToNextPoint = {x = wayPoints[6].x - targetNode.x, z = wayPoints[6].z - targetNode.z}
-            end
-            self.vehicle.ad.pathFinderModule:reset()
-            self.vehicle.ad.pathFinderModule:startPathPlanningTo(targetNode, vecToNextPoint)
-            return true
-        else
-            AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_cannot_find_path;", 5000, self.vehicle.ad.stateModule:getName())
-            self.vehicle.ad.taskModule:abortAllTasks()
-            self.vehicle.ad.taskModule:addTask(StopAndDisableADTask:new(self.vehicle))
+ExitFieldTask.CANDIDATE_MAX_DISTANCE = 200   -- m, network points considered to leave the field
+ExitFieldTask.CANDIDATE_SPACING = 15         -- m between two tried points
+ExitFieldTask.CANDIDATE_COUNT = 6
+ExitFieldTask.FIELD_POINT_MAX_DISTANCE = 500 -- m, field entrance point tried first
+ExitFieldTask.BEHIND_PENALTY = 60            -- m added to points behind the vehicle
+
+-- network points that lead to the destination, easiest first: the closest ones in front of the vehicle,
+-- then the others, the field entrance (route start) included. Each is tried without ever driving
+-- through crops; the first clean path wins, even if it is further away.
+function ExitFieldTask:buildCandidates()
+    local candidates = {}
+    local vx, _, vz = getWorldTranslation(self.vehicle.components[1].node)
+    local dx, _, dz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local minDistance = AutoDrive.getDriverRadius(self.vehicle)
+    local destination = self.vehicle.ad.stateModule:getSecondWayPoint()
+    local routes = {}
+    local closest = self.vehicle:getClosestWayPoint()
+    if closest ~= nil then
+        table.insert(routes, ADGraphManager:pathFromTo(closest, destination, nil, self.vehicle))
+    end
+    local fieldRoute = ADGraphManager:pathFromTo(self.vehicle.ad.stateModule:getFirstWayPoint(), destination, nil, self.vehicle)
+    table.insert(routes, fieldRoute)
+    -- the field's own network point (where the vehicle came in) is tried first, whatever its distance
+    if fieldRoute ~= nil and #fieldRoute > 1 then
+        local fieldWp, nextWp = fieldRoute[1], fieldRoute[2]
+        local distance = MathUtil.vector2Length(fieldWp.x - vx, fieldWp.z - vz)
+        if distance >= minDistance and distance <= ExitFieldTask.FIELD_POINT_MAX_DISTANCE then
+            table.insert(candidates, {wp = fieldWp, vector = {x = nextWp.x - fieldWp.x, z = nextWp.z - fieldWp.z}, score = 0, distance = distance})
         end
     end
-    return false
+
+    local pool = {}
+    local seen = {}
+    for _, route in ipairs(routes) do
+        if route ~= nil and #route > 1 then
+            for i = 1, #route - 1 do
+                local wp, nextWp = route[i], route[i + 1]
+                if wp.id ~= nil and not seen[wp.id] then
+                    seen[wp.id] = true
+                    local distance = MathUtil.vector2Length(wp.x - vx, wp.z - vz)
+                    if distance >= minDistance and distance <= ExitFieldTask.CANDIDATE_MAX_DISTANCE then
+                        local score = distance
+                        if (wp.x - vx) * dx + (wp.z - vz) * dz < 0 then
+                            score = score + ExitFieldTask.BEHIND_PENALTY
+                        end
+                        table.insert(pool, {wp = wp, vector = {x = nextWp.x - wp.x, z = nextWp.z - wp.z}, score = score, distance = distance})
+                    end
+                end
+            end
+        end
+    end
+    table.sort(pool, function(a, b) return a.score < b.score end)
+    for _, c in ipairs(pool) do
+        local farEnough = true
+        for _, chosen in ipairs(candidates) do
+            if MathUtil.vector2Length(c.wp.x - chosen.wp.x, c.wp.z - chosen.wp.z) < ExitFieldTask.CANDIDATE_SPACING then
+                farEnough = false
+                break
+            end
+        end
+        if farEnough then
+            table.insert(candidates, c)
+            if #candidates >= ExitFieldTask.CANDIDATE_COUNT then
+                break
+            end
+        end
+    end
+    return candidates
+end
+
+-- returns true when a path planning was started, false when the task ended
+function ExitFieldTask:startPathPlanning()
+    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:startPathPlanning")
+    if self.candidates == nil then
+        local _, closestDistance = self.vehicle:getClosestWayPoint()
+        if closestDistance ~= nil and closestDistance <= AutoDrive.getDriverRadius(self.vehicle) then
+            -- close to network, set task finished
+            self:finished()
+            return false
+        end
+        self.candidates = self:buildCandidates()
+        self.candidateIndex = 0
+    end
+    self.candidateIndex = self.candidateIndex + 1
+    local candidate = self.candidates[self.candidateIndex]
+    if candidate == nil then
+        ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:startPathPlanning - no clean path to the network (%d point(s) tried), stopping", #self.candidates)
+        AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.WARN, "$l10n_AD_Driver_of; %s $l10n_AD_cannot_find_path;", 5000, self.vehicle.ad.stateModule:getName())
+        self.vehicle.ad.taskModule:abortAllTasks()
+        self.vehicle.ad.taskModule:addTask(StopAndDisableADTask:new(self.vehicle))
+        return false
+    end
+    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:startPathPlanning - trying network point %s (%d/%d, %.0f m)", tostring(candidate.wp.id), self.candidateIndex, #self.candidates, candidate.distance)
+    local pf = self.vehicle.ad.pathFinderModule
+    pf:reset()
+    pf.noFallback = true
+    pf:startPathPlanningTo(candidate.wp, {x = candidate.vector.x, z = candidate.vector.z})
+    self.state = ExitFieldTask.STATE_PATHPLANNING
+    return true
 end
 
 function ExitFieldTask:selectNextStrategy()
