@@ -31,6 +31,8 @@ ADFieldPark.HARVESTER_CLEARANCE = 20                -- m kept between the parked
 ADFieldPark.CLEARANCE_STEP = 4                      -- m between two crop samples around the train
 ADFieldPark.PARALLEL_TOLERANCE = 5                  -- degrees, a parked train within this angle of the border counts as parallel
 ADFieldPark.BORDER_GAPS = {0.5, 1, 1.5, 2, 3, 4}    -- m tried between the footprint (0.5 m wider than the train) and the border
+ADFieldPark.FRINGE = 3                              -- m: crop left by the harvester along the field edge, may be driven over
+ADFieldPark.STRADDLE_GAPS = {0.5, 1, 1.5, 2, 3, 4, 0, -1, -2, -3} -- second pass: astride the border, half on the grass
 ADFieldPark.SAMPLE_STEP = 2                         -- m between two ground samples
 ADFieldPark.QUEUE_GAP = 3                           -- m between two unloaders parked one behind the other
 ADFieldPark.MAX_TRIES = 3                           -- spots tried in turn when no clean path leads to the previous one
@@ -58,6 +60,21 @@ function ADFieldPark.hasGrowingCrop(x, z)
         return false
     end
     return not (fruit:getIsCut(growthState) or fruit:getIsWithered(growthState)), fruitTypeIndex
+end
+
+-- crop strip the harvester left along the field edge (its header does not reach the edge): off field within
+-- ADFieldPark.FRINGE in some direction
+function ADFieldPark.isBorderFringe(x, z)
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 0, z)
+    for _, d in ipairs({1, 2, ADFieldPark.FRINGE}) do
+        for i = 0, 7 do
+            local a = i * math.pi / 4
+            if not AutoDrive.checkIsOnField(x + math.sin(a) * d, y, z + math.cos(a) * d) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- AutoDrive waypoints around a position (computed once per search)
@@ -130,6 +147,10 @@ end
 -- standing crop within ADFieldPark.HARVESTER_CLEARANCE around the footprint: the harvester still works there and
 -- turns on the harvested ground next to it. Small forgotten patches do not count
 function ADFieldPark.hasCropNearby(cx, cz, dx, dz, halfW, halfL)
+    if ADFieldPark.relaxed then
+        -- second pass: no place away from the crop, the harvested headland strip is better than the road
+        return false
+    end
     local clearance, step = ADFieldPark.HARVESTER_CLEARANCE, ADFieldPark.CLEARANCE_STEP
     local cache = {}
     for along = -(halfL + clearance), halfL + clearance, step do
@@ -152,20 +173,31 @@ function ADFieldPark.isGroundFree(cx, cz, dx, dz, halfW, halfL, nearbyWayPoints,
     for _, p in ipairs(ADFieldPark.getOutline(cx, cz, dx, dz, halfW + margin, halfL + margin)) do
         local h = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, p[1], py, p[2])
         minH, maxH = math.min(minH, h), math.max(maxH, h)
-        if not ADFieldPark.isOnField(p[1], h, p[2]) or ADFieldPark.hasGrowingCrop(p[1], p[2]) then
+        local onField = ADFieldPark.isOnField(p[1], h, p[2])
+        -- second pass: the grass along the border is fine too, never another field
+        local onGrass = ADFieldPark.relaxed and not onField and not AutoDrive.checkIsOnField(p[1], h, p[2])
+        if not onField and not onGrass then
+            ADFieldPark.reject = AutoDrive.checkIsOnField(p[1], h, p[2]) and "other field" or "off field"
+            return nil
+        end
+        if ADFieldPark.hasGrowingCrop(p[1], p[2]) and not (ADFieldPark.relaxed and ADFieldPark.isBorderFringe(p[1], p[2])) then
+            ADFieldPark.reject = "crop"
             return nil
         end
     end
     if maxH - minH > ADTrafficYieldModule.MAX_SLOPE_DIFF then
+        ADFieldPark.reject = "slope"
         return nil
     end
     -- the whole train, trailers included, away from the road network
     for _, wp in ipairs(nearbyWayPoints) do
         if ADFieldPark.distanceToFootprint(wp.x, wp.z, cx, cz, dx, dz, halfW, halfL) < ADFieldPark.ROAD_CLEARANCE then
+            ADFieldPark.reject = "road"
             return nil
         end
     end
     if ADFieldPark.hasCropNearby(cx, cz, dx, dz, halfW, halfL) then
+        ADFieldPark.reject = "crop within 20 m"
         return nil
     end
     return maxH
@@ -317,10 +349,12 @@ function ADFieldPark.addQueueCandidates(search)
 end
 
 function ADFieldPark.searchStep(search)
+    ADFieldPark.relaxed = false
     if search.result ~= nil then
         return {}
     end
     ADFieldPark.area = search.area
+    ADFieldPark.relaxed = search.relaxed == true
     if not search.queueDone then
         search.queueDone = true
         ADFieldPark.addQueueCandidates(search)
@@ -424,18 +458,25 @@ function ADFieldPark.addCandidates(search, radius, angle)
     -- stands about 1 m away from it
     local bx, bz, tx, tz, nx, nz = ADFieldPark.findBorder(cx, cz, py)
     if bx == nil then
+        ADFieldPark.count(search, "no border")
         return
     end
     for _, sign in ipairs({1, -1}) do
         local dx, dz = tx * sign, tz * sign
-        for _, gap in ipairs(ADFieldPark.BORDER_GAPS) do
+        for _, gap in ipairs(search.relaxed and ADFieldPark.STRADDLE_GAPS or ADFieldPark.BORDER_GAPS) do
             local px, pz = bx - nx * (halfW + gap), bz - nz * (halfW + gap)
-            local maxH = ADFieldPark.isSpotAllowed(search, px, pz, dx, dz) and ADFieldPark.isGroundFree(px, pz, dx, dz, halfW, halfL, search.nearby, py) or nil
-            if maxH ~= nil then
+            local maxH = nil
+            ADFieldPark.reject = "side or entrance"
+            if ADFieldPark.isSpotAllowed(search, px, pz, dx, dz) then
+                maxH = ADFieldPark.isGroundFree(px, pz, dx, dz, halfW, halfL, search.nearby, py)
+            end
+            if maxH == nil then
+                ADFieldPark.count(search, ADFieldPark.reject)
+            else
                 -- nose pointing away from the entrance: the train drives straight in along the border
                 local ox, oz = px - search.x, pz - search.z
                 local away = (dx * ox + dz * oz) / math.max(MathUtil.vector2Length(ox, oz), 0.1)
-                local cost = 3 * gap + 0.2 * radius - 2 * (dx * search.vdx + dz * search.vdz) - 3 * away
+                local cost = 3 * math.abs(gap) + 0.2 * radius - 2 * (dx * search.vdx + dz * search.vdz) - 3 * away
                 table.insert(search.candidates, {cx = px, cz = pz, dx = dx, dz = dz, maxH = maxH, cost = cost})
                 break
             end
@@ -443,9 +484,33 @@ function ADFieldPark.addCandidates(search, radius, angle)
     end
 end
 
+-- diagnostic: why the places along the border were refused
+function ADFieldPark.count(search, reason)
+    search.stats = search.stats or {}
+    search.stats[reason] = (search.stats[reason] or 0) + 1
+end
+
 -- best candidates first, obstacle test (vehicles, bales, trees...) only on them
 function ADFieldPark.pickSpots(search)
     local candidates = search.candidates
+    local parts = {}
+    for reason, n in pairs(search.stats or {}) do
+        table.insert(parts, string.format("%s %d", reason, n))
+    end
+    search.vehicle.ad.trafficYieldModule:log("field park: %d places, refused: %s (side %s, at x=%.0f z=%.0f)", #candidates,
+        table.concat(parts, ", "), tostring(search.side), search.x, search.z)
+    search.stats = {}
+    if #candidates == 0 and not search.relaxed then
+        -- nothing away from the standing crop (the harvester is still on its headlands): look again without the
+        -- harvester clearance, the unloader must not stay on the road
+        search.relaxed = true
+        search.queueDone = false
+        search.radiusIndex = 1
+        search.angle = 0
+        search.vehicle.ad.trafficYieldModule:log("field park: no spot away from the crop, trying the harvested strip")
+        return nil
+    end
+    ADFieldPark.relaxed = false
     if #candidates == 0 then
         search.result = "no harvested ground along the border"
     end
@@ -563,7 +628,7 @@ function ADFieldPark.isPathClear(vehicle, path, halfW, fieldRule)
                 local x, z = p.x + dz * side * halfW, p.z - dx * side * halfW
                 local crop, fruitTypeIndex = ADFieldPark.hasGrowingCrop(x, z)
                 -- small patches forgotten by the harvester may be driven over, like the AutoDrive pathfinder does
-                if crop and not ADFieldPark.isCropIsland(fruitTypeIndex, x, z, islandCache) then
+                if crop and not ADFieldPark.isCropIsland(fruitTypeIndex, x, z, islandCache) and not ADFieldPark.isBorderFringe(x, z) then
                     return "crop", x, z, i
                 end
                 -- grass and verges are fine, another field is not
