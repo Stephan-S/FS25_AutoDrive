@@ -18,6 +18,9 @@ FollowCombineTask.MAX_REVERSE_TIME = 30000
 FollowCombineTask.MAX_TURN_TIME = 60000
 FollowCombineTask.MAX_STUCK_TIME = 60000
 FollowCombineTask.WAIT_BEFORE_FINISH_TIME = 8000
+-- full unloader: does not leave while the combine turns or still drives within WAIT_COMBINE_NEAR_DISTANCE, at most WAIT_BEFORE_FINISH_MAX_TIME
+FollowCombineTask.WAIT_BEFORE_FINISH_MAX_TIME = 30000
+FollowCombineTask.WAIT_COMBINE_NEAR_DISTANCE = 30
 -- straight line to the chase point: checked every LINE_CHECK_INTERVAL, the chase is given up after LINE_BLOCKED_TIME blocked
 FollowCombineTask.LINE_CHECK_INTERVAL = 500
 FollowCombineTask.LINE_BLOCKED_TIME = 2000
@@ -48,6 +51,8 @@ function FollowCombineTask:new(vehicle, combine)
     o.startedChasing = false
     o.reverseTimer = AutoDriveTON:new()
     o.waitTimer = AutoDriveTON:new()
+    o.waitMaxTimer = AutoDriveTON:new()
+    o.waitCombineLogged = false
     o.chasePos, o.chaseSide = vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getPipeChasePosition()
     o.angleToCombineHeading = vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombineHeading()
     o.angleToCombine = vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombine()
@@ -357,7 +362,18 @@ function FollowCombineTask:update(dt)
         -- TODO: check if following is useful!
         local combineIsDriving = self.combine.ad.isFixedPipeChopper and AutoDrive:getIsCPActive(self.combine) and (self.combine.lastSpeedReal > 0.001)
         self.waitTimer:timer(not combineIsDriving, self.WAIT_BEFORE_FINISH_TIME, dt)
-        if self.waitTimer:done() then
+        self.waitMaxTimer:timer(true, self.WAIT_BEFORE_FINISH_MAX_TIME, dt)
+        local combineBlocks = self:getCombineBlocksDeparture()
+        if self.waitTimer:done() and combineBlocks ~= nil and not self.waitMaxTimer:done() then
+            if not self.waitCombineLogged then
+                self.waitCombineLogged = true
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: unloader full, waiting before leaving (harvester %s)", combineBlocks)
+            end
+        elseif self.waitTimer:done() then
+            if self.waitCombineLogged then
+                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: unloader full, leaving after %.0f s (%s)", self.waitMaxTimer.elapsedTime / 1000,
+                    combineBlocks == nil and "way clear" or "max wait reached")
+            end
             self.state = FollowCombineTask.STATE_FINISHED
             return
         else
@@ -572,6 +588,19 @@ function FollowCombineTask:updateCombineTurn(dt)
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowCombineTask: harvester turn finished (aligned and driving forward), resuming")
         self.combineInTurn = false
     end
+end
+
+-- why the full unloader must not leave yet, nil when it can go:
+-- the combine is still in its turn, or still drives within WAIT_COMBINE_NEAR_DISTANCE
+function FollowCombineTask:getCombineBlocksDeparture()
+    if self.combineInTurn then
+        return "turning"
+    end
+    local distance = AutoDrive.getDistanceBetween(self.vehicle, self.combine)
+    if distance < FollowCombineTask.WAIT_COMBINE_NEAR_DISTANCE and math.abs(self.combine.lastSpeedReal or 0) >= FollowCombineTask.TURN_STOPPED_SPEED then
+        return string.format("driving at %.0f m", distance)
+    end
+    return nil
 end
 
 -- combine driving backwards
@@ -793,6 +822,8 @@ function FollowCombineTask:resetAllTimers()
     self.chaseTimer:timer(false)
     self.reverseTimer:timer(false)
     self.waitTimer:timer(false)
+    self.waitMaxTimer:timer(false)
+    self.waitCombineLogged = false
 end
 
 
