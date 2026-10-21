@@ -91,9 +91,9 @@ function ExitFieldTask:buildCandidates()
     local routes = {}
     local closest = self.vehicle:getClosestWayPoint()
     if closest ~= nil then
-        table.insert(routes, ADGraphManager:pathFromTo(closest, destination))
+        table.insert(routes, ADGraphManager:pathFromTo(closest, destination, nil, self.vehicle))
     end
-    local fieldRoute = ADGraphManager:pathFromTo(self.vehicle.ad.stateModule:getFirstWayPoint(), destination)
+    local fieldRoute = ADGraphManager:pathFromTo(self.vehicle.ad.stateModule:getFirstWayPoint(), destination, nil, self.vehicle)
     table.insert(routes, fieldRoute)
     -- the field's own network point (where the vehicle came in) is tried first, whatever its distance
     if fieldRoute ~= nil and #fieldRoute > 1 then

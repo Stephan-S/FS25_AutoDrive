@@ -715,6 +715,9 @@ function AutoDrive:update(dt)
 	if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) then
 		AutoDrive.debugDrawBoundingBoxForVehicles()
 	end
+	if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
+		ADPathCalculator.debugDraw()
+	end
 
 	if AutoDrive.getSetting("showHUD") then
 		AutoDrive.Hud:update(dt)
