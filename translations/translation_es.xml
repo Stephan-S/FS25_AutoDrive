@@ -61,9 +61,9 @@
 		<text name="input_ADToggleAutomaticPickupTarget"				text="AD: Cambiar a carga automática en destino" />
 		<text name="input_ADToggleAutomaticUnloadTarget"				text="AD: Cambiar a descarga automática en destino" />
 		<text name="input_ADToggleLoadByFillLevel"						text="AD: Alternar carga por nivel de llenado" />
-		<text name="input_ADCopySettings"								text="AD: Copy settings" />
-		<text name="input_ADPasteSettings"								text="AD: Paste settings" />
-		<text name="input_ADCreateFieldPoints"							text="AD: Create Field Points" />
+		<text name="input_ADCopySettings"								text="AD: Copiar ajustes" />
+		<text name="input_ADPasteSettings"								text="AD: Pegar ajustes" />
+		<text name="input_ADCreateFieldPoints"							text="AD: Crear puntos de campo" />
 		<text name="hud_avoidFruit"									text="AD: Evitar destruir cosechas" />
 		<text name="hud_startHelper"									text="AD: Iniciar AI/CP en destino" />
 		<text name="AD_parkVehicle_noPosSet"							text="No se ha asignado ningún destino de estacionamiento. Asigna el destino seleccionado actualmente haciendo clic derecho." />
@@ -94,9 +94,9 @@
 		<text name="AD_lctrl_for_creation"								text="LCTRL para crear" />
 		<text name="AD_lalt_for_deletion"								text="LALT para borrar" />
 		<text name="AD_lshift_for_reverse"								text="RSHIFT marcha atrás" />
-		<text name="AD_settings_copied"								text="Settings copied" />
-		<text name="AD_settings_pasted"								text="Settings pasted" />
-		<text name="AD_settings_clipboard_empty"						text="Copy settings first!" />
+		<text name="AD_settings_copied"								text="Ajustes copiados" />
+		<text name="AD_settings_pasted"								text="Ajustes pegados" />
+		<text name="AD_settings_clipboard_empty"						text="¡Copia los ajustes primero!" />
 		<text name="gui_ad_Setting"									text="Configuración - AutoDrive" />
 		<text name="gui_ad_collisionHeigth"							text="Altura de colisión sobre el suelo" />
 		<text name="gui_ad_collisionHeigth_tooltip"					text="Configuración para la detección de colisiones delante del vehículo. Si no se detectan otros vehículos durante la conducción, reduce poco a poco. (Por defecto 2m)." />
@@ -175,8 +175,8 @@
 		<text name="gui_ad_shovelWidth_tooltip"						text="Si el ancho de la pala detectado automáticamente es demasiado pequeño, se puede aumentar con este valor" />
 		<text name="gui_ad_preCallLevel"								text="Nivel para llamar" />
 		<text name="gui_ad_preCallLevel_tooltip"						text="Llama al remolque al nivel de llenado establecido." />
-		<text name="gui_ad_chaseSide"									text="Chopper Unload Side" />
-		<text name="gui_ad_chaseSide_tooltip"							text="Unloader will use only this side from Chppers perspective: automatic, left, behind, right" />
+		<text name="gui_ad_chaseSide"									text="Lado de descarga de la cosechadora" />
+		<text name="gui_ad_chaseSide_tooltip"							text="El descargador usará solo este lado desde la perspectiva de la cosechadora: automático, izquierdo, detrás, derecho" />
 		<text name="gui_ad_none"										text="Ninguno" />
 		<text name="gui_ad_onlyPickup"									text="Solo recogida" />
 		<text name="gui_ad_onlyDeliver"								text="Solo entrega" />
@@ -219,9 +219,9 @@
 		<text name="gui_ad_shovelHeight_tooltip"						text="Si la altura de la pala detectada automáticamente es incorrecta, usa esto para ajustar la altura objetivo del suelo" />
 		<text name="gui_ad_showMarkersOnMap"							text="Mostrar Marcadores" />
 		<text name="gui_ad_showMarkersOnMap_tooltip"					text="Mostrar Marcadores/Destinos en el mapa del juego" />
-		<text name="gui_ad_mainMenuMap"								text="Main menu map" />
-		<text name="gui_ad_ingameMap"									text="Ingame map" />
-		<text name="gui_ad_both"										text="Both" />
+		<text name="gui_ad_mainMenuMap"								text="Mapa del menú principal" />
+		<text name="gui_ad_ingameMap"									text="Mapa en el juego" />
+		<text name="gui_ad_both"										text="Ambos" />
 		<text name="gui_ad_switchToMarkersOnMap"						text="Cambiar a Marcadores" />
 		<text name="gui_ad_switchToMarkersOnMap_tooltip"				text="Establecer objetivo/descargar objetivo, al hacer clic en los puntos del mapa" />
 		<text name="gui_ad_cornerSpeed"								text="Velocidad de la esquina" />
@@ -256,7 +256,7 @@
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sí: Los descargadores de AutoDrive intentan planificar un camino hacia adelante para adaptarse al giro de 90° de la cosechadora./No - Los descargadores se revertirán antes del giro" />
 		<text name="gui_ad_ALUnload"									text="Autocarga: Posición de descarga" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Apagado: La posición de descarga depende de la configuración del vehículo, no de AutoDrive)" />
-		<text name="gui_ad_Text_all"									text="All" />
+		<text name="gui_ad_Text_all"									text="Todo" />
 		<text name="gui_ad_AL_off"										text="No descargar" />
 		<text name="gui_ad_AL_center"									text="Descargar sobre el vehiculo" />
 		<text name="gui_ad_AL_left"									text="Descargar a la izquierda" />
@@ -292,10 +292,10 @@
 		<text name="gui_ad_RecordDriveDirectionOffset_tooltip"			text="Mover la grabación desde el vehículo hacia la izquierda (-0.1 .. -6m) o derecha (0.1 .. 6m). ¡Conducir en reversa detendrá la grabación!" />
 		<text name="gui_ad_RecordOppositeDriveDirectionOffset"			text="Desplazamiento de grabación en dirección opuesta" />
 		<text name="gui_ad_RecordOppositeDriveDirectionOffset_tooltip"	text="Mover la grabación desde el vehículo hacia la izquierda (-0.1 .. -6m) o derecha (0.1 .. 6m). ¡Conducir en reversa detendrá la grabación!" />
-		<text name="gui_ad_fieldPointOffset"							text="Fieldpoint Offset" />
-		<text name="gui_ad_fieldPointOffset_tooltip"					text="create field points inside (-0.2 .. -6m) or outside (0.2 .. 6m) erzeugen. 0 at field border" />
-		<text name="gui_ad_maxFieldPointDistance"						text="field point max. distance" />
-		<text name="gui_ad_maxFieldPointDistance_tooltip"				text="create field points with max. distance of 2 .. 25 m" />
+		<text name="gui_ad_fieldPointOffset"							text="Desplazamiento del punto de campo" />
+		<text name="gui_ad_fieldPointOffset_tooltip"					text="Crear puntos de campo hacia adentro (-0.2 .. -6m) o hacia afuera (0.2 .. 6m). 0 en el borde del campo" />
+		<text name="gui_ad_maxFieldPointDistance"						text="Distancia máx. de puntos de campo" />
+		<text name="gui_ad_maxFieldPointDistance_tooltip"				text="Crear puntos de campo con una distancia máx. de 2 .. 25 m" />
 		<text name="gui_ad_settingsPage_title"							text="Ajustes - AutoDrive" />
 		<text name="gui_ad_userSettingsPage_title"						text="Ajustes de usuario - AutoDrive" />
 		<text name="gui_ad_vehicleSettingsPage_title"					text="Ajustes del vehículo - AutoDrive" />
@@ -356,10 +356,10 @@
 		<text name="ad_color_hudTextHover"								text="23 Texto del HUD, al pasar el cursor sobre elementos normales" />
 		<text name="ad_color_hudTextSpecial"							text="24 Texto del HUD, elementos activos y carpetas" />
 		<text name="ad_color_hudTextHoverSpecial"						text="25 Texto de HUD al pasar el cursor sobre elementos y carpetas activos" />
-		<text name="ad_color_header"									text="26 HUD: color of header" />
-		<text name="ad_color_background"								text="27 HUD: background color" />
-		<text name="ad_color_markerText"								text="28 color of destination text" />
-		<text name="ad_color_rightOfWayCenter"							text="29 Right of way Center waypoint" />
+		<text name="ad_color_header"									text="26 HUD: Color de la cabecera" />
+		<text name="ad_color_background"								text="27 HUD: Color de fondo" />
+		<text name="ad_color_markerText"								text="28 Color del texto de destino" />
+		<text name="ad_color_rightOfWayCenter"							text="29 Punto de ruta central del derecho de paso" />
 		<text name="button_delete_all"									text="Eliminar todas" />
 		<text name="button_reset_selected"								text="Resetear seleccionados" />
 		<text name="AD_task_pathfinding"								text="Calculando ruta" />
