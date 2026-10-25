@@ -210,8 +210,7 @@ end
 
 function LoadAtDestinationTask:getI18nInfo()
     if self.state == LoadAtDestinationTask.STATE_PATHPLANNING then
-        local actualState, maxStates, steps, max_pathfinder_steps = self.vehicle.ad.pathFinderModule:getCurrentState()
-        return "$l10n_AD_task_pathfinding;" .. string.format(" %d / %d - %d / %d", actualState, maxStates, steps, max_pathfinder_steps)
+        return self:getPlanningI18n()
     else
         return "$l10n_AD_task_drive_to_load_point;"
     end

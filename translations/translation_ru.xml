@@ -406,5 +406,8 @@
 		<text name="gui_ad_editorTip_9"								text="1-ый узел это пересечение, 2-ой это соседний:" />
 		<text name="gui_ad_editorTip_10"								text="с L-Ctrl = Смена типа сегмента (одно/двусторонняя)" />
 		<text name="gui_ad_editorTip_11"								text="с L-Shift = Смена типа на 'боковая дорога'" />
+		<text name="AD_task_hv_chopper" text="the forage harvester" />
+		<text name="AD_task_hv_combine" text="the combine" />
+		<text name="AD_task_planning_way" text="Planning the way" />
 	</texts>
 </l10n>

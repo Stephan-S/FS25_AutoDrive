@@ -142,16 +142,27 @@ function ADHudIcon:addTooltipString(vehicle, currentText)
 end
 
 function ADHudIcon:splitTextByLength(text, fontSize, maxLength)
+    -- parts are separated by " - " only: a hyphen inside a word ("Demi-tour") must not cut the text
+    local textParts = {}
+    local start = 1
+    while true do
+        local i = text:find(" - ", start, true)
+        if i == nil then
+            table.insert(textParts, text:sub(start))
+            break
+        end
+        table.insert(textParts, text:sub(start, i - 1))
+        start = i + 3
+    end
     local lines = {}
-    local textParts = string.split(text, "-")
     local line = textParts[1]
     local index = 2
     while index <= #textParts do
-        if getTextWidth(fontSize, line .. "-" .. textParts[index]) > maxLength then
+        if getTextWidth(fontSize, line .. " - " .. textParts[index]) > maxLength then
             table.insert(lines, line)
-            line = textParts[index]:sub(2)
+            line = textParts[index]
         else
-            line = line .. "-" .. textParts[index]
+            line = line .. " - " .. textParts[index]
         end
         index = index + 1
     end

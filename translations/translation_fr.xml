@@ -406,5 +406,8 @@
 		<text name="gui_ad_editorTip_9"								text="1. point est une intersection, 2. point est voisin:" />
 		<text name="gui_ad_editorTip_10"								text="CTRLG: Choix du segment (unique/double sens)" />
 		<text name="gui_ad_editorTip_11"								text="MAJG = Etablir voie de dégagement" />
+		<text name="AD_task_hv_chopper" text="l'ensileuse" />
+		<text name="AD_task_hv_combine" text="la moissonneuse" />
+		<text name="AD_task_planning_way" text="Calcul du trajet" />
 	</texts>
 </l10n>

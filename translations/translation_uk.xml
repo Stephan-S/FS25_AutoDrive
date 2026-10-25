@@ -406,5 +406,8 @@
 		<text name="gui_ad_editorTip_9"								text="1-й вузол це перетин, 2-й це сусідній:" />
 		<text name="gui_ad_editorTip_10"								text="з L-Ctrl = Зміна типу сегменту (одно/двостороння)" />
 		<text name="gui_ad_editorTip_11"								text="з L-Shift = Зміна типу на 'бічна дорога'" />
+		<text name="AD_task_hv_chopper" text="the forage harvester" />
+		<text name="AD_task_hv_combine" text="the combine" />
+		<text name="AD_task_planning_way" text="Planning the way" />
 	</texts>
 </l10n>

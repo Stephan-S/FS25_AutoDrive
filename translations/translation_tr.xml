@@ -406,5 +406,8 @@
         <text name="gui_ad_editorTip_9"								text="1. nokta kavşak, ikincisi komşusudur:" />
         <text name="gui_ad_editorTip_10"								text="LCTRL: Segment türünü değiştir (normal/çift yönlü)" />
         <text name="gui_ad_editorTip_11"								text="LSHIFT = Yan yolu değiştir" />
+		<text name="AD_task_hv_chopper" text="the forage harvester" />
+		<text name="AD_task_hv_combine" text="the combine" />
+		<text name="AD_task_planning_way" text="Planning the way" />
     </texts>
 </l10n>

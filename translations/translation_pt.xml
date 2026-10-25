@@ -406,5 +406,8 @@
 		<text name="gui_ad_editorTip_9"								text="1. node is intersection, second it's neighbor:" />
 		<text name="gui_ad_editorTip_10"								text="LCTRL: Toggle segment type (normal/dual)" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Toggle side road" />
+		<text name="AD_task_hv_chopper" text="the forage harvester" />
+		<text name="AD_task_hv_combine" text="the combine" />
+		<text name="AD_task_planning_way" text="Planning the way" />
 	</texts>
 </l10n>

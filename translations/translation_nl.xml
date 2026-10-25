@@ -406,5 +406,8 @@
 		<text name="gui_ad_editorTip_9"								text="Het eerste punt is een kruispunt, de tweede zijn nabijgelegen punt:" />
 		<text name="gui_ad_editorTip_10"								text="LCTRL: Tussen wegtype schakelen (1-weg/2-weg)" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Tussen zijweg schakelen" />
+		<text name="AD_task_hv_chopper" text="the forage harvester" />
+		<text name="AD_task_hv_combine" text="the combine" />
+		<text name="AD_task_planning_way" text="Planning the way" />
 	</texts>
 </l10n>
