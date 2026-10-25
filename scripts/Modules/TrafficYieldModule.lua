@@ -69,6 +69,7 @@ ADTrafficYieldModule.COOLDOWN = 20000           -- ms, no new detection after a 
 ADTrafficYieldModule.PATH_STEP = 2               -- m between two points of the parallel path
 ADTrafficYieldModule.PATH_EXTRA = 8              -- m of parallel path after the parking point (alignment, aim)
 ADTrafficYieldModule.CANDIDATE_STEP = 5          -- m between two leaving points tested along the route
+ADTrafficYieldModule.SECTION_WAIT_CLEAR = 15     -- m kept free before the start of a single track when the yielder waits there
 ADTrafficYieldModule.YIELDER_SHARE = 0.65        -- part of the free distance given to the vehicle that pulls over
 ADTrafficYieldModule.DETOUR_MAX = 400            -- m, longest detour taken to avoid meeting an oncoming vehicle
 ADTrafficYieldModule.DETOUR_MIN_AHEAD = 15       -- m, the detour must leave the route before the head-on section
@@ -860,7 +861,7 @@ function ADTrafficYieldModule:getOncomingGap(other)
     if mine == nil then
         return nil
     end
-    return mine + da
+    return mine + da, mine
 end
 
 -- speed limit / hold to stop before the oncoming partner (same rule as the anticipation)
@@ -870,7 +871,7 @@ function ADTrafficYieldModule:limitSpeedTowards(dt, partner, share)
     share = share or 0.5
     if g_time >= (self.nextGapCheck or 0) then
         self.nextGapCheck = g_time + ADTrafficYieldModule.ANTICIPATION_INTERVAL
-        self.earlyGap = self:getOncomingGap(partner)
+        self.earlyGap, self.earlySectionMine = self:getOncomingGap(partner)
         self.earlyGapTime = g_time
         local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
         local otherFront = ADTrafficYieldModule.getTrainExtents(partner)
@@ -1219,6 +1220,39 @@ function ADTrafficYieldModule:updateYielderApproach(dt)
         -- not oncoming any more (route changed): nothing to do
         self:endPlan("no more oncoming", nil)
         return false
+    end
+
+    -- the single track starts ahead of me: I wait on my road SECTION_WAIT_CLEAR m before it, so that my nose
+    -- does not block its mouth, the other one comes out first, then I go
+    if plan.waitBeforeSection == nil and self.earlySectionMine ~= nil then
+        local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+        plan.waitBeforeSection = self.earlySectionMine - myFront > ADTrafficYieldModule.SECTION_WAIT_CLEAR + 2
+        if plan.waitBeforeSection then
+            self:log("single track %.0f m ahead: I wait %d m before it, %s comes out first", self.earlySectionMine, ADTrafficYieldModule.SECTION_WAIT_CLEAR, ADTrafficYieldModule.getName(self.partner))
+        end
+    end
+    if plan.waitBeforeSection and plan.parkSpot == nil then
+        local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+        local elapsed = (g_time - (self.earlyGapTime or g_time)) / 1000
+        local remaining = (self.earlySectionMine or 0) - myFront - ADTrafficYieldModule.SECTION_WAIT_CLEAR - ADTrafficYieldModule.getSpeedKmh(self.vehicle) / 3.6 * elapsed
+        if remaining > 0.5 and not plan.parked then
+            local allowedSpeed = math.sqrt(2 * ADTrafficYieldModule.ANTICIPATION_DECEL * remaining) * 3.6
+            local drivePathModule = self.vehicle.ad.drivePathModule
+            if drivePathModule.speedLimit ~= nil then
+                drivePathModule.speedLimit = math.min(drivePathModule.speedLimit, math.max(allowedSpeed, 3))
+            end
+            return false
+        end
+        -- stopped before the single track: off the shared way, the other one may drive through
+        if not plan.parked then
+            self:log("waiting before the single track, %s may come out", ADTrafficYieldModule.getName(self.partner))
+        end
+        plan.parked = true
+        self:holdVehicle(dt)
+        if self.stateTimer:timer(true, 120000, dt) then
+            self:endPlan("wait before the single track: timeout", false)
+        end
+        return true
     end
 
     if plan.parkSpot == nil then
@@ -1825,7 +1859,9 @@ function ADTrafficYieldModule:updateReverserRetreat(dt)
         self.reverseStart = {x = x, y = y, z = z}
     end
 
-    if plan.reverserMayStop then
+    local room = plan.moreRoom
+    local extra = room ~= nil and room.pending and room.started
+    if plan.reverserMayStop and not extra then
         self:setState(ADTrafficYieldModule.STATE_REVERSER_WAIT)
         self:holdVehicle(dt)
         return
@@ -1844,6 +1880,17 @@ function ADTrafficYieldModule:updateReverserRetreat(dt)
     local blockedTooLong = self.reverseBlockedTimer:timer(blockedBehind, 8000, dt)
 
     local target = self.reverseTargets[self.reverseTargetIndex]
+    if extra then
+        local more = MathUtil.vector2Length(x - room.x, z - room.z)
+        if more >= ADTrafficYieldModule.MORE_ROOM or target == nil or blockedTooLong or reversed >= maxReverse + 5 then
+            room.pending = false
+            room.failed = more < ADTrafficYieldModule.MORE_ROOM_MIN
+            self:log("backed off %.0f m more%s", more, room.failed and " (no room behind me)" or "")
+            self:setState(ADTrafficYieldModule.STATE_REVERSER_WAIT)
+            self:holdVehicle(dt)
+            return
+        end
+    end
     if reversed >= maxReverse + 5 or target == nil or blockedTooLong then
         plan.reverserAtLimit = true
         self:setState(ADTrafficYieldModule.STATE_REVERSER_WAIT)
@@ -1894,6 +1941,15 @@ end
 function ADTrafficYieldModule:updateReverserWait(dt)
     local plan = self.plan
     self:holdVehicle(dt)
+    if plan.moreRoom ~= nil and plan.moreRoom.pending and not plan.moreRoom.started and not plan.parked then
+        local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+        plan.moreRoom.started = true
+        plan.moreRoom.x, plan.moreRoom.z = x, z
+        self:log("backing off %d m more for %s", ADTrafficYieldModule.MORE_ROOM, ADTrafficYieldModule.getName(self.partner))
+        self.vehicle.ad.specialDrivingModule:releaseVehicle()
+        self:setState(ADTrafficYieldModule.STATE_REVERSER_RETREAT)
+        return
+    end
     if plan.parked then
         self:setState(ADTrafficYieldModule.STATE_REVERSER_PASS)
         self.vehicle.ad.specialDrivingModule:releaseVehicle()
@@ -2228,6 +2284,41 @@ function ADTrafficYieldModule:getRearLateralOffset(spot)
     return math.abs((rx - spot.originX) * spot.dirZ - (rz - spot.originZ) * spot.dirX)
 end
 
+-- the parker could reach the reverser before being off the road and call itself parked, so the reverser could not
+-- pass. Now the reverser backs off ADTrafficYieldModule.MORE_ROOM more meters (twice at most), the parker waits
+-- meanwhile, then finishes pulling over.
+ADTrafficYieldModule.MORE_ROOM = 20           -- m backed off once more by the reverser
+ADTrafficYieldModule.MORE_ROOM_TRIES = 2
+ADTrafficYieldModule.MORE_ROOM_MIN = 5        -- m: backed off less than this, no room behind it, the parker stays where it is
+
+-- true while the parker waits for the reverser to make room (the caller returns)
+function ADTrafficYieldModule:requestMoreRoom(dt)
+    local plan = self.plan
+    local room = plan.moreRoom
+    if room ~= nil and room.pending then
+        self:holdVehicle(dt)
+        return true
+    end
+    if room ~= nil and room.failed then
+        return false
+    end
+    if (plan.moreRoomCount or 0) >= ADTrafficYieldModule.MORE_ROOM_TRIES or plan.mode == "branch" then
+        return false
+    end
+    plan.moreRoomCount = (plan.moreRoomCount or 0) + 1
+    plan.moreRoom = {pending = true}
+    self:log("%s too close in front before I am off the road: it backs off %d m more (%d/%d)", ADTrafficYieldModule.getName(self.partner),
+        ADTrafficYieldModule.MORE_ROOM, plan.moreRoomCount, ADTrafficYieldModule.MORE_ROOM_TRIES)
+    self:holdVehicle(dt)
+    return true
+end
+
+-- the move timer does not run while the parker waits for room
+function ADTrafficYieldModule:parkTimeout(dt, limit)
+    local room = self.plan.moreRoom
+    return self.stateTimer:timer(true, limit, room ~= nil and room.pending and 0 or dt)
+end
+
 function ADTrafficYieldModule:updateParkerMove(dt)
     local plan = self.plan
     local spot = plan.parkSpot
@@ -2245,10 +2336,13 @@ function ADTrafficYieldModule:updateParkerMove(dt)
 
     -- parallel path along the route (curves followed)
     if spot.path ~= nil then
+        if tooCloseToReverser and self:requestMoreRoom(dt) then
+            return
+        end
         if tooCloseToReverser then
             self:log("parked early: %s too close in front, the train may not be aligned", ADTrafficYieldModule.getName(reverser))
         end
-        if tooCloseToReverser or self:followParkPath(dt, spot) or self.stateTimer:timer(true, 60000, dt) then
+        if tooCloseToReverser or self:followParkPath(dt, spot) or self:parkTimeout(dt, 60000) then
             self.pathIndex = nil
             plan.parked = true
             self:setState(ADTrafficYieldModule.STATE_PARKER_WAIT)
@@ -2260,14 +2354,20 @@ function ADTrafficYieldModule:updateParkerMove(dt)
     local rearAligned = self:getRearLateralOffset(spot) >= math.abs(spot.lateralAbs) - 0.2 and self:isLastUnitParallel(spot)
     local reachedFinal = finalLocalZ <= 0.5
 
+    if tooCloseToReverser and not (reachedFinal and rearAligned) and self:requestMoreRoom(dt) then
+        return
+    end
     if (reachedFinal and rearAligned) or finalLocalZ <= -6 or tooCloseToReverser then
+        self:log("parked: %s", (reachedFinal and rearAligned) and "aligned on the spot" or (finalLocalZ <= -6 and "spot passed")
+            or string.format("%s too close in front, may still be on the road", ADTrafficYieldModule.getName(reverser)))
         plan.parked = true
         self:setState(ADTrafficYieldModule.STATE_PARKER_WAIT)
         self:holdVehicle(dt)
         return
     end
 
-    if self.stateTimer:timer(true, 45000, dt) then
+    if self:parkTimeout(dt, 45000) then
+        self:log("parked: 45 s timeout, may still be on the road")
         plan.parked = true
         self:setState(ADTrafficYieldModule.STATE_PARKER_WAIT)
         self:holdVehicle(dt)
@@ -2393,3 +2493,4 @@ function ADTrafficYieldModule:updateParkerPass(dt)
         self:endPlan("parker pass timeout", false)
     end
 end
+
