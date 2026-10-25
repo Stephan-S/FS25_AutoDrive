@@ -203,6 +203,32 @@ function AutoDrive.getRequiredRefuels(vehicle, ignoreFillLevel)
     return ret
 end
 
+-- the unloader works for a forage harvester (direct discharge): the chopper-only behaviours apply.
+-- Remembered on the vehicle, so it still holds once the unloader has left the harvester (exit, unload)
+function AutoDrive.isChopperUnloading(vehicle)
+    if vehicle == nil or vehicle.ad == nil then
+        return false
+    end
+    local mode = vehicle.ad.modes ~= nil and vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    local combine = mode ~= nil and mode.combine or nil
+    if combine ~= nil and combine.ad ~= nil then
+        vehicle.ad.workingForChopper = combine.ad.isChopper == true
+    elseif vehicle.ad.workingForChopper == nil and ADHarvestManager ~= nil and vehicle.ad.stateModule ~= nil then
+        -- not assigned yet: a forage harvester working for the same destination decides
+        local marker = vehicle.ad.stateModule:getFirstMarker()
+        for _, list in ipairs({ADHarvestManager.harvesters or {}, ADHarvestManager.idleHarvesters or {}}) do
+            for _, harvester in pairs(list) do
+                if harvester ~= nil and harvester.ad ~= nil and harvester.ad.isChopper and harvester.ad.stateModule ~= nil
+                    and harvester.ad.stateModule:getFirstMarker() == marker then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    return vehicle.ad.workingForChopper == true
+end
+
 function AutoDrive.combineIsTurning(combine)
     local cpIsTurning = AutoDrive:getIsCPTurning(combine)
     if cpIsTurning then

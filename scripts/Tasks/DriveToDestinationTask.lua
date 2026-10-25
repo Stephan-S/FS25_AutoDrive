@@ -39,6 +39,8 @@ function DriveToDestinationTask:update(dt)
             else
                 self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
                 --self.vehicle.ad.drivePathModule:appendPathTo(self.wayPoints[#self.wayPoints], self.destinationID)
+                -- partial route (guided departure, part of the way): its end is not the destination
+                self.routeIsPartial = self.vehicle.ad.pathFinderModule.partialPath == true
                 self.state = DriveToDestinationTask.STATE_DRIVING
             end
         else
@@ -47,7 +49,11 @@ function DriveToDestinationTask:update(dt)
             self.vehicle.ad.specialDrivingModule:update(dt)
         end
     else
-        if self.vehicle.ad.drivePathModule:isTargetReached() then
+        if self.vehicle.ad.drivePathModule:isTargetReached() and self.routeIsPartial then
+            -- end of a partial route, not the destination: plan the rest from here
+            self.routeIsPartial = false
+            self:setUp()
+        elseif self.vehicle.ad.drivePathModule:isTargetReached() then
             self:finished()
         else
             self.vehicle.ad.drivePathModule:update(dt)

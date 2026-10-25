@@ -383,6 +383,7 @@ function AutoDrive:onUpdateTick(dt, isActiveForInput, isActiveForInputIgnoreSele
 
     if self.isServer then
         self.ad.recordingModule:updateTick(dt, isActiveForInput, isActiveForInputIgnoreSelection, isSelected)
+        AutoDrive.recordChopperTrail(self)
 
         if AutoDrive.getSetting("FoldImplements", self) and self.ad.stateModule:isActive() then
             -- fold combine ladder if user exit the vehicle #679
@@ -447,7 +448,10 @@ function AutoDrive:onUpdate(dt)
         allowTaskUpdate = allowTaskUpdate and (self.ad.ALDelayStartTime + AutoDrive.ALDelayTimeout < g_time)
 
         if allowTaskUpdate then
-             self.ad.taskModule:update(dt)
+            -- forage harvester unloader: isolated plants are forgotten by every strict crop check of this update
+            PathFinderModule.ignoreIsolatedCrop = AutoDrive.isChopperUnloading(self)
+            self.ad.taskModule:update(dt)
+            PathFinderModule.ignoreIsolatedCrop = false
         else
             if AutoDrive.getSetting("FoldImplements", self) then
                 -- should fold implements

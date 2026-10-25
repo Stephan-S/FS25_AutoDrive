@@ -33,6 +33,50 @@ function AutoDrive.setCombineType(vehicle)
 end
 
 
+-- forage harvester: the track it really drove (centre every CHOPPER_TRAIL_STEP m, forward only), so that its
+-- unloader aims behind it on its own cut track, also in a curve
+AutoDrive.CHOPPER_TRAIL_STEP = 1
+AutoDrive.CHOPPER_TRAIL_MAX = 150
+AutoDrive.CHOPPER_TRAIL_JUMP = 30
+function AutoDrive.recordChopperTrail(vehicle)
+    if vehicle.spec_combine == nil or vehicle.spec_combine.isBufferCombine ~= true or vehicle.components == nil or vehicle.ad == nil then
+        return
+    end
+    local x, _, z = getWorldTranslation(vehicle.components[1].node)
+    local trail = vehicle.ad.chopperTrail
+    if trail == nil then
+        trail = {}
+        vehicle.ad.chopperTrail = trail
+    end
+    local last = trail[#trail]
+    if last ~= nil then
+        local d = MathUtil.vector2Length(x - last.x, z - last.z)
+        if d > AutoDrive.CHOPPER_TRAIL_JUMP then
+            -- moved away (reset, teleport): a new track
+            for i = #trail, 1, -1 do
+                trail[i] = nil
+            end
+        elseif d < AutoDrive.CHOPPER_TRAIL_STEP then
+            return
+        end
+    end
+    local movingDirection = vehicle.movingDirection or 1
+    if vehicle.ad.isReverseAttached then
+        movingDirection = -movingDirection
+    end
+    if (vehicle.lastSpeedReal or 0) * movingDirection < 0 then
+        local rx, _, rz = AutoDrive.localDirectionToWorld(vehicle, 0, 0, 1, vehicle.ad.ADRootNode)
+        while #trail > 0 and (trail[#trail].x - x) * rx + (trail[#trail].z - z) * rz > 0 do
+            trail[#trail] = nil
+        end
+        return
+    end
+    trail[#trail + 1] = {x = x, z = z}
+    if #trail > AutoDrive.CHOPPER_TRAIL_MAX then
+        table.remove(trail, 1)
+    end
+end
+
 function AutoDrive.getDischargeNode(combine)
     local dischargeNode = nil
     if combine.spec_dischargeable ~= nil then

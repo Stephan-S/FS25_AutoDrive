@@ -151,6 +151,9 @@ function PathFinderModule:reset()
     self.goingToNetwork  = false
     self.goingToPipe = false
     self.noFallback = false -- set by the caller after reset(): never lift field / fruit restrictions, fail instead
+    self.allowCrop = false -- set by the caller after reset: this one trip may cross crop (full trailer without a clean way out)
+    self.edgeOnly = false -- set by the caller after reset: close to a forage harvester, crop edge following only (no grid)
+    self.startPose = nil -- set by the caller after reset: plan from this pose {x, y, z, rx, rz} instead of the vehicle (next piece of a route)
     self.chasingVehicle = false
     self.isSecondChasingVehicle = false
     self.pathFinderTime = AutoDrive.getSetting("pathFinderTime")
@@ -210,8 +213,9 @@ function PathFinderModule:reset()
     self.gridScaleStep = 1
     self.allowPartialPath = false
     self.rearFallbackDone = false
-    self.rearFallbackSkippedPrinted = false
     self.partialPath = false
+    self.bandTour = nil
+    self.goingBehind = false
 end
 
 function PathFinderModule:hasFinished()
@@ -347,6 +351,7 @@ function PathFinderModule:startPathPlanningToPipe(combine, chasing)
     )
     local combineX, worldY, combineZ = getWorldTranslation(combine.components[1].node)
     PathFinderModule.startFieldScan(combineX, combineZ)
+    PathFinderModule.setHarvestField(combine)
     local rx, _, rz =  AutoDrive.localDirectionToWorld(combine, 0, 0, 1, combine.ad.ADRootNode)
     if combine.components[2] ~= nil and combine.components[2].node ~= nil then
         rx, _, rz =  AutoDrive.localDirectionToWorld(combine, 0, 0, 1, combine.components[2].node)
@@ -437,13 +442,19 @@ function PathFinderModule:startPathPlanningToPipe(combine, chasing)
     self.goingToPipe = true
     self.pipeCombine = combine
     -- far from the harvester: aim at its rear first, its own cut track always leads there; the chase takes over close to it
-    if not chasing and combine.ad ~= nil and not combine.ad.isChopper and (self.strictFruit or self.strictField)
-        and AutoDrive.getDistanceBetween(self.vehicle, combine) > PathFinderModule.REAR_FIRST_DISTANCE then
+    -- forage harvester: always from behind, at any distance, the chase takes over there
+    if not chasing and combine.ad ~= nil and (self.strictFruit or self.strictField)
+        and (combine.ad.isChopper or AutoDrive.getDistanceBetween(self.vehicle, combine) > PathFinderModule.REAR_FIRST_DISTANCE) then
         self:startRearFallback()
     end
     if AutoDrive.getDistanceBetween(self.vehicle, combine) < 50 then
         -- shorten path calculation for close combine
         self.max_pathfinder_steps = PathFinderModule.MAX_PATHFINDER_STEPS_COMBINE_TURN
+    end
+    -- forage harvester: the lane of the previous unloader first, else follow the crop edge, else the grid
+    if not chasing and not self:tryLane() and not self:tryEdgeFollow() and self.edgeOnly then
+        -- close to the harvester: no grid route there (it loops), wait and let the chase try again
+        self:abort()
     end
     self.chasingVehicle = chasing
 end
@@ -473,6 +484,20 @@ function PathFinderModule:startPathPlanningToVehicle(targetVehicle, targetDistan
     end
 end
 
+-- the 2nd unloader aims a crumb of the 1st (the point and the trail direction there) instead of a
+-- point behind the 1st (DriveToVehicleTask)
+function PathFinderModule:startPathPlanningToFollow(targetVehicle, targetPoint, targetVector)
+    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:startPathPlanningToFollow %s", tostring(targetVehicle:getName()))
+    self:startPathPlanningTo({x = targetPoint.x, y = targetPoint.y, z = targetPoint.z}, {x = targetVector.x, z = targetVector.z})
+    self.goingToPipe = false
+    self.pipeCombine = nil
+    self.chasingVehicle = true
+    self.isSecondChasingVehicle = true
+    if targetVehicle.ad ~= nil and targetVehicle.ad.pathFinderModule ~= nil and targetVehicle.ad.pathFinderModule.fruitToCheck ~= nil then
+        self.fruitToCheck = targetVehicle.ad.pathFinderModule.fruitToCheck
+    end
+end
+
 function PathFinderModule:getTrainWidth()
     local width = 3
     local units = AutoDrive.getAllUnits(self.vehicle)
@@ -486,6 +511,44 @@ function PathFinderModule:getTrainWidth()
     return width
 end
 
+-- half width over the outer tyre edges of the whole train (crop is only run over by the wheels), nil if unknown
+function PathFinderModule:getWheelHalfWidth()
+    local units = AutoDrive.getAllUnits(self.vehicle)
+    local half = nil
+    for _, unit in pairs(units or {}) do
+        local spec = unit.spec_wheels
+        local root = unit.components ~= nil and unit.components[1] ~= nil and unit.components[1].node or nil
+        if spec ~= nil and spec.wheels ~= nil and root ~= nil then
+            for _, wheel in pairs(spec.wheels) do
+                local physics = wheel.physics
+                if physics ~= nil and wheel.node ~= nil and physics.positionX ~= nil then
+                    local x = localToLocal(wheel.node, root, physics.positionX, physics.positionY or 0, physics.positionZ or 0)
+                    local edge = math.abs(x) + (physics.width or PathFinderModule.WHEEL_DEFAULT_WIDTH) / 2
+                    half = math.max(half or 0, edge)
+                end
+            end
+        end
+    end
+    return half
+end
+
+-- half width used by the crop checks: forage harvester at the outer tyre edges, no margin; otherwise train width + margin
+PathFinderModule.WHEEL_DEFAULT_WIDTH = 0.6
+function PathFinderModule:updateCropHalfWidth()
+    self.cropHalfWidth = self.trainHalfWidth
+    if not self:isChopperWork() then
+        return
+    end
+    local wheelHalf = self:getWheelHalfWidth()
+    if wheelHalf ~= nil and wheelHalf > 0.5 then
+        self.cropHalfWidth = math.min(wheelHalf, self.trainHalfWidth)
+    end
+end
+
+function PathFinderModule:getCropHalfWidth()
+    return self.cropHalfWidth or self.trainHalfWidth or 2
+end
+
 -- corners of the corridor driven from fromCell to cell, same layout as getCorners (start, width, height, opposite)
 function PathFinderModule:getCorridorCorners(fromCell, cell)
     local a = self:gridLocationToWorldLocation(fromCell)
@@ -495,7 +558,8 @@ function PathFinderModule:getCorridorCorners(fromCell, cell)
     if length < 0.01 then
         return nil
     end
-    local nx, nz = -dz / length * self.trainHalfWidth, dx / length * self.trainHalfWidth
+    local half = self:getCropHalfWidth()
+    local nx, nz = -dz / length * half, dx / length * half
     return {
         {x = a.x - nx, z = a.z - nz},
         {x = a.x + nx, z = a.z + nz},
@@ -694,7 +758,11 @@ function PathFinderModule:isFieldPositionAllowed(x, z, isOnField)
         isOnField = PathFinderModule.getMapOnFieldAt(x, z)
     end
     if not self.strictField then
-        return isOnField
+        return isOnField or self.parkOnGrass == true
+    end
+    if not isOnField and self.parkOnGrass then
+        -- forage harvester, full unloader parking aside: the grass beside the field is allowed (obstacles checked)
+        return true
     end
     if not isOnField then
         -- finer grids find gaps on the grass between trees AutoDrive does not always see: stay on field ground,
@@ -704,6 +772,11 @@ function PathFinderModule:isFieldPositionAllowed(x, z, isOnField)
         local nearStart = self.startX ~= nil and MathUtil.vector2Length(x - self.startX, z - self.startZ) < near
         local nearTarget = self.target ~= nil and MathUtil.vector2Length(x - self.target.x, z - self.target.z) < near
         return nearStart or nearTarget
+    end
+    -- the unloader may stand at the entrance on ground taken for another field: the first meters from where it
+    -- stands are never refused for another field
+    if self.startX ~= nil and MathUtil.vector2Length(x - self.startX, z - self.startZ) < PathFinderModule.OFF_FIELD_NEAR_ENDS then
+        return true
     end
     if self.allowedAreas ~= nil and next(self.allowedAreas) ~= nil then
         local capped = false
@@ -827,6 +900,9 @@ function PathFinderModule.addLearnedZone(x, z, vehicleName)
 end
 
 PathFinderModule.FRUIT_MAX_RATIO = 0.10
+PathFinderModule.BAND_FLOOD_WAIT = 10000 -- ms the search waits for the flood of the cut strips (ADBandRoute)
+PathFinderModule.BAND_UNREACHED_PENALTY = 1000 -- estimate added for a place out of the strips that reach the target
+PathFinderModule.BAND_START_LOOKUP = 8 -- m around the start to find the strips (it may stand at the crop edge)
 PathFinderModule.FRUIT_SLICE_LENGTH = 4
 PathFinderModule.SMOOTH_FRUIT_MARGIN = 1
 PathFinderModule.ZIGZAG_MAX_KEPT = 2
@@ -844,6 +920,13 @@ PathFinderModule.fieldMap = {}
 PathFinderModule.fieldMapCount = 0
 PathFinderModule.fieldMapReads = 0
 PathFinderModule.fieldMapRefreshTime = -math.huge
+-- the 2 m cells of a recorded field are read again every 0.5 m (16 samples): FINE_BAND_WIDTH from the outer
+-- border toward the middle, wider than any field = the whole field (wheel lanes through the crop
+-- looked like a way in 2 m samples). The scan reads them after the field, spread over the frames as well
+PathFinderModule.FINE_BAND_WIDTH = 2000
+PathFinderModule.FINE_STEP = 0.5
+PathFinderModule.fineBand = {}       -- key of a 2 m cell -> true when it lies in the band (set by the field scan)
+PathFinderModule.fineReads = 0
 
 -- standing crop at one position: fruit type index, 0 if none (cut, withered, grass and meadow count as none)
 function PathFinderModule.readCropAt(x, z)
@@ -852,7 +935,8 @@ function PathFinderModule.readCropAt(x, z)
         return 0
     end
     if fruitTypeIndex == FruitType.MEADOW or fruitTypeIndex == FruitType.GRASS then
-        return 0
+        -- second value: grass ground, not the field of a harvester working another crop
+        return 0, true
     end
     local fruit = g_fruitTypeManager:getFruitTypeByIndex(fruitTypeIndex)
     if fruit == nil or fruit:getIsCut(growthState) or fruit:getIsWithered(growthState) then
@@ -876,12 +960,18 @@ function PathFinderModule.getMapCell(ix, iz)
     if cell == nil then
         PathFinderModule.fieldMapCount = PathFinderModule.fieldMapCount + 1
     end
-    cell = {t = now, field = {}}
+    cell = {t = now, field = {}, grass = {}}
     local cx, cz = ix * PathFinderModule.MAP_CELL, iz * PathFinderModule.MAP_CELL
     for k, offset in ipairs(PathFinderModule.MAP_SAMPLE_OFFSETS) do
-        cell[k] = PathFinderModule.readCropAt(cx + offset[1], cz + offset[2])
+        local crop, grass = PathFinderModule.readCropAt(cx + offset[1], cz + offset[2])
+        cell[k] = crop
+        cell.grass[k] = grass == true
         cell.field[k] = AutoDrive.checkIsOnField(cx + offset[1], 0, cz + offset[2]) == true
         cell.onField = cell.onField or cell.field[k]
+    end
+    -- field number at the cell centre (the grass strip behind the hedge is field ground for the game)
+    if cell.onField then
+        cell.fieldId = PathFinderModule.getFieldIdAt(cx, cz)
     end
     if g_currentMission ~= nil and g_currentMission.terrainRootNode ~= nil then
         cell.y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 0, cz)
@@ -891,11 +981,170 @@ function PathFinderModule.getMapCell(ix, iz)
     return cell
 end
 
--- crop at a position from the map (nearest of the 4 samples of its cell)
+-- the 16 samples (0.5 m apart) of a cell in the border band, read once per cell reading
+function PathFinderModule.getFineCell(cell, ix, iz)
+    if cell.fine ~= nil then
+        return cell.fine
+    end
+    local size, step = PathFinderModule.MAP_CELL, PathFinderModule.FINE_STEP
+    local n = math.floor(size / step + 0.5)
+    local x0, z0 = ix * size - size / 2 + step / 2, iz * size - size / 2 + step / 2
+    local fine = {crop = {}, field = {}, grass = {}, n = n}
+    for j = 0, n - 1 do
+        for i = 0, n - 1 do
+            local k = j * n + i + 1
+            local x, z = x0 + i * step, z0 + j * step
+            local crop, grass = PathFinderModule.readCropAt(x, z)
+            fine.crop[k] = crop
+            fine.grass[k] = grass == true
+            fine.field[k] = AutoDrive.checkIsOnField(x, 0, z) == true
+        end
+    end
+    PathFinderModule.fineReads = PathFinderModule.fineReads + 1
+    cell.fine = fine
+    return fine
+end
+
+-- index of the fine sample at a position, nil when the cell is not in the border band
+function PathFinderModule.getFineIndex(ix, iz, x, z)
+    if not PathFinderModule.fineBand[(ix + 50000) * 100000 + (iz + 50000)] then
+        return nil
+    end
+    local size, step = PathFinderModule.MAP_CELL, PathFinderModule.FINE_STEP
+    local n = math.floor(size / step + 0.5)
+    local i = math.min(n - 1, math.max(0, math.floor((x - (ix * size - size / 2)) / step)))
+    local j = math.min(n - 1, math.max(0, math.floor((z - (iz * size - size / 2)) / step)))
+    return j * n + i + 1
+end
+
+-- isolated plants (forage harvester only, strict checks): a crop patch at most ISOLATED_PATCH_SIZE wide,
+-- with no other crop within ISOLATED_CLEARANCE around it, is forgotten. A crop sample is isolated when no crop
+-- is found in the ring between ISOLATED_PATCH_SIZE + 0.5 m and ISOLATED_PATCH_SIZE + ISOLATED_CLEARANCE around it
+-- (sampled every 0.5 m): every point of a patch that small lies inside the ring, any standing crop edge or row
+-- reaches into it. Results are kept ISOLATED_TTL ms (the harvester keeps cutting)
+PathFinderModule.ISOLATED_PATCH_SIZE = 2
+PathFinderModule.ISOLATED_CLEARANCE = 2.5
+PathFinderModule.ISOLATED_STEP = 0.5
+PathFinderModule.ISOLATED_TTL = 3000
+PathFinderModule.ISOLATED_CACHE_MAX = 50000
+PathFinderModule.isolatedCache = {}
+PathFinderModule.isolatedCacheCount = 0
+PathFinderModule.ignoreIsolatedCrop = false -- set while a forage harvester unloader searches or checks a route
+
+function PathFinderModule.isIsolatedCrop(x, z)
+    local step = PathFinderModule.ISOLATED_STEP
+    local ix, iz = math.floor(x / step + 0.5), math.floor(z / step + 0.5)
+    local key = (ix + 500000) * 1000000 + (iz + 500000)
+    local now = g_time or 0
+    local cached = PathFinderModule.isolatedCache[key]
+    if cached ~= nil and now >= cached.t and now - cached.t < PathFinderModule.ISOLATED_TTL then
+        return cached.v
+    end
+    if PathFinderModule.isolatedCacheCount > PathFinderModule.ISOLATED_CACHE_MAX then
+        PathFinderModule.isolatedCache = {}
+        PathFinderModule.isolatedCacheCount = 0
+    end
+    local cx, cz = ix * step, iz * step
+    local inner = PathFinderModule.ISOLATED_PATCH_SIZE + step
+    local outer = PathFinderModule.ISOLATED_PATCH_SIZE + PathFinderModule.ISOLATED_CLEARANCE
+    local n = math.floor(outer / step + 0.5)
+    local isolated = true
+    for j = -n, n do
+        local oz = j * step
+        for i = -n, n do
+            local ox = i * step
+            if math.max(math.abs(ox), math.abs(oz)) >= inner - 0.01 and PathFinderModule.getMapCropRawAt(cx + ox, cz + oz) ~= 0 then
+                isolated = false
+                break
+            end
+        end
+        if not isolated then
+            break
+        end
+    end
+    if not isolated then
+        -- a long narrow strip left standing (one or two rows) counts as isolated too
+        isolated = PathFinderModule.isCropStrip(cx, cz)
+    end
+    if cached == nil then
+        PathFinderModule.isolatedCacheCount = PathFinderModule.isolatedCacheCount + 1
+    end
+    PathFinderModule.isolatedCache[key] = {t = now, v = isolated}
+    return isolated
+end
+
+-- narrow strip: in one of the directions across it, no crop between STRIP_HALF_WIDTH + 0.5 and
+-- STRIP_HALF_WIDTH + ISOLATED_CLEARANCE on both sides, here and STRIP_ALONG, 2 x STRIP_ALONG m further each way along it
+-- (a single gap in a crop block is not a strip)
+PathFinderModule.STRIP_HALF_WIDTH = 1.5 -- m: strips up to about 3 m wide
+PathFinderModule.STRIP_DIRECTIONS = 8
+PathFinderModule.STRIP_ALONG = 1.5
+-- two leftover strips 2-3 m apart were seen as a crop block; 1 m clear beside a strip is enough
+PathFinderModule.STRIP_CLEARANCE = 2.5 -- m clear on both sides (less and a field counts as a strip)
+PathFinderModule.STRIP_MAX_WIDTH = 4 -- m of crop across a strip at most
+function PathFinderModule.isCropStrip(cx, cz)
+    -- thickness across the strip measured (crop run until 1 m clear on each side), up to
+    -- STRIP_MAX_WIDTH, here and along it: a strip 2-3 m wide seen from its edge was not one with the old rule
+    local step = PathFinderModule.ISOLATED_STEP
+    local maxWidth = PathFinderModule.STRIP_MAX_WIDTH
+    local clearNeed = PathFinderModule.STRIP_CLEARANCE
+    local along = PathFinderModule.STRIP_ALONG
+    local function run(bx, bz, px, pz)
+        -- distance of crop from (bx,bz) toward p before clearNeed m without crop, nil when wider than maxWidth
+        local last, r, free = 0, step, 0
+        while r <= maxWidth + clearNeed + 0.01 do
+            if PathFinderModule.getMapCropRawAt(bx + px * r, bz + pz * r) ~= 0 then
+                last, free = r, 0
+            else
+                free = free + step
+                if free >= clearNeed - 0.01 then
+                    return last
+                end
+            end
+            r = r + step
+        end
+        return nil
+    end
+    for k = 0, PathFinderModule.STRIP_DIRECTIONS - 1 do
+        local a = math.pi * k / PathFinderModule.STRIP_DIRECTIONS
+        local dx, dz = math.sin(a), math.cos(a)
+        local px, pz = dz, -dx
+        local ok = true
+        -- the same across line here and twice along each way: a field corner seen diagonally is no strip
+        for _, l in ipairs({0, -along, along, -2 * along, 2 * along}) do
+            local bx, bz = cx + dx * l, cz + dz * l
+            local plus = run(bx, bz, px, pz)
+            local minus = plus ~= nil and run(bx, bz, -px, -pz) or nil
+            if plus == nil or minus == nil or plus + minus > maxWidth then
+                ok = false
+                break
+            end
+        end
+        if ok then
+            return true
+        end
+    end
+    return false
+end
+
+-- crop at a position from the map; isolated plants count as none while a forage harvester unloader checks
 function PathFinderModule.getMapCropAt(x, z)
+    local crop = PathFinderModule.getMapCropRawAt(x, z)
+    if crop ~= 0 and PathFinderModule.ignoreIsolatedCrop and PathFinderModule.isIsolatedCrop(x, z) then
+        return 0
+    end
+    return crop
+end
+
+-- crop at a position from the map (nearest of the 4 samples of its cell, 0.5 m sample in the border band)
+function PathFinderModule.getMapCropRawAt(x, z)
     local size = PathFinderModule.MAP_CELL
     local ix, iz = math.floor(x / size + 0.5), math.floor(z / size + 0.5)
     local cell = PathFinderModule.getMapCell(ix, iz)
+    local fk = PathFinderModule.getFineIndex(ix, iz, x, z)
+    if fk ~= nil then
+        return PathFinderModule.getFineCell(cell, ix, iz).crop[fk]
+    end
     local k = 1
     if x >= ix * size then
         k = k + 1
@@ -906,19 +1155,85 @@ function PathFinderModule.getMapCropAt(x, z)
     return cell[k]
 end
 
--- field ground at a position from the map (nearest of the 4 samples of its cell)
+-- field ground at a position from the map (nearest of the 4 samples of its cell, 0.5 m sample in the border band)
 function PathFinderModule.getMapOnFieldAt(x, z)
     local size = PathFinderModule.MAP_CELL
     local ix, iz = math.floor(x / size + 0.5), math.floor(z / size + 0.5)
     local cell = PathFinderModule.getMapCell(ix, iz)
-    local k = 1
-    if x >= ix * size then
-        k = k + 1
+    local fk = PathFinderModule.getFineIndex(ix, iz, x, z)
+    local onField, grass
+    if fk ~= nil then
+        local fine = PathFinderModule.getFineCell(cell, ix, iz)
+        onField, grass = fine.field[fk], fine.grass ~= nil and fine.grass[fk]
+    else
+        local k = 1
+        if x >= ix * size then
+            k = k + 1
+        end
+        if z >= iz * size then
+            k = k + 2
+        end
+        onField, grass = cell.field[k], cell.grass ~= nil and cell.grass[k]
     end
-    if z >= iz * size then
-        k = k + 2
+    if onField and not PathFinderModule.isHarvestFieldGround(cell, grass) then
+        return false
     end
-    return cell.field[k]
+    return onField
+end
+
+-- the field being harvested (an unloader drove round the hedge onto the
+-- grass strip behind it, field ground for the game with no crop on it). While a forage harvester works another crop,
+-- grass or meadow ground is not its field; ground of another field number is not its field either
+PathFinderModule.HARVEST_FIELD_TTL = 60000 -- ms between two readings of the harvester's field
+PathFinderModule.harvestField = nil
+function PathFinderModule.getFieldIdAt(x, z)
+    if g_fieldManager == nil or g_fieldManager.getFieldAtWorldPosition == nil then
+        return nil
+    end
+    local ok, field = pcall(g_fieldManager.getFieldAtWorldPosition, g_fieldManager, x, z)
+    if ok and type(field) == "table" then
+        return field.fieldId or field.id
+    end
+    return nil
+end
+function PathFinderModule.setHarvestField(combine)
+    if combine == nil or combine.components == nil or combine.ad == nil or not combine.ad.isChopper then
+        return
+    end
+    local now = g_time or 0
+    local hf = PathFinderModule.harvestField
+    if hf ~= nil and hf.combine == combine and now - hf.t < PathFinderModule.HARVEST_FIELD_TTL then
+        return
+    end
+    local x, _, z = getWorldTranslation(combine.components[1].node)
+    local _, grass = PathFinderModule.readCropAt(x, z)
+    -- grass is its field when it picks grass up (its tank says so), or when it stands on grass and nothing said otherwise yet
+    local grassIsField = false
+    if combine.spec_combine ~= nil and combine.spec_combine.fillUnitIndex ~= nil and combine.getFillUnitFillType ~= nil then
+        local fillType = combine:getFillUnitFillType(combine.spec_combine.fillUnitIndex)
+        if fillType ~= nil and FillType ~= nil and (fillType == FillType.GRASS_WINDROW or fillType == FillType.DRYGRASS_WINDROW) then
+            grassIsField = true
+        end
+    end
+    if not grassIsField and grass == true and (hf == nil or hf.combine ~= combine or hf.grassIsField) then
+        grassIsField = true
+    end
+    local id = PathFinderModule.getFieldIdAt(x, z)
+    local changed = hf == nil or hf.combine ~= combine or hf.id ~= id or hf.grassIsField ~= grassIsField
+    PathFinderModule.harvestField = {combine = combine, id = id, grassIsField = grassIsField, t = now}
+end
+function PathFinderModule.isHarvestFieldGround(cell, grass)
+    local hf = PathFinderModule.harvestField
+    if hf == nil then
+        return true
+    end
+    if grass and not hf.grassIsField then
+        return false
+    end
+    if hf.id ~= nil and cell.fieldId ~= nil and cell.fieldId ~= hf.id then
+        return false
+    end
+    return true
 end
 
 -- share of standing crop in the parallelogram c1, c2 = c1 + u, c4 = c1 + v, sampled every meter.
@@ -1054,6 +1369,25 @@ function PathFinderModule.updateFieldScan()
             return
         end
     end
+    if scan.fineKeys == nil then
+        scan.bandCells = PathFinderModule.markFineBand(scan.visited)
+        scan.fineKeys, scan.fineIndex = {}, 1
+        for key, _ in pairs(scan.visited) do
+            if PathFinderModule.fineBand[key] then
+                scan.fineKeys[#scan.fineKeys + 1] = key
+            end
+        end
+    end
+    while scan.fineIndex <= #scan.fineKeys do
+        local key = scan.fineKeys[scan.fineIndex]
+        scan.fineIndex = scan.fineIndex + 1
+        local ix, iz = math.floor(key / 100000) - 50000, key % 100000 - 50000
+        PathFinderModule.getFineCell(PathFinderModule.getMapCell(ix, iz), ix, iz)
+        if scan.fineIndex % 10 == 0 and mapClock() >= stopAt then
+            return
+        end
+    end
+    local bandCells = scan.bandCells
     local crop = 0
     for key, _ in pairs(scan.visited) do
         local cell = PathFinderModule.fieldMap[key]
@@ -1063,6 +1397,57 @@ function PathFinderModule.updateFieldScan()
     end
     AutoDrive.debugPrint(nil, AutoDrive.DC_PATHINFO, "PathFinderModule field map: field scanned, %d cells of 2 m (%.1f ha), crop %d cells, in %.1f s", scan.count, scan.count * 4 / 10000, crop, (mapClock() - scan.startTime) / 1000)
     PathFinderModule.fieldScan = nil
+end
+
+-- border band of a scanned field: from the cells off the field next to it (the ring read by the scan), over the
+-- field cells, up to FINE_BAND_WIDTH toward the middle. Returns the number of cells in the band
+function PathFinderModule.markFineBand(visited)
+    local map = PathFinderModule.fieldMap
+    local function decode(key)
+        return math.floor(key / 100000) - 50000, key % 100000 - 50000
+    end
+    local function keyOf(ix, iz)
+        return (ix + 50000) * 100000 + (iz + 50000)
+    end
+    local maxSteps = math.ceil(PathFinderModule.FINE_BAND_WIDTH / PathFinderModule.MAP_CELL)
+    local dist, queue, head = {}, {}, 1
+    for key, _ in pairs(visited) do
+        local cell = map[key]
+        if cell ~= nil and not cell.onField then
+            local ix, iz = decode(key)
+            for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+                local n = map[keyOf(ix + d[1], iz + d[2])]
+                if n ~= nil and n.onField then
+                    dist[key] = 0
+                    queue[#queue + 1] = key
+                    break
+                end
+            end
+        end
+    end
+    while head <= #queue do
+        local key = queue[head]
+        head = head + 1
+        local ix, iz = decode(key)
+        if dist[key] < maxSteps then
+            for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+                local nkey = keyOf(ix + d[1], iz + d[2])
+                local n = map[nkey]
+                if dist[nkey] == nil and n ~= nil and n.onField then
+                    dist[nkey] = dist[key] + 1
+                    queue[#queue + 1] = nkey
+                end
+            end
+        end
+    end
+    local count = 0
+    for key, _ in pairs(dist) do
+        if not PathFinderModule.fineBand[key] then
+            PathFinderModule.fineBand[key] = true
+        end
+        count = count + 1
+    end
+    return count
 end
 
 -- cells looked at by the last search, kept for the display (reason: libre, champ, culture, obstacle/pente, vehicule)
@@ -1109,7 +1494,26 @@ function PathFinderModule.drawFieldMap()
     for ix = cx - r, cx + r do
         for iz = cz - r, cz + r do
             local cell = PathFinderModule.fieldMap[(ix + 50000) * 100000 + (iz + 50000)]
-            if cell ~= nil and cell.onField and cell.y ~= nil then
+            if cell ~= nil and cell.y ~= nil and cell.fine ~= nil then
+                -- border band: one small cross every 0.5 m
+                local fine, step = cell.fine, PathFinderModule.FINE_STEP
+                local x0, z0, y = ix * size - size / 2 + step / 2, iz * size - size / 2 + step / 2, cell.y + 0.15
+                local hh = step * 0.35
+                for j = 0, fine.n - 1 do
+                    for i = 0, fine.n - 1 do
+                        local k = j * fine.n + i + 1
+                        if fine.field[k] then
+                            local x, z = x0 + i * step, z0 + j * step
+                            local red, green = 0, 1
+                            if fine.crop[k] ~= 0 then
+                                red, green = 1, 0
+                            end
+                            drawDebugLine(x - hh, y, z - hh, red, green, 0, x + hh, y, z + hh, red, green, 0, false)
+                            drawDebugLine(x - hh, y, z + hh, red, green, 0, x + hh, y, z - hh, red, green, 0, false)
+                        end
+                    end
+                end
+            elseif cell ~= nil and cell.onField and cell.y ~= nil then
                 local x, z, y = ix * size, iz * size, cell.y + 0.15
                 local red, green = 0, 1
                 if cell[1] ~= 0 or cell[2] ~= 0 or cell[3] ~= 0 or cell[4] ~= 0 then
@@ -1131,6 +1535,29 @@ function PathFinderModule.drawFieldMap()
 end
 
 -- share of the area covered by standing crop (cut or withered crop counts as none)
+--: crop read from the density map over a
+-- parallelogram, kept only if one of its samples is crop that is neither an isolated plant nor a narrow strip
+PathFinderModule.ISLAND_SAMPLE = 1 -- m between samples
+function PathFinderModule.isOnlyIsolatedCropIn(c1X, c1Z, c2X, c2Z, c3X, c3Z)
+    local ux, uz = c2X - c1X, c2Z - c1Z
+    local vx, vz = c3X - c1X, c3Z - c1Z
+    local nu = math.max(1, math.ceil(math.sqrt(ux * ux + uz * uz) / PathFinderModule.ISLAND_SAMPLE))
+    local nv = math.max(1, math.ceil(math.sqrt(vx * vx + vz * vz) / PathFinderModule.ISLAND_SAMPLE))
+    local seen = false
+    for i = 0, nu do
+        for j = 0, nv do
+            local x, z = c1X + ux * i / nu + vx * j / nv, c1Z + uz * i / nu + vz * j / nv
+            if PathFinderModule.getMapCropRawAt(x, z) ~= 0 then
+                seen = true
+                if not PathFinderModule.isIsolatedCrop(x, z) then
+                    return false
+                end
+            end
+        end
+    end
+    return seen
+end
+
 function PathFinderModule.getFruitRatio(fruitTypeIndex, c1X, c1Z, c2X, c2Z, c3X, c3Z)
     if fruitTypeIndex == FruitType.GRASS or fruitTypeIndex == FruitType.MEADOW then
         return 0
@@ -1188,15 +1615,24 @@ function PathFinderModule:getFreeStartDistance(vehicleWorldX, vehicleWorldZ, dir
             self.collisionhits = self.collisionhits + 1
         end
         if self.collisionhits == 0 then
-            if distance ~= maxDistance then
                 PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:getFreeStartDistance obstacle ahead, start %.1f m in front instead of %.1f m", distance, maxDistance)
-            end
             return distance
         end
     end
     local shortest = distances[#distances]
     PathFinderModule.debugMsg(self.vehicle, "PathFinderModule:getFreeStartDistance obstacle right in front, start %.1f m in front", shortest)
     return shortest
+end
+
+-- where the route starts: the vehicle, or the pose given by the caller (end of the piece being driven)
+function PathFinderModule:getStartPose()
+    if self.startPose ~= nil then
+        local p = self.startPose
+        return p.x, p.y, p.z, p.rx, p.rz
+    end
+    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    local rx, _, rz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    return x, y, z, rx, rz
 end
 
 function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
@@ -1222,8 +1658,7 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
         targetVector.z = 0.001
     end
     self.targetVector = targetVector
-    local vehicleWorldX, vehicleWorldY, vehicleWorldZ = getWorldTranslation(self.vehicle.components[1].node)
-    local vehicleRx, _, vehicleRz =  AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local vehicleWorldX, vehicleWorldY, vehicleWorldZ, vehicleRx, vehicleRz = self:getStartPose()
     local vehicleVector = {x = vehicleRx, z = vehicleRz}
     -- the stretch from the vehicle to the start point is driven unchecked: pull the start closer if a tree, wall... is on it
     local startDistance = self:getFreeStartDistance(vehicleWorldX, vehicleWorldZ, vehicleRx, vehicleRz)
@@ -1251,6 +1686,7 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
 
     self.fruitToCheck = nil
     self.trainHalfWidth = self:getTrainWidth() / 2 + PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN
+    self:updateCropHalfWidth()
 
     self.start = {x = self.startX, z = self.startZ}
     self.startCell = {x = 0, z = 0}
@@ -1264,7 +1700,7 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     self.startCell.bordercells = 0
     self.currentCell = nil
 
-    local vehicleBehindX, _, vehicleBehindZ =  AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, -self.minTurnRadius)
+    local vehicleBehindX, vehicleBehindZ = -vehicleRx * self.minTurnRadius, -vehicleRz * self.minTurnRadius
     local vehicleBehindVector = {x = vehicleBehindX, z = vehicleBehindZ}
     self.behindStartCell = self:worldLocationToGridLocation(vehicleWorldX + vehicleBehindX, vehicleWorldZ + vehicleBehindZ)
     self.behindStartCell.direction = self:worldDirectionToGridDirection(vehicleBehindVector, vehicleVector)
@@ -1310,6 +1746,10 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     -- strict settings are never dropped by the fallback modes, whatever the trip
     self.strictField = AutoDrive.getSetting("restrictToField", self.vehicle) == "strict"
     self.strictFruit = self.avoidFruitSetting == "strict"
+    if self.allowCrop then
+        -- crop avoided first, crossed only by the fallback (the caller lifts noFallback)
+        self.strictFruit = false
+    end
     if self.strictField then
         -- strict: never drive on another field, wherever the trip starts or ends. Ground that is not a field (grass, verges) stays allowed
         self.restrictToField = true
@@ -1339,6 +1779,13 @@ function PathFinderModule:startPathPlanningTo(targetPoint, targetVector)
     self.strictFruitRefusals = 0
     self.mapReadsAtStart = PathFinderModule.fieldMapReads
     PathFinderModule.searchCells = {}
+    -- forage harvester work, strict: real driving distances inside the cut strips toward the target (ADBandRoute)
+    self.bandFlood = nil
+    self.bandFloodStartDistance = nil
+    if (self.strictFruit or self.strictField) and self:isChopperWork() and ADBandRoute ~= nil then
+        self.bandFlood = ADBandRoute.request(targetX, targetZ, self:getCropHalfWidth())
+        self.bandFloodWaitUntil = (g_time or 0) + PathFinderModule.BAND_FLOOD_WAIT
+    end
     -- self.targetFieldId = g_farmlandManager:getFarmlandIdAtWorldPosition(targetX, targetZ)   -- only has ID if vector target is onField
     -- self.targetFieldId = nil
     -- if self.restrictToField and self.targetFieldId ~= nil and self.targetFieldId > 0 then
@@ -1441,12 +1888,11 @@ function PathFinderModule:shrinkGrid()
     self.vectorX = {x =   math.cos(angleRad) * self.minTurnRadius, z = math.sin(angleRad) * self.minTurnRadius}
     self.vectorZ = {x = - math.sin(angleRad) * self.minTurnRadius, z = math.cos(angleRad) * self.minTurnRadius}
 
-    local vehicleWorldX, _, vehicleWorldZ = getWorldTranslation(self.vehicle.components[1].node)
-    local vehicleRx, _, vehicleRz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local vehicleWorldX, _, vehicleWorldZ, vehicleRx, vehicleRz = self:getStartPose()
     local vehicleVector = {x = vehicleRx, z = vehicleRz}
     self.startCell.direction = self:worldDirectionToGridDirection(vehicleVector)
 
-    local vehicleBehindX, _, vehicleBehindZ = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, -self.minTurnRadius)
+    local vehicleBehindX, vehicleBehindZ = -vehicleRx * self.minTurnRadius, -vehicleRz * self.minTurnRadius
     self.behindStartCell = self:worldLocationToGridLocation(vehicleWorldX + vehicleBehindX, vehicleWorldZ + vehicleBehindZ)
     self.behindStartCell.direction = self:worldDirectionToGridDirection({x = vehicleBehindX, z = vehicleBehindZ}, vehicleVector)
     self.behind = {x = vehicleWorldX + vehicleBehindX, z = vehicleWorldZ + vehicleBehindZ}
@@ -1537,7 +1983,7 @@ function PathFinderModule:isStretchClear(a, b, inner, narrow, obstaclesOnly)
     end
 
     if self.avoidFruitSetting and not self.fallBackMode3 then
-        local clear, reason = self:isFruitStretchClear(a, b, halfWidth)
+        local clear, reason = self:isFruitStretchClear(a, b, self.cropHalfWidth or halfWidth)
         if not clear then
             return false, reason
         end
@@ -1567,6 +2013,10 @@ end
 
 -- a partial route must bring the vehicle at least PARTIAL_MIN_GAIN closer to the target
 function PathFinderModule:partialGain(endPoint)
+    local band = self:getBandGain(self.startX, self.startZ, endPoint.x, endPoint.z)
+    if band ~= nil then
+        return band
+    end
     local startDistance = MathUtil.vector2Length(self.startX - self.target.x, self.startZ - self.target.z)
     local endDistance = MathUtil.vector2Length(endPoint.x - self.target.x, endPoint.z - self.target.z)
     return startDistance - endDistance
@@ -1592,9 +2042,44 @@ function PathFinderModule:usePartialPath(badIndex)
     return true
 end
 
+-- a corner too sharp for the train: the route is kept up to it (rule: drive to the last valid point, plan
+-- again from there), with the usual end checks of a partial route
+PathFinderModule.SHARP_PARTIAL_MIN_LENGTH = 10
+
+function PathFinderModule:usePartialBeforeSharp()
+    local index = self.firstSharpIndex
+    if not self:isChopperWork() or index == nil or index < 2 or not (self:partialAllowed() or self.partialPath) then
+        return false
+    end
+    local length = 0
+    for i = 2, index do
+        length = length + MathUtil.vector2Length(self.wayPoints[i].x - self.wayPoints[i - 1].x, self.wayPoints[i].z - self.wayPoints[i - 1].z)
+    end
+    if length < PathFinderModule.SHARP_PARTIAL_MIN_LENGTH then
+        return false
+    end
+    local saved, savedPartial = self.wayPoints, self.partialPath
+    local p = saved[index]
+    if self:usePartialPath(index) and self:trimPartialEnd() then
+        return true
+    end
+    self.wayPoints = saved
+    self.partialPath = savedPartial
+    return false
+end
+
+-- the forage harvester behaviours (guided departure, short partial routes, direct curve checks...)
+-- only apply when unloading a forage harvester: a combine harvester keeps the former behaviour
+function PathFinderModule:isChopperWork()
+    return AutoDrive.isChopperUnloading(self.vehicle)
+end
+
 -- end of a partial route to a harvester: never waiting face to face with it, against its way
 PathFinderModule.PARTIAL_MAX_HEADING_ANGLE = math.rad(120)
 PathFinderModule.PARTIAL_HEADING_LENGTH = 3
+PathFinderModule.PARTIAL_FACING_MAX_DISTANCE = 60 -- the rule only matters near the harvester
+PathFinderModule.PARTIAL_FACING_LIFT_FAILURES = 5 -- after so many waits in a row, the rule is lifted
+PathFinderModule.PARTIAL_SHORT_MIN_GAIN = 2 -- a partial route shortened to a clean stop must still move this much
 
 function PathFinderModule:isPartialEndFacingCombine(index)
     local wps = self.wayPoints
@@ -1613,6 +2098,15 @@ function PathFinderModule:isPartialEndFacingCombine(index)
     local length = math.sqrt(dx * dx + dz * dz)
     if length < 0.5 then
         return false
+    end
+    if self:isChopperWork() then
+        if self.partialFacingLifted then
+            return false
+        end
+        local cx, _, cz = getWorldTranslation(self.pipeCombine.components[1].node)
+        if MathUtil.vector2Length(b.x - cx, b.z - cz) > PathFinderModule.PARTIAL_FACING_MAX_DISTANCE then
+            return false
+        end
     end
     local rx, _, rz = AutoDrive.localDirectionToWorld(self.pipeCombine, 0, 0, 1)
     return (dx * rx + dz * rz) / length < math.cos(PathFinderModule.PARTIAL_MAX_HEADING_ANGLE)
@@ -1641,6 +2135,9 @@ end
 -- a partial route stops with margin: PARTIAL_STOP_MARGIN meters back along the route, and the train standing there
 -- (its width + 1 m each side) touches no crop. Returns false if nothing worth driving is left
 PathFinderModule.PARTIAL_STOP_MARGIN = 10
+PathFinderModule.PARTIAL_DRIVE_SHARE = 0.8 -- forage harvester: share of a partial piece driven before the stop
+PathFinderModule.STOP_OVERRUN = 4 -- clear ground in front of a stop: the train overruns its last point by ~3 m
+PathFinderModule.PARTIAL_STOP_START_IGNORE = 15 -- crop this close to the start is where the train already stands
 function PathFinderModule:isPartialStopClear(i)
     local wps = self.wayPoints
     local a, b = wps[i - 1], wps[i]
@@ -1650,30 +2147,1287 @@ function PathFinderModule:isPartialStopClear(i)
         return true
     end
     dx, dz = dx / l, dz / l
-    local half = (self.trainHalfWidth or 2) + 1
+    local chopper = self:isChopperWork()
+    -- exact train width: the route itself is already checked with its margin (combine harvester: width + 1 m)
+    local half = chopper and self:getCropHalfWidth() or ((self.trainHalfWidth or 2) + 1)
     local back = math.max(AutoDrive.getTractorTrainLength(self.vehicle, true, false), 8)
+    -- the train already stands near the start: crop there is not run over by driving on, it is not counted
+    local start = wps[1]
+    if chopper and start ~= nil then
+        local fromStart = MathUtil.vector2Length(b.x - start.x, b.z - start.z) - PathFinderModule.PARTIAL_STOP_START_IGNORE
+        back = math.max(math.min(back, fromStart), 0.5)
+    end
     local c1X, c1Z = b.x - dz * half - dx * back, b.z + dx * half - dz * back
-    local c2X, c2Z = b.x - dz * half + dx * 2, b.z + dx * half + dz * 2
+    local ahead = chopper and PathFinderModule.STOP_OVERRUN or 2
+    local c2X, c2Z = b.x - dz * half + dx * ahead, b.z + dx * half + dz * ahead
     local c4X, c4Z = b.x + dz * half - dx * back, b.z - dx * half - dz * back
     return PathFinderModule.getMapCropRatio(nil, c1X, c1Z, c2X, c2Z, c4X, c4Z) <= 0
 end
 
+-- guided departure (strict): when no clean route leaves from where the train stands (corners too sharp for it,
+-- crop at a tight field entrance), short curves are tried from the real position and heading of the tractor,
+-- first with its real turning radius, then tighter. The whole band swept by the train must be free of crop
+-- (inner side widened in curves, the trailer cuts them) and of obstacles, and the train must stand clear at the stop
+PathFinderModule.GUIDED_DISTANCES = {15, 20, 25, 30, 35, 40}
+PathFinderModule.GUIDED_BEARING_MAX = 90 -- deg, stop points ahead and beside the tractor (parked askew)
+PathFinderModule.GUIDED_BEARING_STEP = 15
+PathFinderModule.GUIDED_HEADING_MAX = 90 -- deg, heading at the stop relative to the tractor
+PathFinderModule.GUIDED_HEADING_STEP = 15
+PathFinderModule.GUIDED_RADIUS_FACTORS = {1, 0.8, 0.7}
+PathFinderModule.GUIDED_MIN_GAIN = 5
+-- no route but with a corner too sharp, no clean stop closer: drive on to a clean stop further (rule), up to
+-- GUIDED_MAX_LOSS farther from the target, the one with the most room of the strips around it, then plan again.
+-- Once per place (GUIDED_LOSS_PLACE m, GUIDED_LOSS_TIME ms), GUIDED_LOSS_MAX_IN_ROW in a row, then the task's U-turn
+PathFinderModule.GUIDED_MAX_LOSS = 30
+PathFinderModule.GUIDED_LOSS_PLACE = 15
+PathFinderModule.GUIDED_LOSS_TIME = 120000
+PathFinderModule.GUIDED_LOSS_MAX_IN_ROW = 2
+PathFinderModule.GUIDED_ROOM_RADIUS = 10
+PathFinderModule.GUIDED_MAX_CURVES = 60 -- curves checked per radius, keeps the frame time low
+PathFinderModule.GUIDED_MAX_IN_ROW = 3 -- guided departures in a row without a normal route
+PathFinderModule.GUIDED_TRAILER_LENGTH = 6 -- for the cut of the trailer inside the curves
+PathFinderModule.GUIDED_STOP_AHEAD = 4 -- clear ground in front of the stop (the train overruns ~3 m)
+PathFinderModule.GUIDED_EXIT_AHEAD = 10 -- m ahead of the stop free of crop at the train width: never stop nose against the crop
+PathFinderModule.GUIDED_POINT_SPACING = 2
+PathFinderModule.GUIDED_EXACT_LENGTH = 15 -- m at the start of a guided curve checked at the exact train width (no margin)
+PathFinderModule.GUIDED_START_TOLERANCE = 4 -- first meters where the train already stands: exact width, as the grid search
+PathFinderModule.GUIDED_RETRY_TIME = 15000 -- no new search from the same place before this delay (ms)
+-- repeated failure from the same place: the crop border lines of the map are ignored on the first meters,
+-- level 1 = first line (the map spills onto the cut strip), level 2 = second line too (first crop row).
+-- The stop zone stays fully clean at every level
+PathFinderModule.GUIDED_BORDER_LENGTH = 30
+PathFinderModule.GUIDED_BORDER_LINE = 2 -- m, one map cell
+PathFinderModule.GUIDED_MAX_LEVEL = 2
+PathFinderModule.GUIDED_FAILS_PER_LEVEL = 2
+-- never stop in the way of the harvester: not in its lane ahead, not too close, not facing it
+PathFinderModule.GUIDED_LANE_LENGTH = 60
+PathFinderModule.GUIDED_LANE_MARGIN = 2
+PathFinderModule.GUIDED_MIN_HARVESTER_DISTANCE = 15 -- failed searches at a level before the next one (extreme case only)
+
+-- stop point in the way of the harvester the route goes to (nil: no harvester, nothing in the way)
+function PathFinderModule:isGuidedStopInHarvesterWay(x, z, heading)
+    local combine = self.pipeCombine
+    if not self.goingToPipe or combine == nil or combine.components == nil then
+        return false
+    end
+    local cx, _, cz = getWorldTranslation(combine.components[1].node)
+    local rx, _, rz = AutoDrive.localDirectionToWorld(combine, 0, 0, 1)
+    local dx, dz = x - cx, z - cz
+    local distance = math.sqrt(dx * dx + dz * dz)
+    if distance < PathFinderModule.GUIDED_MIN_HARVESTER_DISTANCE then
+        return true
+    end
+    local ahead = dx * rx + dz * rz
+    local side = math.abs(dx * rz - dz * rx)
+    local width = (combine.size ~= nil and combine.size.width or 4) / 2 + (self.trainHalfWidth or 2) + PathFinderModule.GUIDED_LANE_MARGIN
+    if ahead > 0 and ahead < PathFinderModule.GUIDED_LANE_LENGTH and side < width then
+        return true
+    end
+    if distance < PathFinderModule.PARTIAL_FACING_MAX_DISTANCE
+        and (math.sin(heading) * rx + math.cos(heading) * rz) < math.cos(PathFinderModule.PARTIAL_MAX_HEADING_ANGLE) then
+        return true
+    end
+    return false
+end
+
+-- crop sample within level lines of clean cut field ground
+function PathFinderModule.isGuidedBorderCrop(x, z, level)
+    local maxR = level * PathFinderModule.GUIDED_BORDER_LINE
+    for r = 1, maxR do
+        for k = 0, 7 do
+            local a = k * math.pi / 4
+            local px, pz = x + math.sin(a) * r, z + math.cos(a) * r
+            if PathFinderModule.getMapCropAt(px, pz) == 0 and PathFinderModule.getMapOnFieldAt(px, pz) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- returns clear, distance along the curve of the first crop met
+function PathFinderModule:isGuidedBandClear(path, radius, level)
+    level = level or 0
+    local along = 0
+    -- crop band at the outer tyre edges (forage harvester only uses the guided departure)
+    local half = self:getCropHalfWidth()
+    local exactHalf = math.min(half, self:getTrainWidth() / 2)
+    local cut = PathFinderModule.GUIDED_TRAILER_LENGTH
+    cut = math.min(radius - math.sqrt(math.max(radius * radius - cut * cut, 0)), 3)
+    for i = 2, #path do
+        local a, b = path[i - 1], path[i]
+        local dx, dz = b.x - a.x, b.z - a.z
+        local l = math.sqrt(dx * dx + dz * dz)
+        along = along + l
+        if l > 0.05 then
+            dx, dz = dx / l, dz / l
+            local tolerant = level > 0 and along <= PathFinderModule.GUIDED_BORDER_LENGTH
+            -- first GUIDED_EXACT_LENGTH meters (leaving a strip along the crop): exact train width, no comfort margin;
+            -- the trailer cut inside the curves is still added after the first meters
+            local base = along <= PathFinderModule.GUIDED_EXACT_LENGTH and exactHalf or half
+            local left, right = base, base
+            local c = path[i + 1]
+            if i > PathFinderModule.GUIDED_START_TOLERANCE + 1 and c ~= nil then
+                local cross = dx * (c.z - b.z) - dz * (c.x - b.x)
+                if cross > 0.02 then
+                    left = base + cut
+                elseif cross < -0.02 then
+                    right = base + cut
+                end
+            end
+            local nx, nz = -dz, dx
+            local w = -right
+            while w <= left do
+                for _, back in ipairs({0, 0.5}) do
+                    local px, pz = b.x - dx * back + nx * w, b.z - dz * back + nz * w
+                    local crop = PathFinderModule.getMapCropAt(px, pz)
+                    if crop ~= nil and crop ~= 0 and not (tolerant and PathFinderModule.isGuidedBorderCrop(px, pz, level)) then
+                        return false, along
+                    end
+                end
+                w = w + 0.5
+            end
+        end
+    end
+    return true, nil
+end
+
+-- the stopped train stands on the last meters of the curve: that strip (and the overrun ahead) must be fully clean.
+-- The first meters, where the train already stands, are left out as for the band
+function PathFinderModule:isGuidedStopClear(path, hx, hz)
+    local half = self:getCropHalfWidth()
+    local trainLength = math.max(AutoDrive.getTractorTrainLength(self.vehicle, true, false), 8)
+    local last = path[#path]
+    -- overrun ahead of the stop, then room to drive on: a stop nose against the crop has no way out but reversing
+    local ahead = math.max(PathFinderModule.GUIDED_STOP_AHEAD, PathFinderModule.GUIDED_EXIT_AHEAD)
+    for f = 0.5, ahead, 0.5 do
+        local w = -half
+        while w <= half do
+            local crop = PathFinderModule.getMapCropAt(last.x + hx * f - hz * w, last.z + hz * f + hx * w)
+            if crop ~= nil and crop ~= 0 then
+                return false
+            end
+            w = w + 0.5
+        end
+    end
+    local covered = 0
+    for i = #path, 2, -1 do
+        if i <= PathFinderModule.GUIDED_START_TOLERANCE + 1 or covered >= trainLength then
+            break
+        end
+        local a, b = path[i - 1], path[i]
+        local dx, dz = b.x - a.x, b.z - a.z
+        local l = math.sqrt(dx * dx + dz * dz)
+        if l > 0.05 then
+            dx, dz = dx / l, dz / l
+            for _, back in ipairs({0, 0.5}) do
+                local w = -half
+                while w <= half do
+                    local crop = PathFinderModule.getMapCropAt(b.x - dx * back - dz * w, b.z - dz * back + dx * w)
+                    if crop ~= nil and crop ~= 0 then
+                        return false
+                    end
+                    w = w + 0.5
+                end
+            end
+            covered = covered + l
+        end
+    end
+    return true
+end
+
+function PathFinderModule:tryGuidedDepartureFurther()
+    local node = self.vehicle.components[1].node
+    local vx, _, vz = getWorldTranslation(node)
+    local now = g_time or 0
+    if (self.guidedLossInRow or 0) >= PathFinderModule.GUIDED_LOSS_MAX_IN_ROW then
+        return false
+    end
+    if self.guidedLossX ~= nil and now - (self.guidedLossTime or 0) < PathFinderModule.GUIDED_LOSS_TIME
+        and MathUtil.vector2Length(vx - self.guidedLossX, vz - self.guidedLossZ) < PathFinderModule.GUIDED_LOSS_PLACE then
+        return false
+    end
+    -- once per place, found or not
+    self.guidedLossX, self.guidedLossZ, self.guidedLossTime = vx, vz, now
+    -- the usual search with its limits lifted: no retry delay, no count in a row
+    local failX, inRow = self.guidedFailX, self.guidedInRow
+    self.guidedFailX, self.guidedInRow = nil, 0
+    local level, levelFails = self.guidedLevel, self.guidedLevelFails
+    self.guidedFurther = true
+    local ok = self:tryGuidedDeparture()
+    self.guidedFurther = false
+    self.guidedFailX, self.guidedInRow = failX, inRow
+    self.guidedLevel, self.guidedLevelFails = level, levelFails
+    if ok then
+        self.guidedLossInRow = (self.guidedLossInRow or 0) + 1
+    end
+    return ok
+end
+
+-- points of the strips within GUIDED_ROOM_RADIUS (2 m steps): room to turn there
+function PathFinderModule:getGuidedRoom(x, z)
+    if not self:isBandFloodReady() then
+        return 0
+    end
+    local room, r = 0, PathFinderModule.GUIDED_ROOM_RADIUS
+    for dz = -r, r, 2 do
+        for dx = -r, r, 2 do
+            if dx * dx + dz * dz <= r * r and ADBandRoute.getDistance(self.bandFlood, x + dx, z + dz, 1) ~= nil then
+                room = room + 1
+            end
+        end
+    end
+    return room
+end
+
+function PathFinderModule:tryGuidedDeparture(allowLoss)
+    if self.startPose ~= nil or not self:isChopperWork() or not (self.strictFruit or self.strictField) or self.target == nil or self.startX == nil then
+        return false
+    end
+    if allowLoss then
+        return self:tryGuidedDepartureFurther()
+    end
+    if (self.guidedInRow or 0) >= PathFinderModule.GUIDED_MAX_IN_ROW then
+        return false
+    end
+    local node = self.vehicle.components[1].node
+    local vx, _, vz = getWorldTranslation(node)
+    -- nothing found from this very place a moment ago: no new search yet (it costs frame time)
+    local now = g_time or 0
+    if self.guidedFailX ~= nil and MathUtil.vector2Length(vx - self.guidedFailX, vz - self.guidedFailZ) < 1 then
+        if now - (self.guidedFailTime or 0) < PathFinderModule.GUIDED_RETRY_TIME then
+            return false
+        end
+    else
+        -- another place: back to the clean search
+        self.guidedLevel = 0
+        self.guidedLevelFails = 0
+    end
+    local level = self.guidedLevel or 0
+    local further = self.guidedFurther == true
+    if further then
+        level = 0
+    end
+    local rx, _, rz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local heading = math.atan2(rx, rz)
+    local q0 = {vx, -vz, AutoDrive.normalizeAngle(heading + math.pi + math.pi / 2)}
+
+    -- stop points on clean field ground ahead, best gain toward the target first
+    local candidates = {}
+    local inWay = 0
+    for _, d in ipairs(PathFinderModule.GUIDED_DISTANCES) do
+        for b = -PathFinderModule.GUIDED_BEARING_MAX, PathFinderModule.GUIDED_BEARING_MAX, PathFinderModule.GUIDED_BEARING_STEP do
+            local a = heading + math.rad(b)
+            local x, z = vx + math.sin(a) * d, vz + math.cos(a) * d
+            local gain = self:partialGain({x = x, z = z})
+            local crop = PathFinderModule.getMapCropAt(x, z)
+            local minGain = further and -PathFinderModule.GUIDED_MAX_LOSS or PathFinderModule.GUIDED_MIN_GAIN
+            if gain >= minGain and (crop == nil or crop == 0) and PathFinderModule.getMapOnFieldAt(x, z) then
+                local room = further and self:getGuidedRoom(x, z) or 0
+                for h = -PathFinderModule.GUIDED_HEADING_MAX, PathFinderModule.GUIDED_HEADING_MAX, PathFinderModule.GUIDED_HEADING_STEP do
+                    local endHeading = heading + math.rad(h)
+                    if self:isGuidedStopInHarvesterWay(x, z, endHeading) then
+                        inWay = inWay + 1
+                    else
+                        candidates[#candidates + 1] = {x = x, z = z, d = d, heading = endHeading, gain = gain - math.abs(h) * 0.02, room = room}
+                    end
+                end
+            end
+        end
+    end
+    if further then
+        -- the most room to turn first, then the smallest loss
+        table.sort(candidates, function(c1, c2)
+            if c1.room ~= c2.room then
+                return c1.room > c2.room
+            end
+            return c1.gain > c2.gain
+        end)
+    else
+        table.sort(candidates, function(c1, c2) return c1.gain > c2.gain end)
+    end
+
+    local tried, refusedBand, refusedStop, refusedObstacle, firstCrop = 0, 0, 0, 0, nil
+    for _, factor in ipairs(PathFinderModule.GUIDED_RADIUS_FACTORS) do
+        local radius = (self.realTurnRadius or self.minTurnRadius) * factor
+        local checked = 0
+        for _, cand in ipairs(candidates) do
+            if checked >= PathFinderModule.GUIDED_MAX_CURVES then
+                break
+            end
+            local hx, hz = math.sin(cand.heading), math.cos(cand.heading)
+            local q1 = {cand.x, -cand.z, AutoDrive.normalizeAngle(cand.heading + math.pi + math.pi / 2)}
+            self.dubins.outPath = {}
+            if self.dubins:dubins_shortest_path(ADDubins.DubinsPath, q0, q1, radius) == ADDubins.EDUBOK
+                and self.dubins:dubins_path_length(ADDubins.DubinsPath) <= cand.d * 1.6 then
+                checked = checked + 1
+                tried = tried + 1
+                local length = self.dubins:dubins_path_length(ADDubins.DubinsPath)
+                if self.dubins:dubins_path_sample_many(ADDubins.DubinsPath, 1, self.dubins.createWayPoints) == ADDubins.EDUBOK
+                    and #self.dubins.outPath > 2 then
+                    local path = self.dubins.outPath
+                    path[#path + 1] = {x = cand.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cand.x, 1, cand.z), z = cand.z, t = q1[3]}
+                    local ok, cropAt = self:isGuidedBandClear(path, radius, level)
+                    if not ok then
+                        refusedBand = refusedBand + 1
+                        if cropAt ~= nil and (firstCrop == nil or cropAt > firstCrop) then
+                            firstCrop = cropAt
+                        end
+                    elseif not self:isGuidedStopClear(path, hx, hz) then
+                        ok = false
+                        refusedStop = refusedStop + 1
+                    end
+                    if ok then
+                        -- level 2 drives over the first crop row on the first meters: the tractor's own crop check is left out there
+                        local avoidFruit = self.avoidFruitSetting
+                        -- obstacles, slope, field and the usual crop check of the tractor, as for any curve
+                        local cells = {}
+                        for i, wp in ipairs(path) do
+                            local cell = {x = i, z = 0, t = wp.t, height = self.vehicleMinHeight}
+                            cell.worldPos = {x = wp.x, y = wp.y, z = wp.z}
+                            cell.incoming = cells[i - 5]
+                            cells[i] = cell
+                            -- the first meters are where the train already stands
+                            if level >= 2 then
+                                self.avoidFruitSetting = avoidFruit and i > PathFinderModule.GUIDED_BORDER_LENGTH
+                            end
+                            if i > PathFinderModule.GUIDED_START_TOLERANCE + 1 and not self:isDriveableDubins(cell) then
+                                ok = false
+                                refusedObstacle = refusedObstacle + 1
+                                break
+                            end
+                        end
+                        self.avoidFruitSetting = avoidFruit
+                    end
+                    if ok and not self:isGuidedTrailerClear(path) then
+                        -- the trailer cut inside the curve into the waiting tractors
+                        ok = false
+                        refusedObstacle = refusedObstacle + 1
+                    end
+                    if ok then
+                        local points = {}
+                        local spacing = PathFinderModule.GUIDED_POINT_SPACING
+                        for i, wp in ipairs(path) do
+                            if i == 1 or i == #path or (i - 1) % spacing == 0 then
+                                points[#points + 1] = {x = wp.x, y = wp.y, z = wp.z}
+                            end
+                        end
+                        self.wayPoints = points
+                        self.partialPath = true
+                        if further then
+                            return true
+                        end
+                        self.guidedInRow = (self.guidedInRow or 0) + 1
+                        self.guidedLevel = 0
+                        self.guidedLevelFails = 0
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    if further then
+        return false
+    end
+    self.guidedFailX, self.guidedFailZ, self.guidedFailTime = vx, vz, now
+    self.guidedLevelFails = (self.guidedLevelFails or 0) + 1
+    local raise = level < PathFinderModule.GUIDED_MAX_LEVEL and self.guidedLevelFails >= PathFinderModule.GUIDED_FAILS_PER_LEVEL
+    if raise then
+        self.guidedLevel = level + 1
+        self.guidedLevelFails = 0
+    end
+    return false
+end
+
+-- forage harvester, very narrow places only (a cut strip where a single train fits): the route follows the crop edge
+-- at a fixed gap instead of the grid (cells cut a diagonal strip into stairs, the route zigzags or finds no way).
+-- Line by line every EDGE_STEP meters: the crop edge is searched beside the line (0.5 m map), the route point is put
+-- EDGE_GAP + half the tyre width away from it on the free side, turning no sharper than the train can. It ends close
+-- to the harvester (the chase takes over), where the edge is lost or the strip blocked; the grid is used otherwise.
+PathFinderModule.EDGE_STEP = 2
+PathFinderModule.EDGE_GAP = 0.5            -- m between the tyres and the first crop row
+PathFinderModule.EDGE_SCAN = 8             -- m beside the line where the crop edge is searched
+PathFinderModule.EDGE_FREE_SCAN = 15       -- m on the free side to measure the strip
+PathFinderModule.EDGE_NARROW_FACTOR = 2    -- narrow: strip narrower than this many trains (body width + margin)
+PathFinderModule.EDGE_MAX_LENGTH = 300
+PathFinderModule.EDGE_MIN_LENGTH = 10
+PathFinderModule.EDGE_NO_GAIN_LENGTH = 20  -- m driven without getting closer to the harvester: stop
+PathFinderModule.EDGE_STOP_OVERRUN = 4
+PathFinderModule.EDGE_CORNER_MARGIN = 1 -- m added to the gap around a corner
+PathFinderModule.EDGE_CORNER_MIN_ROOM = 6 -- m of cut ground behind a corner, else it is no way for the train
+PathFinderModule.EDGE_TURN_MIN_DEG = 20 -- turn of a corner before the edge is looked for along the train
+PathFinderModule.EDGE_TURN_FOUND = 2 -- m beyond the gap where the edge counts as found again
+PathFinderModule.EDGE_BEND_EXTRA = 10 -- m looked ahead beyond the turn radius for a bend toward the crop
+PathFinderModule.EDGE_BEND_MARGIN = 0.7 -- start turning away before the last moment
+
+function PathFinderModule:edgeCropAt(x, z)
+    local crop = PathFinderModule.getMapCropAt(x, z)
+    return crop ~= nil and crop ~= 0
+end
+
+-- distance (0.5 m steps) from x, z along nx, nz to the first crop sample, nil if none within maxDistance
+function PathFinderModule:edgeFindCrop(x, z, nx, nz, fromDistance, maxDistance)
+    local w = fromDistance
+    while w <= maxDistance do
+        if self:edgeCropAt(x + nx * w, z + nz * w) then
+            return w
+        end
+        w = w + 0.5
+    end
+    return nil
+end
+
+-- forage harvester: the track driven by the previous unloader up to the harvester (shared by the harvester), reused
+-- from where it passes the train, every stretch checked again (crop at the tyres, field, obstacles such as parked trailers)
+PathFinderModule.LANE_MAX_AGE = 1200000 -- ms
+PathFinderModule.LANE_JOIN_DISTANCE = 6 -- m from the train to the lane
+PathFinderModule.LANE_END_DISTANCE = 40 -- m: the end of the lane at most this far from the harvester
+
+function PathFinderModule:laneStretchClear(a, b, cropHalf)
+    local dx, dz = b.x - a.x, b.z - a.z
+    local l = math.sqrt(dx * dx + dz * dz)
+    if l < 0.05 then
+        return true
+    end
+    local nx, nz = -dz / l, dx / l
+    local n = math.max(1, math.ceil(l / 0.5))
+    local samples = math.ceil(cropHalf * 4)
+    for i = 0, n do
+        local px, pz = a.x + dx * i / n, a.z + dz * i / n
+        if not PathFinderModule.getMapOnFieldAt(px, pz) then
+            return false
+        end
+        for k = 0, samples do
+            local w = -cropHalf + 2 * cropHalf * k / samples
+            if self:edgeCropAt(px + nx * w, pz + nz * w) then
+                return false
+            end
+        end
+    end
+    return self:isStretchClear(a, b, nil, true, true)
+end
+
+function PathFinderModule:tryLane()
+    if not self:isChopperWork() or not (self.strictFruit or self.strictField) or self.pipeCombine == nil or self.startX == nil then
+        return false
+    end
+    local shared = self.pipeCombine.ad ~= nil and self.pipeCombine.ad.sharedLane or nil
+    if shared == nil or (g_time or 0) - shared.time > PathFinderModule.LANE_MAX_AGE then
+        return false
+    end
+    local lane = shared.points
+    local x, _, z, hx, hz = self:getStartPose()
+    local best, bestD = nil, PathFinderModule.LANE_JOIN_DISTANCE
+    for i = 1, #lane - 1 do
+        local d = MathUtil.vector2Length(lane[i].x - x, lane[i].z - z)
+        local ldx, ldz = lane[i + 1].x - lane[i].x, lane[i + 1].z - lane[i].z
+        local ll = math.sqrt(ldx * ldx + ldz * ldz)
+        if d < bestD and ll > 0.1 and (ldx * hx + ldz * hz) / ll > 0.7 then
+            best, bestD = i, d
+        end
+    end
+    if best == nil then
+        return false
+    end
+    local name = self:getLogName()
+    local cropHalf = self:getCropHalfWidth()
+    local cx, _, cz = getWorldTranslation(self.pipeCombine.components[1].node)
+    local closeRange = CatchCombinePipeTask ~= nil and type(CatchCombinePipeTask.CLOSE_RANGE) == "number" and CatchCombinePipeTask.CLOSE_RANGE or 30
+    local target = self.target or {x = cx, z = cz}
+    local points = {{x = x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z), z = z}}
+    -- join the lane a few meters ahead (not behind the tractor)
+    local i = best
+    while i < #lane and ((lane[i].x - x) * hx + (lane[i].z - z) * hz) < 3 do
+        i = i + 1
+    end
+    local length, reason = 0, "end of the lane"
+    while i <= #lane do
+        local a, b = points[#points], lane[i]
+        if not self:laneStretchClear(a, b, cropHalf) then
+            reason = "lane blocked or crop"
+            break
+        end
+        length = length + MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+        points[#points + 1] = {x = b.x, y = b.y, z = b.z}
+        if MathUtil.vector2Length(cx - b.x, cz - b.z) < closeRange and self:isFruitStretchClear(b, target, cropHalf) then
+            reason = "harvester in reach, clean straight line"
+            break
+        end
+        i = i + 1
+    end
+    if reason == "lane blocked or crop" then
+        local cut = 0
+        while #points > 2 and cut < PathFinderModule.EDGE_STOP_OVERRUN do
+            local p1, p2 = points[#points - 1], points[#points]
+            local l = MathUtil.vector2Length(p2.x - p1.x, p2.z - p1.z)
+            cut = cut + l
+            length = length - l
+            table.remove(points, #points)
+        end
+    end
+    if length < PathFinderModule.EDGE_MIN_LENGTH then
+        return false
+    end
+    -- (seen in game: 194 m of lane followed in circles, its end 77 m from the harvester): the lane must
+    -- lead to the harvester, its end nearer to it than the start and, when the whole lane is taken, close to it
+    local last = points[#points]
+    local endDistance = MathUtil.vector2Length(cx - last.x, cz - last.z)
+    local startDistance = MathUtil.vector2Length(cx - x, cz - z)
+    if reason ~= "harvester in reach, clean straight line"
+        and (endDistance > startDistance - 5 or (reason == "end of the lane" and endDistance > PathFinderModule.LANE_END_DISTANCE)) then
+        return false
+    end
+    self.wayPoints = points
+    self.partialPath = true
+    self.isFinished = true
+    self.smoothDone = true
+    self.dubinsDone = true
+    ADScheduler:removePathfinderVehicle(self.vehicle)
+    return true
+end
+
+function PathFinderModule:tryEdgeFollow()
+    if not self:isChopperWork() or not (self.strictFruit or self.strictField) or self.pipeCombine == nil or self.startX == nil then
+        return false
+    end
+    local name = self:getLogName()
+    local x, _, z, hx, hz = self:getStartPose()
+    local l = math.sqrt(hx * hx + hz * hz)
+    if l < 0.01 then
+        return false
+    end
+    hx, hz = hx / l, hz / l
+    local nx, nz = hz, -hx
+    -- crop side: the nearer crop edge beside the train
+    local cropSide, cropDistance = nil, math.huge
+    for _, side in ipairs({1, -1}) do
+        local d = self:edgeFindCrop(x, z, nx * side, nz * side, 0, PathFinderModule.EDGE_SCAN)
+        if d ~= nil and d < cropDistance then
+            cropSide, cropDistance = side, d
+        end
+    end
+    if cropSide == nil then
+        return false
+    end
+    -- free width of the strip: from the crop edge to the field border (or other crop) on the other side
+    local sx, sz = -nx * cropSide, -nz * cropSide
+    local free = 0
+    while free < PathFinderModule.EDGE_FREE_SCAN do
+        local px, pz = x + sx * (free + 0.5), z + sz * (free + 0.5)
+        if not PathFinderModule.getMapOnFieldAt(px, pz) or self:edgeCropAt(px, pz) then
+            break
+        end
+        free = free + 0.5
+    end
+    -- no width threshold: a crop edge beside the train is followed, the grid cuts strips into stairs.
+    -- Never from inside the crop: every piece (also the ones planned ahead while driving) is checked in full
+    local width = cropDistance + free
+    if cropDistance < self:getCropHalfWidth() or free < 0.5 then
+        return false
+    end
+    local cropHalf = self:getCropHalfWidth()
+    local gap = cropHalf + PathFinderModule.EDGE_GAP
+    local radius = self.realTurnRadius or self.minTurnRadius or 8
+    local step = PathFinderModule.EDGE_STEP
+    local maxShift = step * math.tan(math.min(step / radius, math.rad(30)))
+    local cx, _, cz = getWorldTranslation(self.pipeCombine.components[1].node)
+    local closeRange = CatchCombinePipeTask ~= nil and type(CatchCombinePipeTask.CLOSE_RANGE) == "number" and CatchCombinePipeTask.CLOSE_RANGE or 30
+    local points = {{x = x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z), z = z}}
+    local px, pz, dx, dz = x, z, hx, hz
+    local length, best, sinceBest = 0, MathUtil.vector2Length(cx - x, cz - z), 0
+    local reason = "max length"
+    -- the route ends where the chase can take over: close to the harvester and a clean straight line to its target
+    local target = self.target or {x = cx, z = cz}
+    -- corner of the crop ahead (the edge turns away, ~90 deg): swing wide to the outer side of the strip first, then
+    -- turn as tight as the train can around the corner until the edge is found again (idea)
+    -- anticipate more, the train runs on the crop side all along, it must be on the outer side well before
+    local lookAhead = radius + 30
+    local cdx, cdz, clx, clz = nil, nil, nil, nil -- strip direction when the corner was first seen
+    local cornerX, cornerZ, wideV, cornerQX, cornerQZ, cornerReach = nil, nil, nil, nil, nil, nil
+    local cornerEndIndex, cutCorner = nil, false
+    local corner, turned, corners = nil, 0, 0
+    local bendTurns = 0
+    while length < PathFinderModule.EDGE_MAX_LENGTH do
+        local bx, bz = px + dx * step, pz + dz * step
+        local lx, lz = dz * cropSide, -dx * cropSide -- toward the crop
+        local edge = self:edgeFindCrop(bx, bz, lx, lz, -2, PathFinderModule.EDGE_SCAN)
+        local shift
+        if corner == nil and edge ~= nil then
+            -- corner ahead: the crop edge beside the strip ends within lookAhead. The strip direction is taken over
+            -- the last 10 m (one step only swings a few degrees with the 0.5 m map, far ahead that is meters)
+            local sdx, sdz = dx, dz
+            local back = points[math.max(cornerEndIndex or 1, #points - 5)]
+            local sl = MathUtil.vector2Length(px - back.x, pz - back.z)
+            if sl > 4 then
+                sdx, sdz = (px - back.x) / sl, (pz - back.z) / sl
+            end
+            local slx, slz = sdz * cropSide, -sdx * cropSide
+            local toCorner = nil
+            if self:edgeFindCrop(bx + sdx * lookAhead, bz + sdz * lookAhead, slx, slz, -2, PathFinderModule.EDGE_SCAN + 4) == nil then
+                for k = 1, math.ceil(lookAhead) do
+                    if self:edgeFindCrop(bx + sdx * k, bz + sdz * k, slx, slz, -2, PathFinderModule.EDGE_SCAN + 4) == nil then
+                        toCorner = k
+                        break
+                    end
+                end
+            end
+            if toCorner ~= nil then
+                corners = corners + 1
+                corner = "wide"
+                -- corner frame: cd along the strip, cl toward the crop; the corner point lies on the crop edge
+                cdx, cdz, clx, clz = sdx, sdz, slx, slz
+                dx, dz, lx, lz = sdx, sdz, slx, slz
+                local free = 0
+                while free < PathFinderModule.EDGE_FREE_SCAN do
+                    local fx, fz = bx - lx * (free + 0.5), bz - lz * (free + 0.5)
+                    if not PathFinderModule.getMapOnFieldAt(fx, fz) or self:edgeCropAt(fx, fz) then
+                        break
+                    end
+                    free = free + 0.5
+                end
+                cornerX, cornerZ = bx + dx * toCorner + lx * (edge - 0.5), bz + dz * toCorner + lz * (edge - 0.5)
+                -- room after the corner: depth of the strip beyond it (field, no crop), measured 3 m on the far side
+                local depth = 0
+                while depth < 30 do
+                    local fx, fz = cornerX + dx * (depth + 0.5) + lx * 3, cornerZ + dz * (depth + 0.5) + lz * 3
+                    if not PathFinderModule.getMapOnFieldAt(fx, fz) or self:edgeCropAt(fx, fz) then
+                        break
+                    end
+                    depth = depth + 0.5
+                end
+                cornerReach = depth - cropHalf - 0.5
+                if depth < PathFinderModule.EDGE_CORNER_MIN_ROOM then
+                    -- no cut ground behind the corner for the train (a narrowing gap in the crop): not a way
+                    reason = "corner without room after it"
+                    break
+                end
+                -- swing out only as much as needed for the arc to end inside that room (not more), at most to
+                -- the outer border (wheels 0.5 m inside it)
+                local outer = -(free - cropHalf - 1.0) - (edge - 0.5) -- tyres 1 m inside the border (map read to 0.5 m)
+                -- 1 m more than the gap: the map edge is only known to 0.5 m and the train swings a little in the arc
+                local needed = -gap - PathFinderModule.EDGE_CORNER_MARGIN
+                if cornerReach < radius then
+                    local r2 = (radius - gap) * (radius - gap) - (radius - cornerReach) * (radius - cornerReach)
+                    needed = r2 >= 0 and math.min(-gap - PathFinderModule.EDGE_CORNER_MARGIN, -radius + math.sqrt(r2)) or outer
+                end
+                -- on the outer side, as far as the field allows (not only what the geometry needs)
+                -- (no use beyond one turn radius from the crop edge: the arc has all its room there)
+                wideV = math.min(math.max(outer, -radius), -gap - PathFinderModule.EDGE_CORNER_MARGIN)
+            end
+        end
+        if corner ~= nil then
+            local u = (px - cornerX) * cdx + (pz - cornerZ) * cdz
+            local v = (px - cornerX) * clx + (pz - cornerZ) * clz
+            if corner == "wide" then
+                -- turn centre beside the train toward the crop: the crop corner must stay inside the inner tyre arc
+                -- (radius - gap); start halfway between the earliest and the latest start that keep it there
+                -- earliest start keeping the corner inside the inner tyre arc, so the train ends close to the new edge
+                local cv = v + radius
+                local inner = radius - gap - PathFinderModule.EDGE_CORNER_MARGIN / 2
+                local room = inner * inner - cv * cv
+                if room >= 0 and u >= math.max(-math.sqrt(room), gap - radius) then
+                    corner = "turn"
+                end
+            end
+            local maxTurn = step / radius
+            local function steer(tx, tz)
+                -- new heading toward tx, tz, turning at most maxTurn: the point step meters ahead
+                local want = math.atan2(tx, tz)
+                local cur = math.atan2(dx, dz)
+                local diff = want - cur
+                while diff > math.pi do diff = diff - 2 * math.pi end
+                while diff < -math.pi do diff = diff + 2 * math.pi end
+                diff = math.max(-maxTurn, math.min(maxTurn, diff))
+                local h = cur + diff
+                return px + math.sin(h) * step, pz + math.cos(h) * step, math.abs(diff)
+            end
+            if corner == "wide" then
+                -- out to the wide line, back along the strip direction: aim 6 m ahead on the wide line
+                local ax, az = cornerX + cdx * (u + 12) + clx * wideV, cornerZ + cdz * (u + 12) + clz * wideV
+                -- the crop edge is not straight: keep the aim point the gap (plus margin) away from the crop there
+                local e2 = self:edgeFindCrop(ax, az, clx, clz, -6, PathFinderModule.EDGE_SCAN)
+                if e2 ~= nil and e2 - 0.5 < gap + PathFinderModule.EDGE_CORNER_MARGIN then
+                    local back = gap + PathFinderModule.EDGE_CORNER_MARGIN - (e2 - 0.5)
+                    ax, az = ax - clx * back, az - clz * back
+                end
+                cornerQX, cornerQZ = steer(ax - px, az - pz)
+            else
+                -- turn toward the crop as tight as the train can, until heading along cl (the other side of the corner)
+                local d
+                cornerQX, cornerQZ, d = steer(clx, clz)
+                turned = turned + d
+                -- the crop edge runs along the train again (beside it here and 4 m ahead): a bend, not a right angle
+                local along = false
+                if turned >= math.rad(PathFinderModule.EDGE_TURN_MIN_DEG) then
+                    local e1 = self:edgeFindCrop(px, pz, dz * cropSide, -dx * cropSide, 0, gap + PathFinderModule.EDGE_TURN_FOUND)
+                    local e2 = self:edgeFindCrop(px + dx * 4, pz + dz * 4, dz * cropSide, -dx * cropSide, 0, gap + PathFinderModule.EDGE_TURN_FOUND)
+                    along = e1 ~= nil and e2 ~= nil and e1 - 0.5 >= gap - 0.5 and e2 - 0.5 >= gap - 0.5
+                end
+                if along or dx * clx + dz * clz > 0.995 or turned > math.rad(120) then
+                    corner, turned, cutCorner = nil, 0, false
+                    cornerEndIndex = #points
+                    if edge == nil then
+                        edge = self:edgeFindCrop(bx, bz, lx, lz, -2, PathFinderModule.EDGE_SCAN)
+                    end
+                    if edge ~= nil then
+                        shift = math.max(-maxShift, math.min(maxShift, edge - 0.5 - gap))
+                    else
+                        shift = 0
+                    end
+                    cornerQX = nil
+                end
+            end
+        elseif edge ~= nil then
+            -- the first crop sample is up to one map sample (0.5 m) beyond the real edge: count from the sample before
+            shift = math.max(-maxShift, math.min(maxShift, edge - 0.5 - gap))
+            -- bend ahead with the crop on its outer side (outside, inside, outside): the edge comes closer
+            -- faster than the train can turn by hugging it. Looking one turn radius ahead, the train leaves the edge
+            -- in time toward the inner side of the bend, never closer to the crop meanwhile, and follows it again after
+            local k = step * 2
+            while k <= radius + PathFinderModule.EDGE_BEND_EXTRA do
+                local ek = self:edgeFindCrop(bx + dx * k, bz + dz * k, lx, lz, -2, PathFinderModule.EDGE_SCAN)
+                if ek ~= nil then
+                    -- one map sample (0.5 m) of tolerance: a straight edge read on the map is not straight
+                    local need = ek - 0.5 - gap + 0.5
+                    if need < 0 then
+                        shift = math.min(shift, 0)
+                        -- side shift reachable in k meters turning at the radius, with a margin
+                        if -need >= k * k / (2 * radius) * PathFinderModule.EDGE_BEND_MARGIN then
+                            shift = -maxShift
+                            bendTurns = bendTurns + 1
+                            break
+                        end
+                    end
+                end
+                k = k + step
+            end
+        else
+            reason = "crop edge lost"
+            break
+        end
+        local qx, qz
+        if corner ~= nil and cornerQX ~= nil then
+            qx, qz, shift = cornerQX, cornerQZ, 0
+        else
+            qx, qz = bx + lx * shift, bz + lz * shift
+        end
+        cornerQX = nil
+        -- the train at the tyres: no crop across, centre on the field, body side allowed, no obstacle
+        local ok = PathFinderModule.getMapOnFieldAt(qx, qz)
+        local why = ok and nil or "centre off the field"
+        local samples = math.ceil(cropHalf * 4)
+        for k = 0, samples do
+            if not ok then
+                break
+            end
+            local w = -cropHalf + 2 * cropHalf * k / samples
+            for _, t in ipairs({0, 0.5}) do
+                local mx, mz = qx - dx * step * t + lx * w, qz - dz * step * t + lz * w
+                if self:edgeCropAt(mx, mz) then
+                    if corner == "turn" and not (self.strictFruit or self.strictField) then
+                        -- a corner the train cannot take is cut (crop under the inner tyres in the turn only);
+                        -- strict: never, the route stops before
+                        cutCorner = true
+                    else
+                        ok = false
+                        why = string.format("crop under the tyre at %.1f,%.1f", mx, mz)
+                        break
+                    end
+                end
+            end
+        end
+        if ok and self.strictField then
+            local side = (self.trainHalfWidth or 2) - PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN
+            ok = self:isTrainSideAllowed(qx - lx * side, qz - lz * side) and self:isTrainSideAllowed(qx + lx * side, qz + lz * side)
+            if not ok then
+                why = "body off the field"
+            end
+        end
+        if ok and not self:isStretchClear({x = px, z = pz}, {x = qx, z = qz}, nil, true, true) then
+            ok = false
+            reason = "obstacle"
+        elseif not ok then
+            reason = string.format("%s, %s, point %.0f,%.0f", corner ~= nil and "corner too sharp for the train" or "strip blocked", why or "?", qx, qz)
+        end
+        if not ok then
+            break
+        end
+        local sl = MathUtil.vector2Length(qx - px, qz - pz)
+        dx, dz = (qx - px) / sl, (qz - pz) / sl
+        px, pz = qx, qz
+        length = length + sl
+        points[#points + 1] = {x = qx, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, qx, 1, qz), z = qz}
+        local distance = MathUtil.vector2Length(cx - qx, cz - qz)
+        if distance < closeRange and corner == nil and self:isFruitStretchClear({x = qx, z = qz}, target, cropHalf) then
+            reason = "harvester in reach, clean straight line"
+            break
+        end
+        if distance < best - 0.5 or corner ~= nil then
+            best, sinceBest = math.min(best, distance), 0
+        else
+            sinceBest = sinceBest + sl
+            if sinceBest >= PathFinderModule.EDGE_NO_GAIN_LENGTH then
+                reason = "no longer getting closer"
+                break
+            end
+        end
+    end
+    if reason ~= "harvester in reach, clean straight line" and reason ~= "max length" then
+        -- stopped short of a blocked spot: the train overruns its last point
+        local cut = 0
+        while #points > 2 and cut < PathFinderModule.EDGE_STOP_OVERRUN do
+            local a, b = points[#points - 1], points[#points]
+            cut = cut + MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+            table.remove(points, #points)
+            length = length - MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+        end
+        -- never a stop nose against the crop (same rule as the guided departure): the stop is put earlier on the
+        -- route, where the train still has clean ground ahead
+        local trimmed = 0
+        while #points > 2 do
+            local a, b = points[#points - 1], points[#points]
+            local sl = MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+            if sl > 0.05 and self:isGuidedStopClear(points, (b.x - a.x) / sl, (b.z - a.z) / sl) then
+                break
+            end
+            trimmed = trimmed + sl
+            table.remove(points, #points)
+            length = length - sl
+        end
+    end
+    if length < PathFinderModule.EDGE_MIN_LENGTH then
+        return false
+    end
+    -- (seen in game: edge pieces up to 135 m from the harvester): a piece that ends farther from the target
+    -- than it starts leads away, it is refused
+    if reason ~= "harvester in reach, clean straight line" then
+        local lastP = points[#points]
+        local startD = MathUtil.vector2Length(target.x - x, target.z - z)
+        local endD = MathUtil.vector2Length(target.x - lastP.x, target.z - lastP.z)
+        if endD > startD - PathFinderModule.EDGE_MIN_GAIN then
+            return false
+        end
+    end
+    self.wayPoints = points
+    self.partialPath = true
+    self.isFinished = true
+    self.smoothDone = true
+    self.dubinsDone = true
+    ADScheduler:removePathfinderVehicle(self.vehicle)
+    return true
+end
+
+-- forage harvester, full unloader without a clean way out while other unloaders work the field: move aside so the
+-- next unloader can pass (to the harvester). Short forward curves (as the guided departure) from the real pose, or
+-- from a pose a few meters back on its own track (reverse first, then forward: angle to leave the strip). The spot is
+-- on the cut strip leaving PARK_PASS_MIN_WIDTH free beside the whole train, or on the grass beside the field (strict
+-- exception agreed by the only to park, no obstacle under the whole train, never another field).
+-- Returns waypoints and the track index to back off to first (nil: drive from here); nil, true when already out of
+-- the way; nil when no spot
+PathFinderModule.PARK_DISTANCES = {6, 10, 14, 18, 22, 26, 30}
+PathFinderModule.PARK_LATERAL_MAX = 12 -- m sideways from the start line
+PathFinderModule.PARK_LATERAL_STEP = 1
+PathFinderModule.PARK_HEADING_MAX = 30
+PathFinderModule.PARK_ANGLE_STEP = 15
+PathFinderModule.PARK_HARVESTER_MIN_DISTANCE = 25 -- m between a parked full trailer and the harvester
+PathFinderModule.PARK_PASS_MIN_WIDTH = 4 -- m free beside the parked train for another one to pass
+PathFinderModule.PARK_MAX_CURVES = 40 -- per start pose
+PathFinderModule.PARK_BACK_DISTANCES = {6, 10, 15, 20} -- m backed off along the own track before the forward curve
+PathFinderModule.PARK_STRAIGHT = 10 -- m driven straight after the curve: the trailer lines up behind the tractor
+PathFinderModule.PARK_FIELD_TOLERANCE = 0.5 -- m of the parked train that may stay on the field ground when on the grass
+
+-- the trailer cuts inside a curve (about L^2 / 2R): its axle is followed along the path (hitch behind the
+-- tractor, axle pulled toward the hitch) and its body checked for obstacles and vehicles every meter
+PathFinderModule.GUIDED_TRAILER_MARGIN = 0.3
+PathFinderModule.GUIDED_FRONT_ROOM = 3 -- m free ahead of the tractor nose at the stop
+function PathFinderModule:isGuidedTrailerClear(path)
+    local module = self.vehicle.ad.trafficYieldModule
+    if module == nil or module.overlapHit == nil or #path < 3 then
+        return true
+    end
+    local tractorLength = (self.vehicle.size ~= nil and self.vehicle.size.length) or 6
+    local trailerLength = AutoDrive.getTractorTrainLength(self.vehicle, true, false) - tractorLength
+    local halfW = self:getTrainWidth() / 2 + PathFinderModule.GUIDED_TRAILER_MARGIN
+    local function hitchAt(i)
+        local a, b = path[math.max(1, i - 1)], path[math.min(#path, i + 1)]
+        local hx, hz = b.x - a.x, b.z - a.z
+        local len = math.sqrt(hx * hx + hz * hz)
+        if len < 0.01 then
+            return nil
+        end
+        hx, hz = hx / len, hz / len
+        return path[i].x - hx * tractorLength / 2, path[i].z - hz * tractorLength / 2, hx, hz
+    end
+    -- the whole tractor body (its nose reaches well ahead of the path point) and the room ahead of the stop
+    -- (the curve stopped nose against a waiting tractor, only its centre had been checked)
+    local size = self.vehicle.size or {}
+    local halfL = (size.length or 6) / 2
+    local offset = size.lengthOffset or 0
+    local name = self:getLogName()
+    local strictField = AutoDrive.getSetting("restrictToField", self.vehicle) == "strict"
+    local indices = {}
+    for i = PathFinderModule.GUIDED_START_TOLERANCE + 2, #path - 1, 2 do
+        indices[#indices + 1] = i
+    end
+    indices[#indices + 1] = #path
+    for _, i in ipairs(indices) do
+        local _, _, dx, dz = hitchAt(i)
+        if dx ~= nil then
+            local cx, cz = path[i].x + dx * offset, path[i].z + dz * offset
+            local ahead = 0
+            if i == #path then
+                ahead = PathFinderModule.GUIDED_FRONT_ROOM
+            end
+            cx, cz = cx + dx * ahead / 2, cz + dz * ahead / 2
+            -- the nose and its corners stay on the field ground (nose on the grass against the wall)
+            if strictField then
+                local nose = halfL + ahead / 2
+                for _, w in ipairs({-halfW, 0, halfW}) do
+                    local nx, nz = cx + dx * nose - dz * w, cz + dz * nose + dx * w
+                    if not PathFinderModule.getMapOnFieldAt(nx, nz) then
+                        return false
+                    end
+                end
+            end
+            local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 0, cz)
+            if module:overlapHit(cx, y + 2, cz, math.atan2(dx, dz), halfW, 1.5, halfL + ahead / 2) then
+                return false
+            end
+        end
+    end
+    local hx0, hz0, dx0, dz0 = hitchAt(1)
+    if hx0 == nil or trailerLength < 3 then
+        return true
+    end
+    local tx, tz = hx0 - dx0 * trailerLength, hz0 - dz0 * trailerLength
+    for i = 2, #path do
+        local hx, hz = hitchAt(i)
+        if hx ~= nil then
+            local vx, vz = hx - tx, hz - tz
+            local len = math.sqrt(vx * vx + vz * vz)
+            if len > 0.01 then
+                tx, tz = hx - vx / len * trailerLength, hz - vz / len * trailerLength
+                -- the first meters are where the train already stands
+                if i > PathFinderModule.GUIDED_START_TOLERANCE + 1 then
+                    local cx, cz = (hx + tx) / 2, (hz + tz) / 2
+                    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 0, cz)
+                    if module:overlapHit(cx, y + 2, cz, math.atan2(vx, vz), halfW, 1.5, trailerLength / 2) then
+                        return false
+                    end
+                end
+            end
+        end
+    end
+    return true
+end
+
+-- footprint of a train whose tractor stands at x, z heading hx, hz: centre and half sizes
+function PathFinderModule:getParkFootprint(x, z, hx, hz)
+    local trainLength = math.max(AutoDrive.getTractorTrainLength(self.vehicle, true, false), 8)
+    local halfW = self:getTrainWidth() / 2 + 0.5
+    return x - hx * trainLength / 2, z - hz * trainLength / 2, halfW, trainLength / 2 + 0.5
+end
+
+-- free cut ground beside the whole train (m); a train standing entirely on the grass leaves the strip free
+function PathFinderModule:getPassWidth(x, z, hx, hz)
+    local cx, cz, halfW, halfL = self:getParkFootprint(x, z, hx, hz)
+    if self:isFootprintOffField(cx, cz, hx, hz, halfW - PathFinderModule.PARK_FIELD_TOLERANCE, halfL) then
+        return math.huge, true
+    end
+    return PathFinderModule.getFreeWidthBeside(cx, cz, hx, hz, halfW, halfL), false
+end
+
+PathFinderModule.PASS_SEARCH = 12 -- m looked at beside a parked train for the free cut ground
+
+-- free cut field ground beside a train footprint (centre cx, cz, direction dx, dz), widest side, in m
+function PathFinderModule.getFreeWidthBeside(cx, cz, dx, dz, halfW, halfL)
+    local best = 0
+    for _, side in ipairs({1, -1}) do
+        local nx, nz = dz * side, -dx * side
+        local width = math.huge
+        -- every 2 m from the rear of the trailer to the nose of the tractor: the narrowest place counts
+        local steps = math.max(2, math.ceil(halfL * 2 / 2))
+        for k = 0, steps do
+            local f = -1 + 2 * k / steps
+            local px, pz = cx + dx * halfL * f, cz + dz * halfL * f
+            local w = 0
+            local o = halfW + 0.5
+            while o <= halfW + PathFinderModule.PASS_SEARCH do
+                local x, z = px + nx * o, pz + nz * o
+                local crop = PathFinderModule.getMapCropAt(x, z)
+                if (crop ~= nil and crop ~= 0) or not PathFinderModule.getMapOnFieldAt(x, z) then
+                    break
+                end
+                w = o - halfW
+                o = o + 0.5
+            end
+            width = math.min(width, w)
+        end
+        best = math.max(best, width)
+    end
+    return best
+end
+
+-- samples every ~1 m across a footprint, edges included: fn(x, z) returns true to stop
+function PathFinderModule.forEachFootprintSample(cx, cz, hx, hz, halfW, halfL, fn)
+    local nl = math.max(1, math.ceil(halfL * 2))
+    local nw = math.max(1, math.ceil(halfW * 2))
+    for i = 0, nl do
+        local l = -halfL + 2 * halfL * i / nl
+        for j = 0, nw do
+            local w = -halfW + 2 * halfW * j / nw
+            if fn(cx + hx * l + hz * w, cz + hz * l - hx * w) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- every 1 m sample of the footprint off the field ground (grass)
+function PathFinderModule:isFootprintOffField(cx, cz, hx, hz, halfW, halfL)
+    return not PathFinderModule.forEachFootprintSample(cx, cz, hx, hz, halfW, halfL, function(x, z)
+        return PathFinderModule.getMapOnFieldAt(x, z)
+    end)
+end
+
+-- the whole parked train: no obstacle (trees, walls, fences, vehicles), no other field, no crop
+function PathFinderModule:isParkFootprintClear(x, z, hx, hz)
+    local cx, cz, halfW, halfL = self:getParkFootprint(x, z, hx, hz)
+    local bad = PathFinderModule.forEachFootprintSample(cx, cz, hx, hz, halfW, halfL, function(px, pz)
+        local crop = PathFinderModule.getMapCropAt(px, pz)
+        if crop ~= nil and crop ~= 0 then
+            return true
+        end
+        -- another field
+        return PathFinderModule.getMapOnFieldAt(px, pz) and not self:isFieldPositionAllowed(px, pz, true)
+    end)
+    if bad then
+        return false
+    end
+    local module = self.vehicle.ad.trafficYieldModule
+    if module ~= nil and module.overlapHit ~= nil then
+        local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 0, cz)
+        if module:overlapHit(cx, y + 2, cz, math.atan2(hx, hz), halfW, 1.5, halfL) then
+            return false
+        end
+    end
+    return true
+end
+
+-- one forward curve from a pose to a parking spot; waypoints or nil
+function PathFinderModule:tryParkCurve(px, pz, heading, cand, radius)
+    local hx, hz = math.sin(cand.heading), math.cos(cand.heading)
+    local q0 = {px, -pz, AutoDrive.normalizeAngle(heading + math.pi + math.pi / 2)}
+    local q1 = {cand.x, -cand.z, AutoDrive.normalizeAngle(cand.heading + math.pi + math.pi / 2)}
+    self.dubins.outPath = {}
+    if self.dubins:dubins_shortest_path(ADDubins.DubinsPath, q0, q1, radius) ~= ADDubins.EDUBOK
+        or self.dubins:dubins_path_length(ADDubins.DubinsPath) > cand.d * 1.6 + 2 then
+        return nil, false
+    end
+    if self.dubins:dubins_path_sample_many(ADDubins.DubinsPath, 1, self.dubins.createWayPoints) ~= ADDubins.EDUBOK or #self.dubins.outPath <= 2 then
+        return nil, true
+    end
+    local path = self.dubins.outPath
+    path[#path + 1] = {x = cand.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cand.x, 1, cand.z), z = cand.z, t = q1[3]}
+    -- then straight on to the stop: the trailer lines up behind the tractor (the spot is checked for a straight train)
+    local straight = PathFinderModule.PARK_STRAIGHT
+    for m = 1, straight do
+        local x, z = cand.x + hx * m, cand.z + hz * m
+        path[#path + 1] = {x = x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z), z = z, t = q1[3]}
+    end
+    if not self:isGuidedBandClear(path, radius, 0) then
+        return nil, true
+    end
+    local cells = {}
+    for i, wp in ipairs(path) do
+        local cell = {x = i, z = 0, t = wp.t, height = self.vehicleMinHeight or 3}
+        cell.worldPos = {x = wp.x, y = wp.y, z = wp.z}
+        cell.incoming = cells[i - 5]
+        cells[i] = cell
+        if i > PathFinderModule.GUIDED_START_TOLERANCE + 1 and not self:isDriveableDubins(cell) then
+            return nil, true
+        end
+    end
+    local points = {}
+    for i, wp in ipairs(path) do
+        if i == 1 or i == #path or (i - 1) % PathFinderModule.GUIDED_POINT_SPACING == 0 then
+            points[#points + 1] = {x = wp.x, y = wp.y, z = wp.z}
+        end
+    end
+    return points, true
+end
+
+-- fromHere: after backing off along its track, a real spot is wanted (grass or side of the strip), from where
+-- the train stands only, even if the lane beside it is already wide enough
+function PathFinderModule:findParkAside(harvester, fromHere)
+    if not self:isChopperWork() then
+        return nil
+    end
+    local name = self:getLogName()
+    self.trainHalfWidth = self.trainHalfWidth or (self:getTrainWidth() / 2 + PathFinderModule.FRUIT_CHECK_CORRIDOR_MARGIN)
+    self:updateCropHalfWidth()
+    local radius = self.realTurnRadius or self.minTurnRadius or 10
+    local vx, _, vz = getWorldTranslation(self.vehicle.components[1].node)
+    local rx, _, rz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local savedGoing, savedCombine = self.goingToPipe, self.pipeCombine
+    self.goingToPipe, self.pipeCombine = harvester ~= nil, harvester
+    local here = self:getPassWidth(vx, vz, rx, rz)
+    local hereNear = false
+    if harvester ~= nil and harvester.components ~= nil then
+        local hvx, _, hvz = getWorldTranslation(harvester.components[1].node)
+        hereNear = MathUtil.vector2Length(vx - hvx, vz - hvz) < PathFinderModule.PARK_HARVESTER_MIN_DISTANCE
+    end
+    if not hereNear and (here == math.huge or not fromHere) and here >= PathFinderModule.PARK_PASS_MIN_WIDTH and not self:isGuidedStopInHarvesterWay(vx, vz, math.atan2(rx, rz)) then
+        self.goingToPipe, self.pipeCombine = savedGoing, savedCombine
+        return nil, true
+    end
+    -- start poses: here, then a few meters back on the own track
+    local poses = {{x = vx, z = vz, heading = math.atan2(rx, rz), back = 0}}
+    local mode = self.vehicle.ad.modes ~= nil and self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    local track = mode ~= nil and mode.track or nil
+    if track ~= nil and #track > 2 and not fromHere then
+        local walked = MathUtil.vector2Length(track[#track].x - vx, track[#track].z - vz)
+        local wanted = 1
+        for k = #track - 1, 2, -1 do
+            walked = walked + MathUtil.vector2Length(track[k + 1].x - track[k].x, track[k + 1].z - track[k].z)
+            local d = PathFinderModule.PARK_BACK_DISTANCES[wanted]
+            if d == nil then
+                break
+            end
+            if walked >= d then
+                local dx, dz = track[k].x - track[k - 1].x, track[k].z - track[k - 1].z
+                if dx * dx + dz * dz > 0.01 then
+                    poses[#poses + 1] = {x = track[k].x, z = track[k].z, heading = math.atan2(dx, dz), back = walked, index = k}
+                end
+                wanted = wanted + 1
+            end
+        end
+    end
+    self.parkOnGrass = true
+    local inWay, narrow, blocked, checked = 0, 0, 0, 0
+    local result, resultIndex, info = nil, nil, nil
+    for _, pose in ipairs(poses) do
+        local candidates = {}
+        local fx, fz = math.sin(pose.heading), math.cos(pose.heading)
+        for _, d in ipairs(PathFinderModule.PARK_DISTANCES) do
+            -- spots d meters ahead, shifted sideways every meter (strips run along the border)
+            for lateral = -PathFinderModule.PARK_LATERAL_MAX, PathFinderModule.PARK_LATERAL_MAX, PathFinderModule.PARK_LATERAL_STEP do
+                local x, z = pose.x + fx * d + fz * lateral, pose.z + fz * d - fx * lateral
+                for h = -PathFinderModule.PARK_HEADING_MAX, PathFinderModule.PARK_HEADING_MAX, PathFinderModule.PARK_ANGLE_STEP do
+                    local endHeading = pose.heading + math.rad(h)
+                    local hx, hz = math.sin(endHeading), math.cos(endHeading)
+                    -- where the tractor stops, after the straight part
+                    local sx, sz = x + hx * PathFinderModule.PARK_STRAIGHT, z + hz * PathFinderModule.PARK_STRAIGHT
+                    -- a train standing on the grass is out of everybody's way (they all drive on the field)
+                    local pass, onGrass = self:getPassWidth(sx, sz, hx, hz)
+                    -- never next to the harvester, grass included: Courseplay would take the full trailer for its
+                    -- unloader and wait for it (the whole train, tractor and trailer, kept away)
+                    local nearHarvester = false
+                    if harvester ~= nil and harvester.components ~= nil then
+                        local hvx, _, hvz = getWorldTranslation(harvester.components[1].node)
+                        local trainLength = math.max(AutoDrive.getTractorTrainLength(self.vehicle, true, false), 8)
+                        for _, back in ipairs({0, trainLength / 2, trainLength}) do
+                            if MathUtil.vector2Length(sx - hx * back - hvx, sz - hz * back - hvz) < PathFinderModule.PARK_HARVESTER_MIN_DISTANCE then
+                                nearHarvester = true
+                            end
+                        end
+                    end
+                    if nearHarvester or (not onGrass and self:isGuidedStopInHarvesterWay(sx, sz, endHeading)) then
+                        inWay = inWay + 1
+                    else
+                        if pass < PathFinderModule.PARK_PASS_MIN_WIDTH then
+                            narrow = narrow + 1
+                        else
+                            -- grass first (whole strip left free), then the widest lane, short manoeuvres
+                            local score = (onGrass and 100 or math.min(pass, 20)) - d * 0.05 - math.abs(h) * 0.01 - pose.back * 0.2
+                            candidates[#candidates + 1] = {x = x, z = z, stopX = sx, stopZ = sz, d = d, heading = endHeading, score = score, onGrass = onGrass, pass = pass}
+                        end
+                    end
+                end
+            end
+        end
+        table.sort(candidates, function(c1, c2) return c1.score > c2.score end)
+        local checkedHere = 0
+        for _, cand in ipairs(candidates) do
+            if checkedHere >= PathFinderModule.PARK_MAX_CURVES then
+                break
+            end
+            local points, tried = nil, false
+            -- the whole parked train (obstacles, crop, other field), only for the spots actually tried
+            if self:isParkFootprintClear(cand.stopX, cand.stopZ, math.sin(cand.heading), math.cos(cand.heading)) then
+                points, tried = self:tryParkCurve(pose.x, pose.z, pose.heading, cand, radius)
+            else
+                blocked = blocked + 1
+            end
+            if tried then
+                checked = checked + 1
+                checkedHere = checkedHere + 1
+            end
+            if points ~= nil then
+                result, resultIndex = points, pose.index
+                info = string.format("%s, back %.0f m then %.0f m forward (%d m straight) to %.0f,%.0f", cand.onGrass and "on the grass" or string.format("%.1f m free beside", cand.pass), pose.back, cand.d + PathFinderModule.PARK_STRAIGHT, PathFinderModule.PARK_STRAIGHT, cand.stopX, cand.stopZ)
+                break
+            end
+        end
+        if result ~= nil then
+            break
+        end
+    end
+    self.parkOnGrass = false
+    self.goingToPipe, self.pipeCombine = savedGoing, savedCombine
+    if result ~= nil then
+        return result, false, resultIndex
+    end
+    return nil
+end
+
 function PathFinderModule:keepPartialStopMargin()
     local wps = self.wayPoints
+    local saved = {}
+    for i = 1, #wps do
+        saved[i] = wps[i]
+    end
     local removed = 0
+    local margin = PathFinderModule.PARTIAL_STOP_MARGIN
+    if self:isChopperWork() then
+        -- forage harvester: drive PARTIAL_DRIVE_SHARE of the planned piece (the next piece is planned meanwhile),
+        -- the stop itself keeps STOP_OVERRUN of clean ground ahead (isPartialStopClear)
+        local length = 0
+        for i = 2, #wps do
+            length = length + MathUtil.vector2Length(wps[i].x - wps[i - 1].x, wps[i].z - wps[i - 1].z)
+        end
+        margin = length * (1 - PathFinderModule.PARTIAL_DRIVE_SHARE)
+    end
     while #wps > 2 do
         local last, before = wps[#wps], wps[#wps - 1]
-        if removed >= PathFinderModule.PARTIAL_STOP_MARGIN and self:isPartialStopClear(#wps) then
+        if removed >= margin and self:isPartialStopClear(#wps) then
             break
         end
         removed = removed + MathUtil.vector2Length(last.x - before.x, last.z - before.z)
         table.remove(wps, #wps)
     end
-    if #wps < 2 or self:partialGain(wps[#wps]) < PathFinderModule.PARTIAL_MIN_GAIN then
         PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path too short with the margin, waiting")
+    if (#wps < 2 or self:partialGain(wps[#wps]) < PathFinderModule.PARTIAL_MIN_GAIN) and not self:isChopperWork() then
         return false
     end
     PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path stopped %.0f m earlier (margin), at %.0f,%.0f", removed, wps[#wps].x, wps[#wps].z)
+    if #wps < 2 or self:partialGain(wps[#wps]) < PathFinderModule.PARTIAL_MIN_GAIN then
+        -- too short with the full margin: smaller margin, as long as the stopped train touches no crop
+        for i = #wps + 1, #saved do
+            wps[i] = saved[i]
+        end
+        removed = 0
+        while #wps > 2 and not self:isPartialStopClear(#wps) do
+            local last, before = wps[#wps], wps[#wps - 1]
+            removed = removed + MathUtil.vector2Length(last.x - before.x, last.z - before.z)
+            table.remove(wps, #wps)
+        end
+        if #wps < 2 or not self:isPartialStopClear(#wps) or self:partialGain(wps[#wps]) < PathFinderModule.PARTIAL_SHORT_MIN_GAIN then
+            return false
+        end
+        return true
+    end
     return true
 end
 
@@ -1681,6 +3435,262 @@ end
 PathFinderModule.REAR_FALLBACK_GAP = 8
 PathFinderModule.REAR_FIRST_DISTANCE = 40
 
+-- working direction of a harvester (recognise it): its front faces the standing crop, its back the cut ground.
+-- The node direction is checked against the field map: crop on the back side only means the node points backwards
+PathFinderModule.WORK_DIR_SCAN = {2, 4, 6, 8} -- m beyond its half length
+function PathFinderModule:getWorkingDirection(combine)
+    local x, _, z = getWorldTranslation(combine.components[1].node)
+    local rx, _, rz = AutoDrive.localDirectionToWorld(combine, 0, 0, 1, combine.ad ~= nil and combine.ad.ADRootNode or nil)
+    local half = (combine.size ~= nil and combine.size.length or 10) / 2
+    local function cropCount(sign)
+        local n = 0
+        for _, d in ipairs(PathFinderModule.WORK_DIR_SCAN) do
+            for _, w in ipairs({-2, 0, 2}) do
+                local px, pz = x + rx * sign * (half + d) - rz * w, z + rz * sign * (half + d) + rx * w
+                local crop = PathFinderModule.getMapCropAt(px, pz)
+                if crop ~= nil and crop ~= 0 then
+                    n = n + 1
+                end
+            end
+        end
+        return n
+    end
+    -- during a Courseplay turn (end of row) the crop around it says nothing about its direction: node direction
+    if AutoDrive.combineIsTurning(combine) then
+        return rx, rz
+    end
+    local ahead, behind = cropCount(1), cropCount(-1)
+    if behind > ahead then
+        return -rx, -rz
+    end
+    return rx, rz
+end
+
+-- fixed obstacle (hedge, trees, wall, learned blocked zone) in a slice of the train's width at x, z along hx, hz
+-- (the place behind a harvester standing with its back to a hedge was in the hedge)
+PathFinderModule.REAR_PROBE_HALF_LENGTH = 1 -- m
+function PathFinderModule:isRearPointObstructed(x, z, hx, hz)
+    if g_currentMission == nil or g_currentMission.terrainRootNode == nil or FollowCombineTask == nil or overlapBox == nil then
+        return false
+    end
+    local halfWidth = self:getTrainWidth() / 2 + 0.3
+    local height = PathFinderModule.getTrainHeight(self.vehicle) + PathFinderModule.OBSTACLE_HEIGHT_MARGIN
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-hz, hx))
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z)
+    local probe = {hits = 0, callback = FollowCombineTask.lineCollisionCallback}
+    overlapBox(x, y + height / 2, z, 0, angleRad, 0, PathFinderModule.REAR_PROBE_HALF_LENGTH, height / 2, halfWidth, "callback", probe, AutoDrive.collisionMaskTerrain, true, true, true, true)
+    if probe.hits > 0 then
+        return true
+    end
+    return self:boxHitsBlockedZone(x, z, angleRad, PathFinderModule.REAR_PROBE_HALF_LENGTH, halfWidth)
+end
+
+-- the whole train standing at x, z heading hx, hz (tractor at the point, the trailer behind it): no fixed obstacle
+function PathFinderModule:isRearTrainBoxFree(x, z, hx, hz)
+    if g_currentMission == nil or g_currentMission.terrainRootNode == nil or FollowCombineTask == nil or overlapBox == nil then
+        return true
+    end
+    local length = math.max(6, AutoDrive.getTractorTrainLength(self.vehicle, true, false))
+    local halfWidth = self:getTrainWidth() / 2 + 0.3
+    local height = PathFinderModule.getTrainHeight(self.vehicle) + PathFinderModule.OBSTACLE_HEIGHT_MARGIN
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-hz, hx))
+    local cx, cz = x - hx * (length / 2 - 3), z - hz * (length / 2 - 3)
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, cx, 1, cz)
+    local probe = {hits = 0, callback = FollowCombineTask.lineCollisionCallback}
+    overlapBox(cx, y + height / 2, cz, 0, angleRad, 0, length / 2, height / 2, halfWidth, "callback", probe, AutoDrive.collisionMaskTerrain, true, true, true, true)
+    if probe.hits > 0 then
+        return false
+    end
+    return not self:boxHitsBlockedZone(cx, cz, angleRad, length / 2, halfWidth)
+end
+
+-- the train fits at x, z: centre on the field, no crop over its half width
+function PathFinderModule:isRearPointFree(x, z, half)
+    if PathFinderModule.getMapOnFieldAt(x, z) ~= true then
+        return false
+    end
+    local n = math.ceil(half / 0.5)
+    for j = -n, n do
+        for i = -n, n do
+            local dx, dz = i * 0.5, j * 0.5
+            if dx * dx + dz * dz <= half * half + 0.001 then
+                local crop = PathFinderModule.getMapCropAt(x + dx, z + dz)
+                if crop ~= nil and crop ~= 0 then
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
+-- the point behind a forage harvester on the track it really drove (in a curve the straight line
+-- behind it falls in the crop). Its recorded track first, then the cut ground behind it meter by meter.
+-- Returns x, z, the harvester direction there, the distance along the track and where it comes from; nil if none
+PathFinderModule.EDGE_MIN_GAIN = 2 -- m closer to the target at least at the end of an edge piece
+PathFinderModule.REAR_TRAIL_SEARCH = 25 -- m further back when the point is in crop
+PathFinderModule.REAR_WALK_ANGLES = {0, 10, -10, 20, -20, 30, -30, 45, -45}
+PathFinderModule.REAR_TRAIL_MAX_COS = math.cos(math.rad(45))
+-- forage harvester standing (full, it waits): its trail counts only while it stays on its heading axis. Stopped right
+-- after its U-turn the last 20 m of trail are the end of the arc (an unloader was sent 20 m back on
+-- that arc, 13 m beside the axis and 41 deg off, arrived on the wrong side and planned the same point for ever)
+PathFinderModule.REAR_TRAIL_MAX_COS_STANDING = math.cos(math.rad(15))
+PathFinderModule.REAR_TRAIL_MAX_LATERAL_STANDING = 3 -- m from its heading axis
+PathFinderModule.REAR_WALK_ANGLES_STANDING = {0, 10, -10} -- deg from its heading axis, not from the previous step
+PathFinderModule.STANDING_SPEED = 0.0003 -- lastSpeedReal (m/ms) under which the harvester stands
+function PathFinderModule.isCombineStanding(combine)
+    if combine == nil then
+        return false
+    end
+    if math.abs(combine.lastSpeedReal or 0) < PathFinderModule.STANDING_SPEED then
+        return true
+    end
+    return combine.ad ~= nil and combine.ad.noMovementTimer ~= nil and (combine.ad.noMovementTimer.elapsedTime or 0) > 1000
+end
+function PathFinderModule:getRearTarget(combine, back, rx, rz)
+    local x, _, z = getWorldTranslation(combine.components[1].node)
+    local half = self:getCropHalfWidth()
+    local maxD = back + PathFinderModule.REAR_TRAIL_SEARCH
+    local points = {}
+    local px, pz, d, hx, hz = x, z, 0, rx, rz
+    local trail = combine.ad ~= nil and combine.ad.chopperTrail or {}
+    local fromTrail = 0
+    local standing = PathFinderModule.isCombineStanding(combine)
+    local maxCos = standing and PathFinderModule.REAR_TRAIL_MAX_COS_STANDING or PathFinderModule.REAR_TRAIL_MAX_COS
+    local trailCut = false
+    local first = #trail
+    while first > 0 and (trail[first].x - x) * rx + (trail[first].z - z) * rz > -1 do
+        first = first - 1
+    end
+    for i = first, 1, -1 do
+        local t = trail[i]
+        local seg = MathUtil.vector2Length(px - t.x, pz - t.z)
+        if seg > 0.01 then
+            local sx, sz = (px - t.x) / seg, (pz - t.z) / seg
+            -- the trail before its last turn (end-of-row U-turn): not the row it works now, stop there
+            -- standing: off its heading axis is the end of its U-turn arc, stop there, straight on behind
+            if sx * rx + sz * rz < maxCos
+                or (standing and math.abs((t.x - x) * rz - (t.z - z) * rx) > PathFinderModule.REAR_TRAIL_MAX_LATERAL_STANDING) then
+                if standing then
+                    trailCut = true
+                    hx, hz = rx, rz
+                end
+                break
+            end
+            hx, hz = sx, sz
+            local n = math.ceil(seg)
+            for k = 1, n do
+                local f = k / n
+                points[#points + 1] = {x = px + (t.x - px) * f, z = pz + (t.z - pz) * f, hx = hx, hz = hz, d = d + seg * f}
+            end
+            d = d + seg
+            px, pz = t.x, t.z
+            fromTrail = d
+            if d >= maxD then
+                break
+            end
+        end
+    end
+    -- short track (just started, game loaded): on over the cut ground behind
+    -- standing harvester: the walk keeps its heading axis, no curve back onto its U-turn arc
+    local angles = standing and PathFinderModule.REAR_WALK_ANGLES_STANDING or PathFinderModule.REAR_WALK_ANGLES
+    -- the walk stops at the first fixed obstacle (hedge, trees, wall), nothing is aimed beyond it
+    local obstacleD, offFieldD = nil, nil
+    while d < maxD do
+        local found, obstacle, offField = false, false, false
+        local bhx, bhz = hx, hz
+        if standing then
+            bhx, bhz = rx, rz
+        end
+        for _, a in ipairs(angles) do
+            local c, s = math.cos(math.rad(a)), math.sin(math.rad(a))
+            local bx, bz = -bhx * c - -bhz * s, -bhx * s + -bhz * c
+            local qx, qz = px + bx, pz + bz
+            if self:isRearPointFree(qx, qz, half) then
+                if self:isRearPointObstructed(qx, qz, -bx, -bz) then
+                    obstacle = true
+                else
+                    hx, hz = -bx, -bz
+                    px, pz, d = qx, qz, d + 1
+                    points[#points + 1] = {x = px, z = pz, hx = hx, hz = hz, d = d}
+                    found = true
+                    break
+                end
+            elseif a == 0 and PathFinderModule.getMapOnFieldAt(qx, qz) ~= true then
+                offField = true
+            end
+        end
+        if not found then
+            if obstacle then
+                obstacleD = d + 1
+            elseif offField then
+                offFieldD = d + 1
+            end
+            break
+        end
+    end
+    local minD = (combine.size ~= nil and combine.size.length or 10) / 2 + 4
+    local best = nil
+    for _, p in ipairs(points) do
+        if p.d >= back and self:isRearPointFree(p.x, p.z, half) and self:isRearTrainBoxFree(p.x, p.z, p.hx, p.hz) then
+            best = p
+            break
+        end
+    end
+    if best == nil then
+        for i = #points, 1, -1 do
+            local p = points[i]
+            if p.d < back and p.d >= minD and self:isRearPointFree(p.x, p.z, half) and self:isRearTrainBoxFree(p.x, p.z, p.hx, p.hz) then
+                best = p
+                break
+            end
+        end
+    end
+    local limit = nil
+    if obstacleD ~= nil then
+        limit = string.format("obstacle %.0f m behind it", obstacleD)
+    elseif offFieldD ~= nil then
+        limit = string.format("field edge %.0f m behind it", offFieldD)
+    end
+    if best == nil then
+        return nil, nil, nil, nil, nil, limit or string.format("no free point over %.0f m (crop or train in the way)", d)
+    end
+    local source = fromTrail >= best.d and "on its trail" or (fromTrail > 0 and "trail then cut ground" or "cut ground behind it")
+    if trailCut then
+        source = source .. " (harvester standing, its trail ends in a turn: on its heading axis)"
+    end
+    if best.d < back and limit ~= nil then
+        source = source .. string.format(" (%s, closer place)", limit)
+    end
+    return best.x, best.z, best.hx, best.hz, best.d, source
+end
+
+PathFinderModule.TRAIL_ON_DISTANCE = 4
+function PathFinderModule.getTrailDirectionAt(combine, x, z)
+    local trail = combine.ad ~= nil and combine.ad.chopperTrail or nil
+    if trail == nil or #trail < 2 then
+        return nil
+    end
+    local best, bestD = nil, PathFinderModule.TRAIL_ON_DISTANCE
+    for i = 2, #trail do
+        local d = MathUtil.vector2Length(trail[i].x - x, trail[i].z - z)
+        if d < bestD then
+            best, bestD = i, d
+        end
+    end
+    if best == nil then
+        return nil
+    end
+    local a, b = trail[best - 1], trail[best]
+    local l = MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+    if l < 0.01 then
+        return nil
+    end
+    return (b.x - a.x) / l, (b.z - a.z) / l
+end
+
+PathFinderModule.REAR_UTURN_EXTRA = 5 -- m
+PathFinderModule.ANTICIPATED_MAX_AGE = 60000 -- ms
 function PathFinderModule:startRearFallback()
     local combine = self.pipeCombine
     if self.rearFallbackDone or not self.goingToPipe or combine == nil or combine.components == nil or not (self.strictFruit or self.strictField) then
@@ -1689,21 +3699,80 @@ function PathFinderModule:startRearFallback()
     -- only to catch a harvester that drives: behind a stopped one the trailer cannot reach the pipe, nothing takes over there
     local stopped = (combine.lastSpeedReal or 0) < 0.0002
         or (combine.ad ~= nil and combine.ad.noMovementTimer ~= nil and combine.ad.noMovementTimer.elapsedTime > 1000)
-    if stopped then
-        if not self.rearFallbackSkippedPrinted then
-            self.rearFallbackSkippedPrinted = true
-            PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: harvester stopped, aiming at the pipe directly (not behind)")
-        end
+    -- forage harvester: behind it even when it stands, it drives on once its unloader is there
+    if stopped and not (combine.ad ~= nil and combine.ad.isChopper) then
         return false
     end
     local x, y, z = getWorldTranslation(combine.components[1].node)
-    local rx, _, rz = AutoDrive.localDirectionToWorld(combine, 0, 0, 1)
+    local rx, rz = self:getWorkingDirection(combine)
     local back = (combine.size ~= nil and combine.size.length or 10) / 2 + PathFinderModule.REAR_FALLBACK_GAP + AutoDrive.getTractorTrainLength(self.vehicle, true, false) / 2
+    local wrongWayNeed = nil
+    -- tractor facing the other way (after the harvester's end-of-row U-turn): the target leaves room for
+    -- its own U-turn beyond where it stands, so it arrives the right way round the first time
+    if combine.ad ~= nil and combine.ad.isChopper then
+        -- from where this piece starts (end of the piece being driven, the next piece began 12 m from the
+        -- target and had no room to turn)
+        local vx, _, vz, hx, hz = self:getStartPose()
+        if hx * rx + hz * rz < 0 then
+            local behind = (x - vx) * rx + (z - vz) * rz
+            local radius = AutoDrive.getDriverRadius(self.vehicle) or 8
+            -- more room each time the train arrived the wrong way round at the same place (CatchCombinePipeTask.tryWrongWayTurn)
+            local extra = self.vehicle.ad.turnRoomExtra or 0
+            local need = behind + 2 * radius + PathFinderModule.REAR_UTURN_EXTRA + extra
+            if need > back then
+                back = need
+                wrongWayNeed = need
+            end
+        end
+    end
     local target = {x = x - rx * back, y = y, z = z - rz * back}
+    local arrive = {x = rx, z = rz}
+    local where = "straight line (no free point on its trail)"
+    -- end-of-row U-turn anticipated: behind the entry of the next row read on the Courseplay course,
+    -- the nearest free place on the cut ground going back from the wanted distance
+    local anticipated = false
+    local ant = self.vehicle.ad.anticipatedRear
+    if ant ~= nil and (g_time or 0) - ant.t < PathFinderModule.ANTICIPATED_MAX_AGE and combine.ad ~= nil and combine.ad.isChopper then
+        local half = self:getCropHalfWidth()
+        local minD = (combine.size ~= nil and combine.size.length or 10) / 2 + 4
+        for d = ant.back, minD, -1 do
+            local px, pz = ant.ex - ant.dx * d, ant.ez - ant.dz * d
+            if self:isRearPointFree(px, pz, half) then
+                target = {x = px, y = y, z = pz}
+                arrive = {x = ant.dx, z = ant.dz}
+                back = d
+                where = string.format("anticipated U-turn, %.0f m behind the entry of the new row", d)
+                anticipated = true
+                break
+            end
+        end
+        if not anticipated then
+            self.vehicle.ad.anticipatedRear = nil
+        end
+    end
+    if combine.ad ~= nil and combine.ad.isChopper and not anticipated then
+        local tx, tz, thx, thz, td, source = self:getRearTarget(combine, back, rx, rz)
+        -- behind a harvester standing with its back to a hedge there
+        -- is no place. An unloader aimed 20 m behind it, in the hedge, for 8 minutes: without a place the side place is aimed
+        if tx == nil then
+            self.rearPlaceNone = true
+            return false
+        end
+        -- facing the other way with less room behind her than the U-turn needs: not aimed either (the turn comes first)
+        if wrongWayNeed ~= nil and td < wrongWayNeed - 2 then
+            self.rearPlaceNone = true
+            return false
+        end
+        self.rearPlaceNone = nil
+        target = {x = tx, y = y, z = tz}
+        arrive = {x = thx, z = thz}
+        where = string.format("%s, %.0f m", source, td)
+    end
     local allowPartial = self.allowPartialPath
     local fruitToCheck = self.fruitToCheck
-    PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: going behind the harvester (%.0f,%.0f)", target.x, target.z)
-    self:startPathPlanningTo(target, {x = rx, z = rz})
+    self:startPathPlanningTo(target, arrive)
+    -- behind the harvester is cut ground: no crop allowed near the target, the whole route judged
+    self.goingBehind = true
     self.goingToPipe = true
     self.pipeCombine = combine
     self.fruitToCheck = fruitToCheck
@@ -1717,10 +3786,20 @@ function PathFinderModule:usePartialGridPath()
     if not self:partialAllowed() or self.closedset == nil or self.nodeGoal == nil then
         return false
     end
+    -- a target inside an obstacle (hedge) is never approached piece by piece (an unloader crept toward the
+    -- hedge, route after route). The target itself must be free of fixed obstacles
+    if self.target ~= nil and self.targetVector ~= nil and self:isRearPointObstructed(self.target.x, self.target.z, self.targetVector.x, self.targetVector.z) then
+        return false
+    end
     local best, bestDistance = nil, math.huge
     for node, _ in pairs(self.closedset) do
         if node ~= self.nodeBehindStart and self.came_from[node] ~= nil then
             local distance = MathUtil.vector2Length(node.x - self.nodeGoal.x, node.z - self.nodeGoal.z)
+            local band = self:getBandDistanceAtNode(node)
+            if band ~= nil then
+                -- in grid cells, as the straight distance; a node out of the strips is never the best
+                distance = band ~= false and band / self.minTurnRadius or math.huge
+            end
             if distance < bestDistance then
                 best, bestDistance = node, distance
             end
@@ -1745,6 +3824,8 @@ end
 -- the first meters (at the vehicle) and the last meters (next to the target) are not judged
 PathFinderModule.VERIFY_SKIP_START = 12
 PathFinderModule.START_CROP_RADIUS = 4
+PathFinderModule.START_CROP_AHEAD = 1 -- m ahead of the tractor node where crop may still be (its own front)
+PathFinderModule.VERIFY_CROP_START = 3 -- forage harvester, strict: crop judged from here on (12 m before)
 PathFinderModule.VERIFY_SKIP_END = 15
 function PathFinderModule:findBlockedStretch()
     local wps = self.wayPoints
@@ -1757,8 +3838,13 @@ function PathFinderModule:findBlockedStretch()
         total = total + MathUtil.vector2Length(wps[i + 1].x - wps[i].x, wps[i + 1].z - wps[i].z)
     end
     local skipFrom, skipTo = PathFinderModule.VERIFY_SKIP_START, total - PathFinderModule.VERIFY_SKIP_END
-    if self.partialPath then
-        -- a partial route stops before the target: its end is where the vehicle waits, it is judged too
+    if self:isChopperWork() and (self.strictFruit or self.strictField) then
+        -- strict: no turn through the crop at the start either, only the train's own place is left out
+        skipFrom = PathFinderModule.VERIFY_CROP_START
+    end
+    if self.partialPath or self.goingBehind then
+        -- a partial route stops before the target: its end is where the vehicle waits, it is judged too;
+        -- behind the harvester is cut ground, nothing to leave out there
         skipTo = total
     end
     local done = 0
@@ -1774,6 +3860,17 @@ function PathFinderModule:findBlockedStretch()
             local pb = {x = a.x + dx * startTo / length, z = a.z + dz * startTo / length}
             if not self:isStretchClear(a, pb, nil, true, true) then
                 return i, "obstacle"
+            end
+        end
+        -- exit to the network: the last meters are judged for obstacles too. A wall or a post
+        -- between the field and the road is thinner than a cell, the coarse grid drives through it
+        if self.exitToNetwork then
+            local endFrom = math.max(0, skipTo - done, startTo)
+            if length - endFrom > 0.5 then
+                local pa = {x = a.x + dx * endFrom / length, z = a.z + dz * endFrom / length}
+                if not self:isStretchClear(pa, b, nil, true, true) then
+                    return i, "obstacle (approach)"
+                end
             end
         end
         done = done + length
@@ -1796,6 +3893,156 @@ PathFinderModule.CORNER_ARC_STEP = 2.5
 PathFinderModule.CORNER_INNER_MARGIN = 1.5
 -- a corner that could not be rounded to the real turn radius and turns more than this cannot be driven by the train
 PathFinderModule.CORNER_SHARP_ANGLE = math.rad(30)
+-- forage harvester (choice): a corner kept up to this angle is driven, the train may cut it
+PathFinderModule.CORNER_SHARP_ANGLE_CHOPPER = math.rad(60)
+
+-- forage harvester, strict: a corner without room on the route line is driven as a driver would, outside, inside,
+-- outside (rule): before a right turn the train first swings left, cuts the corner at the turn radius, ends
+-- on the left of the next line and comes back to it. The swing angles before and after are tried from the smallest.
+PathFinderModule.WIDE_SWING_ANGLES = {0, 8, 16, 24} -- deg away from the turn
+PathFinderModule.WIDE_SWING_LEADS = {6, 12} -- m of the line used for the swing, before and after the normal arc
+PathFinderModule.WIDE_MAX_ANGLE = math.rad(170) -- whole turn of the wide arc
+PathFinderModule.WIDE_MAX_CHECKS = 40 -- full checks (obstacles) per corner, keeps the frame time low
+PathFinderModule.WIDE_BAND_LOOKUP = 1.5 -- m: a point of the wide corner must have a point of the strips this close
+
+function PathFinderModule:useWideCorners()
+    return self:isChopperWork() and (self.strictFruit or self.strictField)
+end
+
+-- cheap check before the obstacle boxes: the point is in the cut strips the whole train fits in
+function PathFinderModule:isWidePointInBand(x, z)
+    if not self:isBandFloodReady() or self.startX == nil then
+        return true
+    end
+    if MathUtil.vector2Length(x - self.startX, z - self.startZ) < PathFinderModule.VERIFY_SKIP_START then
+        return true
+    end
+    return ADBandRoute.getDistance(self.bandFlood, x, z, PathFinderModule.WIDE_BAND_LOOKUP) ~= nil
+end
+
+function PathFinderModule:isWideLineInBand(a, b)
+    local l = MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+    local n = math.max(1, math.ceil(l / 2))
+    for j = 0, n do
+        if not self:isWidePointInBand(a.x + (b.x - a.x) * j / n, a.z + (b.z - a.z) * j / n) then
+            return false
+        end
+    end
+    return true
+end
+
+-- corner between the line from last through pi (d1) and the line through pk to nextPoint (d2), turning theta.
+-- Returns the arc points, the swing start and the swing end (points to add to the route), nil when none is clean
+function PathFinderModule:findWideCorner(last, pi, pk, nextPoint, d1, d2, theta, cross, radius, moreCorners, newPoint)
+    local sign = cross > 0 and 1 or -1
+    local function inside(d)
+        if sign > 0 then
+            return {x = -d.z, z = d.x}
+        end
+        return {x = d.z, z = -d.x}
+    end
+    local n1, n2 = inside(d1), inside(d2)
+    local denom = d1.x * d2.z - d1.z * d2.x
+    if math.abs(denom) < 0.001 then
+        return nil
+    end
+    local s = ((pk.x - pi.x) * d2.z - (pk.z - pi.z) * d2.x) / denom
+    local vx, vz = pi.x + d1.x * s, pi.z + d1.z * s
+    local baseTangent = radius * math.tan(theta / 2)
+    -- room on the lines: from the last kept point to the corner, from the corner to the next point
+    local inRoom = (vx - last.x) * d1.x + (vz - last.z) * d1.z
+    local outRoom = (nextPoint.x - vx) * d2.x + (nextPoint.z - vz) * d2.z
+    if moreCorners then
+        outRoom = outRoom * 0.5
+    end
+    if inRoom < 1 or outRoom < 1 then
+        return nil
+    end
+    local options = {}
+    for _, a1 in ipairs(PathFinderModule.WIDE_SWING_ANGLES) do
+        for _, a2 in ipairs(PathFinderModule.WIDE_SWING_ANGLES) do
+            if (a1 > 0 or a2 > 0) and theta + math.rad(a1 + a2) <= PathFinderModule.WIDE_MAX_ANGLE then
+                for n, l1 in ipairs(PathFinderModule.WIDE_SWING_LEADS) do
+                    for m, l2 in ipairs(PathFinderModule.WIDE_SWING_LEADS) do
+                        -- no swing on a side: its lead does not matter
+                        if (a1 > 0 or n == 1) and (a2 > 0 or m == 1) then
+                            options[#options + 1] = {a1 = a1, a2 = a2, l1 = l1, l2 = l2, cost = a1 + a2 + (l1 + l2) * 0.1}
+                        end
+                    end
+                end
+            end
+        end
+    end
+    table.sort(options, function(o1, o2) return o1.cost < o2.cost end)
+    local checks = 0
+    for _, o in ipairs(options) do
+        if checks >= PathFinderModule.WIDE_MAX_CHECKS then
+            break
+        end
+        local a1, a2 = math.rad(o.a1), math.rad(o.a2)
+        local back = math.min(baseTangent + o.l1, inRoom)
+        local ahead = math.min(baseTangent + o.l2, outRoom)
+        local q1 = {x = vx - d1.x * back, z = vz - d1.z * back}
+        local q2 = {x = vx + d2.x * ahead, z = vz + d2.z * ahead}
+        -- swing out before the corner (away from the turn), come back from outside after it
+        local e1 = {x = d1.x * math.cos(a1) - n1.x * math.sin(a1), z = d1.z * math.cos(a1) - n1.z * math.sin(a1)}
+        local e2 = {x = d2.x * math.cos(a2) + n2.x * math.sin(a2), z = d2.z * math.cos(a2) + n2.z * math.sin(a2)}
+        local denomE = e1.x * e2.z - e1.z * e2.x
+        if math.abs(denomE) > 0.001 then
+            local t = ((q2.x - q1.x) * e2.z - (q2.z - q1.z) * e2.x) / denomE
+            local wx, wz = q1.x + e1.x * t, q1.z + e1.z * t
+            local theta2 = math.acos(math.max(-1, math.min(1, e1.x * e2.x + e1.z * e2.z)))
+            local tangent = radius * math.tan(theta2 / 2)
+            local t1 = {x = wx - e1.x * tangent, z = wz - e1.z * tangent}
+            local t2 = {x = wx + e2.x * tangent, z = wz + e2.z * tangent}
+            local geometryOk = t > 0 and math.abs(theta2 - (theta + a1 + a2)) < 0.05
+                and ((t1.x - q1.x) * e1.x + (t1.z - q1.z) * e1.z) >= 0
+                and ((q2.x - t2.x) * e2.x + (q2.z - t2.z) * e2.z) >= 0
+            local arc = nil
+            if geometryOk then
+                local p = inside(e1)
+                local cx, cz = t1.x + p.x * radius, t1.z + p.z * radius
+                local a0 = math.atan2(t1.z - cz, t1.x - cx)
+                local sweep = sign * theta2
+                local steps = math.max(2, math.ceil(theta2 * radius / PathFinderModule.CORNER_ARC_STEP))
+                arc = {newPoint(t1.x, t1.z, pi)}
+                for j = 1, steps do
+                    local a = a0 + sweep * j / steps
+                    arc[#arc + 1] = newPoint(cx + math.cos(a) * radius, cz + math.sin(a) * radius, pk)
+                end
+                local inBand = self:isWideLineInBand(q1, t1) and self:isWideLineInBand(arc[#arc], q2)
+                for j = 1, #arc do
+                    if not inBand then
+                        break
+                    end
+                    inBand = self:isWidePointInBand(arc[j].x, arc[j].z)
+                end
+                if inBand then
+                    checks = checks + 1
+                    local qp1, qp2 = newPoint(q1.x, q1.z, pi), newPoint(q2.x, q2.z, pk)
+                    local clear = self:isStretchClear(last, qp1) and self:isStretchClear(qp1, arc[1])
+                        and self:isStretchClear(arc[#arc], qp2) and self:isStretchClear(qp2, nextPoint)
+                    for j = 2, #arc do
+                        if not clear then
+                            break
+                        end
+                        local midX, midZ = (arc[j - 1].x + arc[j].x) / 2, (arc[j - 1].z + arc[j].z) / 2
+                        local l = math.max(0.01, MathUtil.vector2Length(cx - midX, cz - midZ))
+                        clear = self:isStretchClear(arc[j - 1], arc[j], {x = (cx - midX) / l, z = (cz - midZ) / l})
+                    end
+                    if clear then
+                        return arc, qp1, qp2
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function PathFinderModule:getSharpCornerAngle()
+    return self:isChopperWork() and PathFinderModule.CORNER_SHARP_ANGLE_CHOPPER or PathFinderModule.CORNER_SHARP_ANGLE
+end
 
 -- the finer grid makes corners tighter than the vehicle can turn: replace them by arcs of the real radius
 -- a corner too short for its arc is merged with the next corners turning the same way; no room -> corner kept
@@ -1824,12 +4071,16 @@ function PathFinderModule:roundCornersToTurnRadius()
     local out = {wps[1]}
     local last = wps[1]
     local rounded, kept, sharp = 0, 0, 0
+    local wide = 0
+    local useWide = self:useWideCorners()
+    self.firstSharpIndex = nil
     local i = 2
     while i <= #wps - 1 do
         local d1 = unit(wps[i - 1], wps[i])
         local done = false
         if d1 ~= nil then
             local turnSign = nil
+            local wideCandidates = {}
             for k = i, math.min(i + PathFinderModule.CORNER_MAX_MERGE - 1, #wps - 1) do
                 local d2 = unit(wps[k], wps[k + 1])
                 if d2 == nil then
@@ -1865,6 +4116,7 @@ function PathFinderModule:roundCornersToTurnRadius()
                         local wx, wz = wps[k].x - wps[i].x, wps[k].z - wps[i].z
                         local s = (wx * d2.z - wz * d2.x) / denom
                         local vx, vz = wps[i].x + d1.x * s, wps[i].z + d1.z * s
+                        wideCandidates[#wideCandidates + 1] = {k = k, theta = theta, cross = cross, d2 = d2}
                         local tangent = radius * math.tan(theta / 2)
                         local t1 = {x = vx - d1.x * tangent, z = vz - d1.z * tangent}
                         local t2 = {x = vx + d2.x * tangent, z = vz + d2.z * tangent}
@@ -1916,6 +4168,31 @@ function PathFinderModule:roundCornersToTurnRadius()
                     end
                 end
             end
+            -- no room for the arc on the route line: outside, inside, outside
+            if not done and useWide then
+                for _, c in ipairs(wideCandidates) do
+                    local arc, q1, q2 = self:findWideCorner(last, wps[i], wps[c.k], wps[c.k + 1], d1, c.d2, c.theta, c.cross, radius, c.k + 1 < #wps, newPoint)
+                    if arc ~= nil then
+                        -- no double point where the swing starts at the last point or ends at the next one
+                        if MathUtil.vector2Length(q1.x - last.x, q1.z - last.z) > 0.5 then
+                            out[#out + 1] = q1
+                        end
+                        for _, p in ipairs(arc) do
+                            out[#out + 1] = p
+                        end
+                        last = arc[#arc]
+                        if MathUtil.vector2Length(q2.x - wps[c.k + 1].x, q2.z - wps[c.k + 1].z) > 0.5 then
+                            out[#out + 1] = q2
+                            last = q2
+                        end
+                        rounded = rounded + 1
+                        wide = wide + 1
+                        i = c.k + 1
+                        done = true
+                        break
+                    end
+                end
+            end
         end
         if not done then
             local d2 = unit(wps[i], wps[i + 1])
@@ -1924,8 +4201,11 @@ function PathFinderModule:roundCornersToTurnRadius()
                 if theta >= PathFinderModule.CORNER_MIN_ANGLE then
                     kept = kept + 1
                 end
-                if theta > PathFinderModule.CORNER_SHARP_ANGLE then
+                if theta > self:getSharpCornerAngle() then
                     sharp = sharp + 1
+                    if self.firstSharpIndex == nil then
+                        self.firstSharpIndex = #out + 1
+                    end
                 end
             end
             out[#out + 1] = wps[i]
@@ -1982,6 +4262,81 @@ function PathFinderModule:autoRestart()
     self.smoothDone = false
     self.completelyBlocked = false
     -- self.targetBlocked = false   --> always false TODO: how to use this ?
+end
+
+-- forage harvester, strict, no route: the tour of the field through the cut strips, forward only, to
+-- the point behind the harvester in its direction (ADBandTour). Once per place (TOUR_RETRY_PLACE m, TOUR_RETRY_TIME ms)
+PathFinderModule.TOUR_RETRY_TIME = 120000
+PathFinderModule.TOUR_RETRY_PLACE = 15
+PathFinderModule.TOUR_POINT_SPACING = 2
+
+function PathFinderModule:startBandTour()
+    if self.bandTour ~= nil or self.startPose ~= nil or ADBandTour == nil or not self:isChopperWork() or not (self.strictFruit or self.strictField)
+        or not self.goingToPipe or self.target == nil or self.targetVector == nil then
+        return false
+    end
+    local x, _, z, hx, hz = self:getStartPose()
+    local now = g_time or 0
+    if self.tourFailX ~= nil and now - (self.tourFailTime or 0) < PathFinderModule.TOUR_RETRY_TIME
+        and MathUtil.vector2Length(x - self.tourFailX, z - self.tourFailZ) < PathFinderModule.TOUR_RETRY_PLACE then
+        return false
+    end
+    local tl = MathUtil.vector2Length(self.targetVector.x, self.targetVector.z)
+    if tl < 0.01 then
+        return false
+    end
+    local th = math.atan2(self.targetVector.x / tl, self.targetVector.z / tl)
+    local flood = self:isBandFloodReady() and self.bandFlood or nil
+    self.bandTour = ADBandTour.start(x, z, math.atan2(hx, hz), self.target.x, self.target.z, th, self.realTurnRadius or self.minTurnRadius, self:getCropHalfWidth(), flood)
+    return true
+end
+
+-- no route: the tour first, else the usual end (the calling task waits and plans again)
+function PathFinderModule:abortOrTour()
+    if self:startBandTour() then
+        self.isFinished = false
+        self.smoothDone = false
+        self.dubinsDone = false
+        return true
+    end
+    self:abort()
+    return false
+end
+
+function PathFinderModule:updateBandTour()
+    local tour = self.bandTour
+    if not ADBandTour.step(tour, ADBandTour.BUDGET) then
+        return
+    end
+    self.bandTour = nil
+    local x, _, z = self:getStartPose()
+    if tour.found then
+        local points = {}
+        for i, p in ipairs(tour.path) do
+            if i == 1 or i == #tour.path or (i - 1) % PathFinderModule.TOUR_POINT_SPACING == 0 then
+                points[#points + 1] = {x = p.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, p.x, 1, p.z), z = p.z}
+            end
+        end
+        local blocked = nil
+        for i = 2, #points do
+            if not self:isStretchClear(points[i - 1], points[i], nil, true, true) then
+                blocked = points[i]
+                break
+            end
+        end
+        if blocked == nil then
+            self.wayPoints = points
+            self.partialPath = false
+            self.completelyBlocked = false
+            self.isFinished = true
+            self.smoothDone = true
+            self.dubinsDone = true
+            ADScheduler:removePathfinderVehicle(self.vehicle)
+            return
+        end
+    end
+    self.tourFailX, self.tourFailZ, self.tourFailTime = x, z, g_time or 0
+    self:abort()
 end
 
 function PathFinderModule:abort()
@@ -2052,6 +4407,20 @@ function PathFinderModule:update(dt)
 
     self.delayTime = math.max(0, self.delayTime - dt)
     if self.delayTime > 0 then
+        return
+    end
+    if self.bandFlood ~= nil and not self.isFinished then
+        local done = ADBandRoute.step(self.bandFlood, ADBandRoute.BUDGET)
+        if not done and (g_time or 0) < self.bandFloodWaitUntil then
+            return
+        end
+        if not self.bandFloodChecked then
+            self.bandFloodChecked = true
+            self:checkBandFlood()
+        end
+    end
+    if self.bandTour ~= nil then
+        self:updateBandTour()
         return
     end
 
@@ -2134,6 +4503,13 @@ function PathFinderModule:update(dt)
         local fallBackModeAllowed2 = (not keepRestrictions) and (not self.strictField) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.restrictToField) and (not self.fallBackMode2)    -- disable restrict to field border
         local fallBackModeAllowed3 = (not keepRestrictions) and (not self.strictFruit) and (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.avoidFruitSetting) and (not self.fallBackMode3)    -- disable avoid fruit
         local increaseStepsAllowed = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and (self.max_pathfinder_steps < PathFinderModule.MAX_PATHFINDER_STEPS_TOTAL * self.pathFinderTime)    -- increase number of steps if possible
+        -- a search to the harvester that
+        -- ended blocked (no more cells to explore, or its own limit) gives the same result with more steps: the 728 ran
+        -- 9 identical restarts of 8 s (steps 201/400 ... 201/1200) for nothing. Such a search fails at once; the task
+        -- then backs off along its own tracks after the next failure from the same place
+        if increaseStepsAllowed and keepRestrictions and self.completelyBlocked then
+            increaseStepsAllowed = false
+        end
 
         -- Only allow auto restart when planning path to network and we can adjust target wayPoint
         local retryAllowed = self.destinationId ~= nil and self.retryCounter < self.PATHFINDER_MAX_RETRIES
@@ -2217,7 +4593,7 @@ function PathFinderModule:update(dt)
                 string.format("PFM update - error - retryAllowed: no -> fallBackModeAllowed: no -> aborting now"
                 )
             )
-            self:abort()
+            self:abortOrTour()
         end
         return
     end
@@ -2867,8 +5243,8 @@ function PathFinderModule:checkForFruitInArea(cell, corners)
     end
     cell.hasFruit = hasFruit
     cell.fruitValue = ratio
-    --Allow fruit in the last few grid cells
-    if (self:cellDistance(cell) <= 3 and self.goingToPipe) then
+    --Allow fruit in the last few grid cells (not behind the harvester: cut ground there)
+    if (self:cellDistance(cell) <= 3 and self.goingToPipe and not self.goingBehind) then
         cell.isRestricted = false or wasRestricted
     end
     -- the vehicle already stands there: crop in the start cell (or within START_CROP_RADIUS) does not block the way out,
@@ -2877,6 +5253,11 @@ function PathFinderModule:checkForFruitInArea(cell, corners)
     if hasFruit and not wasRestricted and self.startX ~= nil then
         local center = cell.worldPos or self:gridLocationToWorldLocation(cell)
         nearStart = MathUtil.vector2Length(center.x - self.startX, center.z - self.startZ) < PathFinderModule.START_CROP_RADIUS
+        if nearStart and self:isChopperWork() and (self.strictFruit or self.strictField) then
+            -- strict: only where the train stands, a turn through the crop ahead of the tractor is no way out
+            local _, _, _, hx, hz = self:getStartPose()
+            nearStart = (center.x - self.startX) * hx + (center.z - self.startZ) * hz < PathFinderModule.START_CROP_AHEAD
+        end
     end
     if hasFruit and not wasRestricted and (nearStart or (self.startCell ~= nil and cell.x ~= nil and cell.z ~= nil
         and cell.x == self.startCell.x and cell.z == self.startCell.z)) then
@@ -2945,8 +5326,8 @@ function PathFinderModule:checkForFruitTypeInArea(cell, fruitTypeIndex, corners)
         end
     end
 
-    --Allow fruit in the last few grid cells
-    if (self:cellDistance(cell) <= 3 and self.goingToPipe) then
+    --Allow fruit in the last few grid cells (not behind the harvester: cut ground there)
+    if (self:cellDistance(cell) <= 3 and self.goingToPipe and not self.goingBehind) then
         cell.isRestricted = false or wasRestricted
     end
 end
@@ -3502,6 +5883,10 @@ function PathFinderModule:smoothResultingPPPath_Refined()
                 -- shortcuts keep a margin from the crop: the vehicle drives in the free strip, not along the crop edge
                 if self.trainHalfWidth ~= nil then
                     fruitSide = self.trainHalfWidth + PathFinderModule.SMOOTH_FRUIT_MARGIN
+                    if self:isChopperWork() then
+                        -- forage harvester: the shortcut is judged as the final check, at the tyre edges
+                        fruitSide = self:getCropHalfWidth()
+                    end
                 end
                 local fruitCornerX = node.x - math.cos(leftAngle) * fruitSide
                 local fruitCornerZ = node.z + math.sin(leftAngle) * fruitSide
@@ -3674,10 +6059,13 @@ function PathFinderModule:smoothResultingPPPath_Refined()
                 end
                 if (self.strictFruit or self.strictField) and self:usePartialPath(badIndex) then
                     -- the clean beginning of the route is kept, the task plans again on arrival
+                elseif (self.strictFruit or self.strictField) and self:tryGuidedDeparture() then
+                    self.smoothDone = true
+                    return
                 elseif self.strictFruit or self.strictField then
                     -- strict: better wait and plan again than drive through the crop, the calling task retries
                     PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: no clean path (%s at %.0f,%.0f), strict: waiting and new try", tostring(reason), p.x, p.z)
-                    self:abort()
+                    self:abortOrTour()
                     self.smoothStep = 3
                     return
                 else
@@ -3686,10 +6074,22 @@ function PathFinderModule:smoothResultingPPPath_Refined()
             end
             if self.partialPath and not self:trimPartialEnd() then
                 PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: partial path without a clean stop point (facing the harvester), waiting and new try")
-                self:abort()
+                if self:tryGuidedDeparture() then
+                    self.smoothDone = true
+                    return
+                end
+                self.partialFailCount = (self.partialFailCount or 0) + 1
+                if self.partialFailCount >= PathFinderModule.PARTIAL_FACING_LIFT_FAILURES and not self.partialFacingLifted and self:isChopperWork() then
+                    self.partialFacingLifted = true
+                end
+                self:abortOrTour()
                 self.smoothStep = 3
                 return
             end
+            -- a route leaves: the next wait counts from zero again
+            self.partialFailCount = 0
+            self.partialFacingLifted = false
+            self.guidedInRow = 0
         end
         if self.gridScaleStep ~= nil and self.gridScaleStep > 1 then
             local kept, sharp = self:roundCornersToTurnRadius()
@@ -3700,9 +6100,17 @@ function PathFinderModule:smoothResultingPPPath_Refined()
                 self.isFinished = false
                 self:shrinkGrid()
                 return
+            elseif sharp > 0 and (self.strictFruit or self.strictField) and self:usePartialBeforeSharp() then
+                -- the route is driven up to the corner, planned again there
+            elseif sharp > 0 and (self.strictFruit or self.strictField) and self:tryGuidedDeparture() then
+                self.smoothDone = true
+                return
+            elseif sharp > 0 and (self.strictFruit or self.strictField) and self:tryGuidedDeparture(true) then
+                self.smoothDone = true
+                return
             elseif sharp > 0 and (self.strictFruit or self.strictField) then
                 PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: %d corner(s) too sharp for the train even in %.1f m cells, strict: waiting and new try", sharp, self.minTurnRadius)
-                self:abort()
+                self:abortOrTour()
                 self.smoothStep = 3
                 return
             end
@@ -3713,6 +6121,10 @@ function PathFinderModule:smoothResultingPPPath_Refined()
                 self:shrinkGrid()
                 return
             end
+        end
+        -- a whole route leaves: the further departures count from zero again
+        if not self.partialPath then
+            self.guidedLossInRow = 0
         end
 
         self.smoothDone = true
@@ -4068,6 +6480,12 @@ function PathFinderModule:isDriveableAstar(cell)
         end
     end
 
+    -- field ground the cut strips do not reach (wheel lane through the crop, pocket): counted as crop
+    if not cell.isRestricted and cell.isOnField and self:isOutOfBand(worldPos.x, worldPos.z) then
+        cell.isRestricted = true
+        cell.hasFruit = true
+    end
+
     if not cell.isRestricted and cell.incoming ~= nil then
         -- check for up/down is to big or below water level
         local worldPosPrevious = self:gridLocationToWorldLocation(cell.incoming)
@@ -4164,7 +6582,174 @@ end
 -- For heuristic. Estimate cost of current node to goal node
 -- neighbor, goal
 function PathFinderModule:estimate_cost(node, goal_node)
+    local band = self:getBandDistanceAtNode(node)
+    if band then
+        return band * 1.5 + (node.cost + goal_node.cost) * 0.5
+    elseif band == false then
+        -- strips known but this place cannot reach the target through them
+        return self:get_cost(node, goal_node) * 1.5 + PathFinderModule.BAND_UNREACHED_PENALTY + (node.cost + goal_node.cost) * 0.5
+    end
     return self:get_cost(node, goal_node) * 1.5 + (node.cost + goal_node.cost) * 0.5
+end
+
+-- real driving distance from a grid node to the target through the cut strips: number, false when the strips
+-- are known but the node is not in them, nil when there is no flood (any other trip)
+function PathFinderModule:getBandDistanceAtNode(node)
+    if not self:isBandFloodReady() then
+        return nil
+    end
+    local p = self:gridLocationToWorldLocation(node)
+    return ADBandRoute.getDistance(self.bandFlood, p.x, p.z) or false
+end
+
+function PathFinderModule:isBandFloodReady()
+    return self.bandFlood ~= nil and self.bandFlood.done and not self.bandFlood.failed and self.bandFloodStartDistance ~= nil
+end
+
+-- distance gained toward the target: real distance in the strips when both ends are in them
+function PathFinderModule:getBandGain(fromX, fromZ, toX, toZ)
+    if not self:isBandFloodReady() then
+        return nil
+    end
+    local a = ADBandRoute.getDistance(self.bandFlood, fromX, fromZ, PathFinderModule.BAND_START_LOOKUP)
+    if a == nil then
+        return nil
+    end
+    local b = ADBandRoute.getDistance(self.bandFlood, toX, toZ)
+    if b == nil then
+        -- from the strips to a place they do not reach: a dead end, never a gain
+        return -math.huge
+    end
+    return a - b
+end
+
+-- field ground the strips do not reach (a wheel lane through the crop, a pocket): no way for the train.
+-- Not judged near the start (the train stands where it stands) and near the target
+function PathFinderModule:isOutOfBand(x, z)
+    -- only when the strips link the start to the target: else the search keeps its usual checks
+    if not self:isBandFloodReady() or not self.bandFloodStartDistance then
+        return false
+    end
+    if MathUtil.vector2Length(x - self.startX, z - self.startZ) < PathFinderModule.VERIFY_SKIP_START
+        or MathUtil.vector2Length(x - self.target.x, z - self.target.z) < PathFinderModule.VERIFY_SKIP_END then
+        return false
+    end
+    return ADBandRoute.getDistance(self.bandFlood, x, z, math.max(1, self.minTurnRadius / 2)) == nil
+end
+
+-- the grid (cells of the turning radius, 9-10 m) finds no way through
+-- a cut strip. The flood of the cut strips (ADBandRoute, 1 m points, whole train width) knows the real way: traced back
+-- from the tractor to the target, thinned, each piece checked for obstacles (the flood only knows crop and field).
+-- Returns the waypoints (isPathFinderPoint) or nil, reason
+PathFinderModule.BAND_PATH_THIN = 3          -- m between kept points on a straight stretch
+PathFinderModule.BAND_PATH_CORNER = 12       -- deg: a heading change above this keeps the point
+PathFinderModule.BAND_PATH_START_AHEAD = 1.5 -- m: the first point is ahead of the tractor at least
+PathFinderModule.BAND_PATH_MAX_HEADING = 100 -- deg between the tractor heading and the first piece
+PathFinderModule.BAND_PATH_END_TOLERANCE = 6 -- m between the end of the trace and the target at most
+function PathFinderModule:getBandPath()
+    local flood = self.bandFlood
+    if flood == nil then
+        return nil, "no strip flood"
+    end
+    if not flood.done then
+        return nil, "strip flood not done"
+    end
+    if flood.failed then
+        return nil, "no free point near the target"
+    end
+    local vx, vy, vz, hx, hz = self:getStartPose()
+    local raw = ADBandRoute.tracePath(flood, vx, vz, PathFinderModule.BAND_START_LOOKUP)
+    if raw == nil or #raw < 2 then
+        return nil, "no strip links the start to the target"
+    end
+    local tail = raw[#raw]
+    if MathUtil.vector2Length(tail.x - flood.x, tail.z - flood.z) > ADBandRoute.TARGET_SNAP + PathFinderModule.BAND_PATH_END_TOLERANCE then
+        return nil, string.format("strip interrupted %.0f m from the target", MathUtil.vector2Length(tail.x - flood.x, tail.z - flood.z))
+    end
+    -- the trace starts at the reached point closest to the tractor, maybe beside or behind it: first point ahead
+    local first = nil
+    for i = 1, math.min(#raw, 20) do
+        local dx, dz = raw[i].x - vx, raw[i].z - vz
+        if dx * hx + dz * hz >= PathFinderModule.BAND_PATH_START_AHEAD then
+            first = i
+            break
+        end
+    end
+    if first == nil or first >= #raw then
+        return nil, "the strip starts behind the tractor"
+    end
+    local look = raw[math.min(#raw, first + 3)]
+    local angle = math.abs(AutoDrive.angleBetween({x = hx, z = hz}, {x = look.x - vx, z = look.z - vz}))
+    if angle > PathFinderModule.BAND_PATH_MAX_HEADING then
+        return nil, string.format("the strip leaves %.0f deg off my heading", angle)
+    end
+    -- thinning: a point every BAND_PATH_THIN m, every corner, the last one
+    local kept = {{x = vx, z = vz}}
+    local lastKept = kept[1]
+    local lastDir = nil
+    for i = first, #raw do
+        local p = raw[i]
+        local dx, dz = p.x - lastKept.x, p.z - lastKept.z
+        local d = math.sqrt(dx * dx + dz * dz)
+        local corner = false
+        if lastDir ~= nil and i < #raw then
+            local q = raw[i + 1]
+            corner = math.abs(AutoDrive.angleBetween(lastDir, {x = q.x - p.x, z = q.z - p.z})) > PathFinderModule.BAND_PATH_CORNER
+        end
+        if (i == #raw or corner or d >= PathFinderModule.BAND_PATH_THIN) and d > 0.5 then
+            kept[#kept + 1] = {x = p.x, z = p.z}
+            lastDir = {x = dx / d, z = dz / d}
+            lastKept = kept[#kept]
+        end
+    end
+    if #kept < 2 then
+        return nil, "strip too short"
+    end
+    -- obstacles along each piece (walls, trees, learned blocked zones): the flood only knows crop and field
+    local halfWidth = self:getTrainWidth() / 2 + FollowCombineTask.LINE_WIDTH_MARGIN
+    local height = PathFinderModule.getTrainHeight(self.vehicle) + PathFinderModule.OBSTACLE_HEIGHT_MARGIN
+    for i = 2, #kept do
+        local a, b = kept[i - 1], kept[i]
+        local dx, dz = b.x - a.x, b.z - a.z
+        local len = math.sqrt(dx * dx + dz * dz)
+        if len > 0.1 then
+            dx, dz = dx / len, dz / len
+            local angleRad = AutoDrive.normalizeAngle(math.atan2(-dz, dx))
+            local midX, midZ = (a.x + b.x) / 2, (a.z + b.z) / 2
+            local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, midX, 1, midZ)
+            local probe = {hits = 0, callback = FollowCombineTask.lineCollisionCallback}
+            overlapBox(midX, y + height / 2, midZ, 0, angleRad, 0, len / 2, height / 2, halfWidth, "callback", probe, AutoDrive.collisionMaskTerrain, true, true, true, true)
+            if probe.hits > 0 then
+                return nil, string.format("obstacle on the strip at %.0f,%.0f", midX, midZ)
+            end
+            if self:boxHitsBlockedZone(midX, midZ, angleRad, len / 2, halfWidth) then
+                return nil, string.format("blocked zone on the strip at %.0f,%.0f", midX, midZ)
+            end
+        end
+    end
+    local path = {}
+    for i, p in ipairs(kept) do
+        path[i] = {x = p.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, p.x, 1, p.z), z = p.z, isPathFinderPoint = true}
+    end
+    return path
+end
+
+-- once the flood is done: distance of the start through the strips (false: the start is not linked to the target)
+function PathFinderModule:checkBandFlood()
+    local flood = self.bandFlood
+    if not flood.done then
+        return
+    end
+    if flood.failed then
+        return
+    end
+    -- the start stands at the crop edge: a wider look around it
+    local d = ADBandRoute.getDistance(flood, self.startX, self.startZ, PathFinderModule.BAND_START_LOOKUP)
+    self.bandFloodStartDistance = d
+    if d == nil then
+        self.bandFloodStartDistance = false
+        return
+    end
 end
 
 -- current = self:pop_best_node(self.openset, self.f_score)
@@ -4585,6 +7170,32 @@ function PathFinderModule:isDriveableDubins(cell)
     return not(cell.isRestricted)
 end
 
+-- the direct curve must not loop around to reach a point at a hard angle (the harvester is gone meanwhile),
+-- and in strict mode the band swept by the whole train (trailer inside the curves) must be free of crop
+PathFinderModule.DIRECT_CURVE_MAX_FACTOR = 2
+PathFinderModule.DIRECT_CURVE_MIN_LENGTH = 15
+function PathFinderModule:checkDirectCurve(path)
+    if path == nil or #path < 2 then
+        return ADDubins.EDUBNOPATH
+    end
+    if not self:isChopperWork() then
+        return ADDubins.EDUBOK
+    end
+    local a, b = path[1], path[#path]
+    local distance = MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+    local length = #path -- samples are 1 m apart
+    if length > math.max(PathFinderModule.DIRECT_CURVE_MAX_FACTOR * distance, PathFinderModule.DIRECT_CURVE_MIN_LENGTH) then
+        return ADDubins.EDUBNOPATH
+    end
+    if (self.strictFruit or self.strictField) then
+        local clear, cropAt = self:isGuidedBandClear(path, self.realTurnRadius or self.minTurnRadius, 0)
+        if not clear then
+            return ADDubins.EDUBNOPATH
+        end
+    end
+    return ADDubins.EDUBOK
+end
+
 function PathFinderModule:getDubinsPath()
     PathFinderModule.debugMsg(self.vehicle, "PFM:getDubinsPath start")
     self.dubinsPath = nil
@@ -4623,6 +7234,9 @@ function PathFinderModule:getDubinsPath()
                         result = ADDubins.EDUBNOPATH
                         break
                     end
+                end
+                if result == ADDubins.EDUBOK then
+                    result = self:checkDirectCurve(self.dubins.outPath)
                 end
             else
                 result = ADDubins.EDUBNOPATH
