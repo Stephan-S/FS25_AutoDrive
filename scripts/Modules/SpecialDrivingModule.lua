@@ -211,7 +211,7 @@ function ADSpecialDrivingModule:driveReverse(dt, maxSpeed, maxAcceleration, guid
     
 end
 
-function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDynamicCollision, maxAcc, maxSpeed)
+function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDynamicCollision, maxAcc, maxSpeed, capToMaxSpeed)
     local speed = math.min(self.vehicle.ad.stateModule:getFieldSpeedLimit(), maxSpeed)
     local acc = math.max(0.75, maxAcc)
 
@@ -224,6 +224,11 @@ function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDyn
         speed = maxFollowSpeed + self.distanceToChasePos * 1.4
     elseif self.distanceToChasePos < 20 then
         speed = maxFollowSpeed + self.distanceToChasePos * 2
+    end
+    -- the speed above ignores maxSpeed for a point closer than 20 m (asked 7 km/h, drove 21 and
+    -- went ahead of the harvester): capped when asked
+    if capToMaxSpeed then
+        speed = math.min(speed, maxSpeed)
     end
 
     --print("Targetspeed: " .. speed .. " distance: " .. self.distanceToChasePos .. " maxFollowSpeed: " .. maxFollowSpeed)

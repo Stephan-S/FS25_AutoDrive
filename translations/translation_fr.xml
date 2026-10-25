@@ -407,5 +407,39 @@
 		<text name="gui_ad_editorTip_9"								text="1. point est une intersection, 2. point est voisin:" />
 		<text name="gui_ad_editorTip_10"								text="CTRLG: Choix du segment (unique/double sens)" />
 		<text name="gui_ad_editorTip_11"								text="MAJG = Etablir voie de dégagement" />
+		<text name="AD_task_hv_chopper" text="l'ensileuse" />
+		<text name="AD_task_hv_combine" text="la moissonneuse" />
+		<text name="AD_task_plan_to" text="Calcule le trajet vers" />
+		<text name="AD_task_no_path_retry" text="Pas de trajet, nouvel essai dans" />
+		<text name="AD_task_drive_to" text="Roule vers" />
+		<text name="AD_task_plan_next" text="calcule la suite" />
+		<text name="AD_task_near" text="Près de" />
+		<text name="AD_task_wait_behind" text="attend de pouvoir se placer derrière" />
+		<text name="AD_task_reverse_by" text="Recule de" />
+		<text name="AD_task_tracks_open_angle" text="dans ses traces pour ouvrir l'angle" />
+		<text name="AD_task_band_turn_rescue" text="Demi-tour dans la bande (secours)" />
+		<text name="AD_task_clear_way_for" text="Dégage le passage de" />
+		<text name="AD_task_let_pass" text="Laisse passer" />
+		<text name="AD_task_stuck_reverse" text="Bloqué, marche arrière" />
+		<text name="AD_task_chase" text="Poursuit" />
+		<text name="AD_task_side_rear" text="par derrière" />
+		<text name="AD_task_side_left" text="à gauche" />
+		<text name="AD_task_side_right" text="à droite" />
+		<text name="AD_task_join_side_left" text="Rejoint le côté gauche de" />
+		<text name="AD_task_join_side_right" text="Rejoint le côté droit de" />
+		<text name="AD_task_join_side_rear" text="Se place derrière" />
+		<text name="AD_task_backoff" text="Recule," />
+		<text name="AD_task_waiting_comma" text="Attend," />
+		<text name="AD_task_is_turning" text="fait demi-tour" />
+		<text name="AD_task_reverse_tracks_clear" text="Recule dans ses traces pour dégager" />
+		<text name="AD_task_back_to_place" text="Recule vers la place de déchargement" />
+		<text name="AD_task_uturn" text="Fait demi-tour" />
+		<text name="AD_task_planning_way" text="Calcul du trajet" />
+		<text name="AD_task_wait_row_entry" text="En place à l'entrée du rang, attend" />
+		<text name="AD_task_follow_trail" text="Suit la trace de" />
+		<text name="AD_task_blocked_reverse" text="Bloqué par un véhicule devant, recule de" />
+		<text name="AD_task_end_row_turn" text="Demi-tour en bout de rang" />
+		<text name="AD_task_wait_overtake_1" text="Attend que" />
+		<text name="AD_task_wait_overtake_2" text="le dépasse" />
 	</texts>
 </l10n>

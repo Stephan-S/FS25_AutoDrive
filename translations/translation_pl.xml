@@ -407,5 +407,39 @@
 		<text name="gui_ad_editorTip_9"								text="Pierwszy punkt to skrzyżowanie, drugi to punkt sąsiedni:" />
 		<text name="gui_ad_editorTip_10"								text="LCTRL: Zamień typ segmentu (normalny/podwójny)" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Zamień na drogę boczną" />
+		<text name="AD_task_hv_chopper" text="the forage harvester" />
+		<text name="AD_task_hv_combine" text="the combine" />
+		<text name="AD_task_plan_to" text="Planning the way to" />
+		<text name="AD_task_no_path_retry" text="No way found, next try in" />
+		<text name="AD_task_drive_to" text="Driving to" />
+		<text name="AD_task_plan_next" text="planning the next part" />
+		<text name="AD_task_near" text="Near" />
+		<text name="AD_task_wait_behind" text="waiting to get behind it" />
+		<text name="AD_task_reverse_by" text="Backing up" />
+		<text name="AD_task_tracks_open_angle" text="along its tracks to open the angle" />
+		<text name="AD_task_band_turn_rescue" text="U-turn in the strip (fallback)" />
+		<text name="AD_task_clear_way_for" text="Clearing the way for" />
+		<text name="AD_task_let_pass" text="Making way for" />
+		<text name="AD_task_stuck_reverse" text="Stuck, reversing" />
+		<text name="AD_task_chase" text="Following" />
+		<text name="AD_task_side_rear" text="from behind" />
+		<text name="AD_task_side_left" text="on the left" />
+		<text name="AD_task_side_right" text="on the right" />
+		<text name="AD_task_join_side_left" text="Moving to the left side of" />
+		<text name="AD_task_join_side_right" text="Moving to the right side of" />
+		<text name="AD_task_join_side_rear" text="Moving behind" />
+		<text name="AD_task_backoff" text="Backing off," />
+		<text name="AD_task_waiting_comma" text="Waiting," />
+		<text name="AD_task_is_turning" text="is turning" />
+		<text name="AD_task_reverse_tracks_clear" text="Backing up along its tracks to clear the way" />
+		<text name="AD_task_back_to_place" text="Backing up to the unloading place" />
+		<text name="AD_task_uturn" text="Turning around" />
+		<text name="AD_task_planning_way" text="Planning the way" />
+		<text name="AD_task_wait_row_entry" text="In place at the row entry, waiting for" />
+		<text name="AD_task_follow_trail" text="Following the track of" />
+		<text name="AD_task_blocked_reverse" text="Blocked by a vehicle ahead, backing up" />
+		<text name="AD_task_end_row_turn" text="U-turn at the end of the row" />
+		<text name="AD_task_wait_overtake_1" text="Waiting for" />
+		<text name="AD_task_wait_overtake_2" text="to pass" />
 	</texts>
 </l10n>
