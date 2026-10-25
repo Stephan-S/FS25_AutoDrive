@@ -26,6 +26,14 @@ function ExitFieldTask:setUp()
 end
 
 function ExitFieldTask:update(dt)
+    -- the point it drives out to is published: an empty unloader coming in waits before the entrance (field park)
+    if ADFieldPark ~= nil and ADFieldPark.setFieldExit ~= nil then
+        if self.state == ExitFieldTask.STATE_DRIVING and self.exitPoint ~= nil then
+            ADFieldPark.setFieldExit(self.vehicle, self.exitPoint.x, self.exitPoint.z)
+        else
+            ADFieldPark.setFieldExit(self.vehicle, nil)
+        end
+    end
     if self.state == ExitFieldTask.STATE_PATHPLANNING then
         if self.vehicle.ad.pathFinderModule:hasFinished() then
             self.wayPoints = self.vehicle.ad.pathFinderModule:getPath()
@@ -58,6 +66,9 @@ function ExitFieldTask:update(dt)
     elseif self.state == ExitFieldTask.STATE_DRIVING then
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             self.state = ExitFieldTask.STATE_FINISHED
+        elseif self:isExitPointBlocked(dt) then
+            -- an unloader waits on the point: the next point instead
+            self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
         else
             self.vehicle.ad.drivePathModule:update(dt)
         end
@@ -67,10 +78,47 @@ function ExitFieldTask:update(dt)
 end
 
 function ExitFieldTask:abort()
+    self:clearFieldExit()
 end
 
 function ExitFieldTask:finished()
+    self:clearFieldExit()
     self.vehicle.ad.taskModule:setCurrentTaskFinished()
+end
+
+function ExitFieldTask:clearFieldExit()
+    if ADFieldPark ~= nil and ADFieldPark.setFieldExit ~= nil then
+        ADFieldPark.setFieldExit(self.vehicle, nil)
+    end
+end
+
+ExitFieldTask.POINT_CHECK_INTERVAL = 2000 -- ms between two looks at the exit point
+ExitFieldTask.POINT_CHECK_MIN_DISTANCE = 20 -- m: closer to the point, it goes on (the other one sees it coming)
+
+-- an empty unloader stands on the network point this one drives out to (it waits for its call there):
+-- the next point of the list is tried, if there is one
+function ExitFieldTask:isExitPointBlocked(dt)
+    if ADFieldPark == nil or ADFieldPark.isExitPointTaken == nil then
+        return false
+    end
+    self.pointCheckTime = (self.pointCheckTime or 0) + dt
+    if self.exitPoint == nil or self.pointCheckTime < ExitFieldTask.POINT_CHECK_INTERVAL then
+        return false
+    end
+    self.pointCheckTime = 0
+    if self.candidates == nil or self.candidateIndex == nil or self.candidateIndex >= #self.candidates then
+        return false
+    end
+    local x, _, z = getWorldTranslation(self.vehicle.components[1].node)
+    if MathUtil.vector2Length(x - self.exitPoint.x, z - self.exitPoint.z) < ExitFieldTask.POINT_CHECK_MIN_DISTANCE then
+        return false
+    end
+    local other = ADFieldPark.isExitPointTaken(self.vehicle, self.exitPoint.x, self.exitPoint.z)
+    if other == nil then
+        return false
+    end
+    ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:isExitPointBlocked - %s waits on network point %s, next point", tostring(other:getName()), tostring(self.exitPoint.id))
+    return true
 end
 
 ExitFieldTask.CANDIDATE_MAX_DISTANCE = 200   -- m, network points considered to leave the field
@@ -169,9 +217,97 @@ function ExitFieldTask:startPathPlanning()
     local pf = self.vehicle.ad.pathFinderModule
     pf:reset()
     pf.noFallback = true
-    pf:startPathPlanningTo(candidate.wp, {x = candidate.vector.x, z = candidate.vector.z})
+    -- the end of the route is judged for obstacles too (a wall between the field and the road)
+    pf.exitToNetwork = true
+    local approach, appended = self:buildApproach(candidate)
+    if approach ~= nil then
+        -- the point is reached along the axis of the network (the gate), the grid only has to bring the train
+        -- to an approach point in the open field, aligned with that axis
+        ExitFieldTask.debugMsg(self.vehicle, "ExitFieldTask:startPathPlanning - point %s reached along the network axis: approach %.0f m before it", tostring(candidate.wp.id), approach.distance)
+        pf:startPathPlanningTo(approach, {x = candidate.vector.x, z = candidate.vector.z})
+        pf.appendWayPoints = appended
+    else
+        pf:startPathPlanningTo(candidate.wp, {x = candidate.vector.x, z = candidate.vector.z})
+    end
+    self.exitPoint = {x = candidate.wp.x, z = candidate.wp.z, id = candidate.wp.id}
     self.state = ExitFieldTask.STATE_PATHPLANNING
     return true
+end
+
+ExitFieldTask.APPROACH_DISTANCES = {20, 12} -- m before the network point, along the axis of the network, tried in this order
+ExitFieldTask.APPROACH_STEP = 3             -- m between the points of the straight stretch to the network point
+ExitFieldTask.APPROACH_MIN_VEHICLE_DISTANCE = 12 -- m: closer than approach + this, the point is driven to directly
+
+-- a field gate is a lane between a post and a wall, narrower than the train plus the margins of the grid: the grid
+-- cannot find it, or finds it with a corner too sharp. The network does go through it, so the point is reached
+-- along the axis of the network: an approach point in the open field, on that axis, then straight on. Returns the
+-- approach point (target of the grid) and the points appended after it, or nil when the axis does not fit here
+-- (approach point off the field, crop on the straight stretch, vehicle too close).
+function ExitFieldTask:buildApproach(candidate)
+    local wp, vector = candidate.wp, candidate.vector
+    if wp == nil or vector == nil then
+        return nil
+    end
+    local length = MathUtil.vector2Length(vector.x, vector.z)
+    if length < 0.5 then
+        return nil
+    end
+    local ux, uz = vector.x / length, vector.z / length
+    local halfWidth = self:getTrainHalfWidth()
+    local wy = wp.y or getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, wp.x, 1, wp.z)
+    for _, distance in ipairs(ExitFieldTask.APPROACH_DISTANCES) do
+        if (candidate.distance or 0) >= distance + ExitFieldTask.APPROACH_MIN_VEHICLE_DISTANCE then
+            local ax, az = wp.x - ux * distance, wp.z - uz * distance
+            local ay = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, ax, 1, az)
+            if AutoDrive.checkIsOnField(ax, ay, az) and not ExitFieldTask.hasCropOnStretch(ax, az, wp.x, wp.z, halfWidth) then
+                local approach = {x = ax, y = ay, z = az, distance = distance}
+                local appended = {approach}
+                local d = ExitFieldTask.APPROACH_STEP
+                while d < distance - ExitFieldTask.APPROACH_STEP / 2 do
+                    local px, pz = ax + ux * d, az + uz * d
+                    table.insert(appended, {x = px, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, px, 1, pz), z = pz})
+                    d = d + ExitFieldTask.APPROACH_STEP
+                end
+                table.insert(appended, {x = wp.x, y = wy, z = wp.z})
+                return approach, appended
+            end
+        end
+    end
+    return nil
+end
+
+function ExitFieldTask:getTrainHalfWidth()
+    local width = self.vehicle.size ~= nil and self.vehicle.size.width or 3
+    for _, trailer in pairs(self.trailers or {}) do
+        if trailer.size ~= nil and trailer.size.width ~= nil then
+            width = math.max(width, trailer.size.width)
+        end
+    end
+    return width / 2
+end
+
+-- standing crop on the straight band (train width) between two points, every meter
+function ExitFieldTask.hasCropOnStretch(x1, z1, x2, z2, halfWidth)
+    local dx, dz = x2 - x1, z2 - z1
+    local length = math.sqrt(dx * dx + dz * dz)
+    if length < 0.5 then
+        return false
+    end
+    dx, dz = dx / length, dz / length
+    local d = 0
+    while d <= length do
+        local cx, cz = x1 + dx * d, z1 + dz * d
+        local corners = {
+            {x = cx - dz * halfWidth, z = cz + dx * halfWidth},
+            {x = cx + dz * halfWidth, z = cz - dx * halfWidth},
+            {x = cx - dz * halfWidth + dx, z = cz + dx * halfWidth + dz}
+        }
+        if AutoDrive.checkForUnknownFruitInArea(corners) then
+            return true
+        end
+        d = d + 1
+    end
+    return false
 end
 
 function ExitFieldTask:selectNextStrategy()

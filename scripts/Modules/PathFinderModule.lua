@@ -121,6 +121,7 @@ function PathFinderModule:reset()
     self.goingToNetwork  = false
     self.goingToPipe = false
     self.noFallback = false -- set by the caller after reset(): never lift field / fruit restrictions, fail instead
+    self.exitToNetwork = false -- set by the caller after reset(): exit of a field to a network point
     self.chasingVehicle = false
     self.isSecondChasingVehicle = false
     self.pathFinderTime = AutoDrive.getSetting("pathFinderTime")
