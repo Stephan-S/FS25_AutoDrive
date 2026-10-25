@@ -53,6 +53,11 @@ function ADHarvestManager:registerAsUnloader(vehicle)
     if not table.contains(self.idleUnloaders, vehicle) then
         ADHarvestManager.debugMsg(vehicle, "ADHarvestManager:registerAsUnloader - inserted")
         table.insert(self.idleUnloaders, vehicle)
+        -- queue by order of arrival: the first unloader waiting for this harvester is called first.
+        -- A failed call keeps the place in the queue, it is only cleared when the unloader leaves to unload
+        if vehicle.ad ~= nil and vehicle.ad.unloaderQueueTime == nil then
+            vehicle.ad.unloaderQueueTime = g_time
+        end
     end
 end
 
@@ -111,6 +116,10 @@ function ADHarvestManager:update(dt)
         local vehicle = harvester
         if vehicle.isTrailedHarvester then
             vehicle = vehicle.trailingVehicle
+        end
+        if ADFieldPark ~= nil and ADFieldPark.isEnabled() then
+            -- the sense of its first headland, for the unloaders parked in the field
+            ADFieldPark.trackHarvester(harvester)
         end
         local unloader = self:getAssignedUnloader(harvester)
         if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
@@ -329,15 +338,19 @@ end
 function ADHarvestManager:getClosestIdleUnloader(harvester)
     local closestUnloader = nil
     local closestDistance = math.huge
+    local closestTime = math.huge
     for _, unloader in pairs(self.idleUnloaders) do
         -- sort by distance to combine first
         local distance = AutoDrive.getDistanceBetween(unloader, harvester)
         --local distanceMatch = distance <= ADHarvestManager.MAX_SEARCH_RANGE and AutoDrive.getSetting("findDriver")
         local targetsMatch = unloader.ad.stateModule:getFirstMarker() == harvester.ad.stateModule:getFirstMarker()
         if targetsMatch then --if distanceMatch or targetsMatch then
-            if closestUnloader == nil or distance < closestDistance then
+            -- order of arrival first (unloaders queue in the field and beside the road), then distance
+            local queueTime = unloader.ad.unloaderQueueTime or math.huge
+            if closestUnloader == nil or queueTime < closestTime or (queueTime == closestTime and distance < closestDistance) then
                 closestUnloader = unloader
                 closestDistance = distance
+                closestTime = queueTime
             end
         end
     end

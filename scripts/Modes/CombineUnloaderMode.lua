@@ -31,6 +31,7 @@ end
 function CombineUnloaderMode:reset()
     self.state = self.STATE_INIT
     self.activeTask = nil
+    self.vehicle.ad.unloaderQueueTime = nil
     ADHarvestManager:unregisterAsUnloader(self.vehicle)
     self.combine = nil
     self.followingUnloader = nil
@@ -188,6 +189,8 @@ function CombineUnloaderMode:continue()
         end
 
         ADHarvestManager:unregisterAsUnloader(self.vehicle)
+        -- leaves to unload: back at the end of the queue on return
+        self.vehicle.ad.unloaderQueueTime = nil
         self.followingUnloader = nil
         self.combine = nil
         self.vehicle.ad.taskModule:addTask(self.activeTask)
@@ -383,6 +386,8 @@ function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
     end
 
     if filledToUnload then
+        -- leaves to unload: back at the end of the queue on return
+        self.vehicle.ad.unloaderQueueTime = nil
         --ADHarvestManager:unregisterAsUnloader(self.vehicle)
         --self.followingUnloader = nil
         --self.combine = nil
