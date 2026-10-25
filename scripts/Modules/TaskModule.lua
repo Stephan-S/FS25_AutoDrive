@@ -122,10 +122,58 @@ function ADTaskModule:hasToRefuel()
     if AutoDrive.getSetting("autoRefuel", self.vehicle) or self.vehicle.ad.onRouteToRefuel then
         local refuelFillTypes = AutoDrive.getRequiredRefuels(self.vehicle, self.vehicle.ad.onRouteToRefuel)
         if #refuelFillTypes > 0 then
-            ret = true
+            ret = not self:shouldPostponeRefuel()
         end
     end
     return ret
+end
+
+-- below this fuel / DEF level the refuel is no longer postponed
+ADTaskModule.REFUEL_EMERGENCY_LEVEL = 0.05
+
+-- automatic refuel waits until the current job is done: nothing left on board and,
+-- for a combine unloader, no harvester assigned. A refuel asked by the player
+-- (onRouteToRefuel already set) or a nearly empty tank is never postponed.
+function ADTaskModule:shouldPostponeRefuel()
+    local vehicle = self.vehicle
+    if vehicle.ad.onRouteToRefuel then
+        return false
+    end
+    local spec = vehicle.spec_motorized
+    if spec ~= nil and spec.consumersByFillTypeName ~= nil then
+        for fillTypeName, consumer in pairs(spec.consumersByFillTypeName) do
+            if not table.contains(AutoDrive.nonFillableFillTypes, fillTypeName)
+                and vehicle:getFillUnitFillLevelPercentage(consumer.fillUnitIndex) < ADTaskModule.REFUEL_EMERGENCY_LEVEL then
+                return false
+            end
+        end
+    end
+
+    local reason = nil
+    local mode = vehicle.ad.stateModule:getCurrentMode()
+    if vehicle.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD and mode ~= nil and mode.state ~= nil
+        and (mode.state == CombineUnloaderMode.STATE_DRIVE_TO_COMBINE or mode.state == CombineUnloaderMode.STATE_DRIVE_TO_PIPE
+        or mode.state == CombineUnloaderMode.STATE_FOLLOW_COMBINE or mode.state == CombineUnloaderMode.STATE_ACTIVE_UNLOAD_COMBINE
+        or mode.state == CombineUnloaderMode.STATE_FOLLOW_CURRENT_UNLOADER or mode.state == CombineUnloaderMode.STATE_REVERSE_FROM_BAD_LOCATION) then
+        reason = "working for a harvester"
+    else
+        local units = AutoDrive.getAllUnits(vehicle)
+        if units ~= nil and #units > 0 then
+            local fillLevel, fillCapacity = AutoDrive.getAllFillLevels(units)
+            if fillLevel > 0.01 * math.max(fillCapacity, 1) then
+                reason = string.format("still loaded (%.0f / %.0f l)", fillLevel, fillCapacity)
+            end
+        end
+    end
+    if reason ~= nil then
+        if self.refuelPostponedReason ~= reason then
+            AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "ADTaskModule: refuel postponed, %s", reason)
+        end
+        self.refuelPostponedReason = reason
+        return true
+    end
+    self.refuelPostponedReason = nil
+    return false
 end
 
 function ADTaskModule:RefuelIfNeeded()
