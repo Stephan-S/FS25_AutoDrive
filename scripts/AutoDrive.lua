@@ -19,6 +19,7 @@ AutoDrive.mapHotspotsBuffer = {}
 
 AutoDrive.drawHeight = 0.3
 AutoDrive.drawDistance = getViewDistanceCoeff() * 100
+AutoDrive.splineInterpolationUserCurvature = 0.49
 
 AutoDrive.MODE_DRIVETO = 1
 AutoDrive.MODE_PICKUPANDDELIVER = 2

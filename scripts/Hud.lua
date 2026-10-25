@@ -557,7 +557,7 @@ function AutoDriveHud:mouseEventConnectWaypoints(vehicle, connectDual)
                 ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId), reverseDirection, connectDual)
             end
 
-            AutoDrive.splineInterpolationUserCurvature = nil
+            AutoDrive.splineInterpolationUserCurvature = 0.49
         else
             AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent toggleConnectionBetween 1 vehicle.ad.selectedNodeId %d vehicle.ad.hoveredNodeId %d", vehicle.ad.selectedNodeId, vehicle.ad.hoveredNodeId)
             ADGraphManager:toggleConnectionBetween(ADGraphManager:getWayPointById(vehicle.ad.selectedNodeId), ADGraphManager:getWayPointById(vehicle.ad.hoveredNodeId), reverseDirection, connectDual)
@@ -575,7 +575,7 @@ function AutoDriveHud:mouseEventSelectWaypoint(vehicle)
     -- select point
     -- no selectedNodeId: hoveredNodeId is now selectedNodeId
     vehicle.ad.selectedNodeId = vehicle.ad.hoveredNodeId
-    AutoDrive.splineInterpolationUserCurvature = nil
+    AutoDrive.splineInterpolationUserCurvature = 0.49
     AutoDriveHud.debugMsg(vehicle, "AutoDriveHud:mouseEvent select point selectedNodeId %d", vehicle.ad.selectedNodeId)
     
     AutoDrive.playSample(AutoDrive.selectedWayPointSample, 0.75)
