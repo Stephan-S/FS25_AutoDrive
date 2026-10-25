@@ -76,6 +76,7 @@ source(Utils.getFilename("scripts/Utils/FieldPointGenerator.lua", g_currentModDi
 
 source(Utils.getFilename("scripts/Manager/RoutesManager.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Manager/DrawingManager.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Manager/ChaseDisplay.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Manager/MessagesManager.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Manager/GraphManager.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Manager/TriggerManager.lua", g_currentModDirectory))
@@ -102,6 +103,7 @@ source(Utils.getFilename("scripts/Tasks/FollowCombineTask.lua", g_currentModDire
 source(Utils.getFilename("scripts/Tasks/RefuelTask.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/ExitFieldTask.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/FollowVehicleTask.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Tasks/StepAsideTask.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/ReverseFromBadLocationTask.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/ParkTask.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/RepairTask.lua", g_currentModDirectory))

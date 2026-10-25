@@ -40,6 +40,7 @@ AutoDrive.DC_RENDERINFO = 256
 AutoDrive.DC_ROADNETWORKINFO = 512
 AutoDrive.DC_BGA_MODE = 1024
 AutoDrive.DC_TRAINS = 2048
+AutoDrive.DC_CHASEDISPLAY = 4096 -- permanent chase display (ADChaseDisplay), kept in the settings like the others
 AutoDrive.DC_ALL = 65535
 
 AutoDrive.currentDebugChannelMask = AutoDrive.DC_NONE
@@ -743,6 +744,9 @@ end
 
 function AutoDrive:draw()
 	PathFinderModule.drawFieldMap()
+	if ADChaseDisplay ~= nil and ADChaseDisplay.isEnabled() then
+		ADChaseDisplay.draw()
+	end
 	ADDrawingManager:draw()
 	ADMessagesManager:draw()
 end

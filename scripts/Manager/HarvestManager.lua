@@ -49,15 +49,25 @@ end
 function ADHarvestManager:registerAsUnloader(vehicle)
     ADHarvestManager.debugMsg(vehicle, "ADHarvestManager:registerAsUnloader")
     --remove from active and idle list
-    self:unregisterAsUnloader(vehicle)
+    -- an unloader that waits for a call again while keeping its harvester
+    -- (U-turn given up, new route: setToWaitForCall(true)) is not leaving it, its follower stays its follower. The
+    -- promotion here sent an unloader to the harvester and back behind an unloader every 2 s
+    local mode = vehicle.ad ~= nil and vehicle.ad.modes ~= nil and vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    local keepFollower = mode ~= nil and mode.combine ~= nil and mode:getFollowingUnloader() ~= nil
+    self:unregisterAsUnloader(vehicle, keepFollower)
     if not table.contains(self.idleUnloaders, vehicle) then
         ADHarvestManager.debugMsg(vehicle, "ADHarvestManager:registerAsUnloader - inserted")
         table.insert(self.idleUnloaders, vehicle)
+        -- queue by order of arrival: the first unloader waiting for this harvester is called first.
+        -- A failed call keeps the place in the queue, it is only cleared when the unloader leaves to unload
+        if vehicle.ad ~= nil and vehicle.ad.unloaderQueueTime == nil then
+            vehicle.ad.unloaderQueueTime = g_time
+        end
     end
 end
 
-function ADHarvestManager:unregisterAsUnloader(vehicle)
-    if vehicle.ad and vehicle.ad.modes ~= nil and vehicle.ad.modes[AutoDrive.MODE_UNLOAD] ~= nil then
+function ADHarvestManager:unregisterAsUnloader(vehicle, keepFollower)
+    if vehicle.ad and vehicle.ad.modes ~= nil and vehicle.ad.modes[AutoDrive.MODE_UNLOAD] ~= nil and not keepFollower then
         local followingUnloder = vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getFollowingUnloader()
         if followingUnloder ~= nil then
             --promote following unloader to current unloader
@@ -113,7 +123,18 @@ function ADHarvestManager:update(dt)
             vehicle = vehicle.trailingVehicle
         end
         local unloader = self:getAssignedUnloader(harvester)
-        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
+        local driverStopped = not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
+        if driverStopped and harvester.ad ~= nil and harvester.ad.isChopper and not (vehicle.ad.onRouteToRefuel or vehicle.ad.onRouteToRepair) then
+            -- forage harvester: its driver (Courseplay) stops for a moment now and then. The unloaders keep their place,
+            -- the queue and the attached unloader, and wait; only a long stop releases them as before
+            harvester.ad.driverStoppedSince = harvester.ad.driverStoppedSince or g_time
+            if g_time - harvester.ad.driverStoppedSince < ADHarvestManager.CHOPPER_DRIVER_STOP_TIME then
+                driverStopped = false
+            end
+        elseif harvester.ad ~= nil then
+            harvester.ad.driverStoppedSince = nil
+        end
+        if driverStopped
             or (vehicle.ad.onRouteToRefuel or vehicle.ad.onRouteToRepair) -- harvester is going to refuel or park
             or (unloader ~= nil and unloader.ad.stateModule:getFirstMarker() ~= vehicle.ad.stateModule:getFirstMarker()) -- harvester - unloader targets do not match
         then
@@ -301,6 +322,10 @@ end
 function ADHarvestManager:assignUnloaderToHarvester(harvester)
     local closestUnloader = self:getClosestIdleUnloader(harvester)
     if closestUnloader ~= nil then
+        if harvester.ad ~= nil and harvester.ad.isChopper then
+            -- forage harvester: this unloader stays its own until it is full (chopper only)
+            harvester.ad.stickyUnloader = closestUnloader
+        end
         ADHarvestManager.debugMsg(closestUnloader, "ADHarvestManager:assignUnloaderToHarvester ")
         closestUnloader.ad.modes[AutoDrive.MODE_UNLOAD]:assignToHarvester(harvester)
         table.insert(self.activeUnloaders, closestUnloader)
@@ -326,9 +351,63 @@ function ADHarvestManager:getAssignedUnloader(harvester)
     return nil
 end
 
+-- forage harvester only: the unloader it worked with last, until that one is full and leaves to unload
+ADHarvestManager.CHOPPER_DRIVER_STOP_TIME = 300000 -- ms, forage harvester driver stopped longer: unloaders released
+
+function ADHarvestManager.releaseStickyUnloader(vehicle, reason)
+    for _, list in ipairs({ADHarvestManager.harvesters or {}, ADHarvestManager.idleHarvesters or {}}) do
+        for _, harvester in pairs(list) do
+            if harvester ~= nil and harvester.ad ~= nil and harvester.ad.stickyUnloader == vehicle then
+                harvester.ad.stickyUnloader = nil
+            end
+        end
+    end
+end
+
+ADHarvestManager.QUEUE_SAME_TIME = 10000 -- ms: unloaders registered this close together are called by their place in the line
+ADHarvestManager.QUEUE_LINE_ANGLE = 30 -- deg at most between the headings of two unloaders in the same line
+ADHarvestManager.QUEUE_LINE_SIDE = 6 -- m at most aside from the other one's axis
+ADHarvestManager.QUEUE_LINE_AHEAD = 2 -- m ahead at least
+
+-- unloader a stands in front of unloader b in the same line: same heading, on b's axis, ahead of b
+function ADHarvestManager.isAheadInLine(a, b)
+    if a == nil or b == nil or a.components == nil or b.components == nil then
+        return false
+    end
+    local ax, _, az = getWorldTranslation(a.components[1].node)
+    local bx, _, bz = getWorldTranslation(b.components[1].node)
+    local ahx, _, ahz = localDirectionToWorld(a.components[1].node, 0, 0, 1)
+    local bhx, _, bhz = localDirectionToWorld(b.components[1].node, 0, 0, 1)
+    local la, lb = math.sqrt(ahx * ahx + ahz * ahz), math.sqrt(bhx * bhx + bhz * bhz)
+    if la < 0.01 or lb < 0.01 then
+        return false
+    end
+    ahx, ahz, bhx, bhz = ahx / la, ahz / la, bhx / lb, bhz / lb
+    if ahx * bhx + ahz * bhz < math.cos(math.rad(ADHarvestManager.QUEUE_LINE_ANGLE)) then
+        return false
+    end
+    local dx, dz = ax - bx, az - bz
+    local along = dx * bhx + dz * bhz
+    local aside = math.abs(dx * bhz - dz * bhx)
+    return along >= ADHarvestManager.QUEUE_LINE_AHEAD and aside <= ADHarvestManager.QUEUE_LINE_SIDE
+end
+
+-- combine harvester: the closest idle unloader (former behaviour).
+-- Forage harvester: its own unloader while not full, else the first in the queue (order of arrival, then distance):
+-- in a narrow cut strip the trailers cannot pass each other, the one that came first must be called first
 function ADHarvestManager:getClosestIdleUnloader(harvester)
+    local chopper = harvester ~= nil and harvester.ad ~= nil and harvester.ad.isChopper == true
+    local sticky = chopper and harvester.ad.stickyUnloader or nil
+    if sticky ~= nil and table.contains(self.idleUnloaders, sticky) then
+        local handedOver = sticky.ad.skipHarvester == harvester and sticky.ad.skipHarvesterUntil ~= nil and g_time < sticky.ad.skipHarvesterUntil
+        if not handedOver then
+            return sticky
+        end
+    end
     local closestUnloader = nil
     local closestDistance = math.huge
+    local closestTime = math.huge
+    local matching = 0
     for _, unloader in pairs(self.idleUnloaders) do
         -- sort by distance to combine first
         local distance = AutoDrive.getDistanceBetween(unloader, harvester)
@@ -337,9 +416,36 @@ function ADHarvestManager:getClosestIdleUnloader(harvester)
         -- an unloader that gave this harvester up after reversing twice is not called back by it for a while
         local handedOver = unloader.ad.skipHarvester == harvester and unloader.ad.skipHarvesterUntil ~= nil and g_time < unloader.ad.skipHarvesterUntil
         if targetsMatch and not handedOver then --if distanceMatch or targetsMatch then
-            if closestUnloader == nil or distance < closestDistance then
+            matching = matching + 1
+            -- order of arrival for both harvester types (unloaders queue in the field and beside the road)
+            local queueTime = unloader.ad.unloaderQueueTime or math.huge
+            if closestUnloader == nil or queueTime < closestTime or (queueTime == closestTime and distance < closestDistance) then
                 closestUnloader = unloader
                 closestDistance = distance
+                closestTime = queueTime
+            end
+        end
+    end
+    -- unloaders registered within QUEUE_SAME_TIME of each other (game load: an unloader was
+    -- called, the 728 stood in front of it in the line) go by their place in the line, the one in front first
+    if chopper and closestUnloader ~= nil and matching > 1 then
+        local first, firstTime = closestUnloader, closestTime
+        local moved = 0
+        local changed = true
+        while changed and moved < matching do
+            changed = false
+            for _, unloader in pairs(self.idleUnloaders) do
+                local queueTime = unloader.ad.unloaderQueueTime or math.huge
+                local handedOver = unloader.ad.skipHarvester == harvester and unloader.ad.skipHarvesterUntil ~= nil and g_time < unloader.ad.skipHarvesterUntil
+                if unloader ~= closestUnloader and not handedOver and unloader.ad.stateModule:getFirstMarker() == harvester.ad.stateModule:getFirstMarker()
+                    and math.abs(queueTime - closestTime) <= ADHarvestManager.QUEUE_SAME_TIME and ADHarvestManager.isAheadInLine(unloader, closestUnloader) then
+                    closestUnloader = unloader
+                    closestDistance = AutoDrive.getDistanceBetween(unloader, harvester)
+                    closestTime = queueTime
+                    moved = moved + 1
+                    changed = true
+                    break
+                end
             end
         end
     end

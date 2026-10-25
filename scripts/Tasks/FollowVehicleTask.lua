@@ -34,7 +34,8 @@ function FollowVehicleTask:setUp()
             for i = 1, (indexToAttachTo - 1) do
                 breadCrumbs:Dequeue()
             end
-            self.vehicle.ad.drivePathModule:setWayPoints(self:getBreadCrumbsUntilFollowDistance())
+            local path = self:getBreadCrumbsUntilFollowDistance()
+            self.vehicle.ad.drivePathModule:setWayPoints(path)
         end
     end
     self.trailers, _ = AutoDrive.getAllUnits(self.vehicle)
@@ -73,6 +74,10 @@ function FollowVehicleTask:getBreadCrumbDistanceToEnd(index)
 end
 
 function FollowVehicleTask:update(dt)
+    -- the harvester or the 1st comes toward this follower: it steps aside (StepAsideTask) and comes back
+    if not self.setFinishedNext and StepAsideTask ~= nil and StepAsideTask.hook(self.vehicle, self.targetVehicle, dt) then
+        return
+    end
     if self.vehicle.ad.drivePathModule:isTargetReached() or self.vehicle.ad.drivePathModule:getWayPoints() == nil or #self.vehicle.ad.drivePathModule:getWayPoints() == 0 then
         --AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_COMBINEINFO, "FollowVehicleTask:FollowVehicleTask:update() - drivePathModule signals target reached")
         local newPath = self:getBreadCrumbsUntilFollowDistance()

@@ -328,6 +328,7 @@
 		<text name="gui_ad_debugChannelRoadNetwork"					text="Rodovias" />
 		<text name="gui_ad_debugChannelBGA"							text="Modo BGA" />
 		<text name="gui_ad_debugChannelTrains"							text="Trains" />
+		<text name="gui_ad_debugChannelChaseDisplay"							text="Chase display (permanent)" />
 		<text name="gui_ad_debugChannelAll"							text="Todos" />
 		<text name="gui_ad_notificationHistoryTitle"					text="Notificações" />
 		<text name="gui_ad_colorSettingsTitle"							text="Color Assignments" />
@@ -368,6 +369,7 @@
 		<text name="AD_task_clearcrop"									text="Limpando a colheita" />
 		<text name="AD_task_drive_to_destination"						text="Dirigindo para o destino" />
 		<text name="AD_task_drive_to_vehicle"							text="Dirigindo para o veículo" />
+		<text name="AD_task_step_aside"							text="Stepping aside for the harvester" />
 		<text name="AD_task_drive_to_combine_pipe"						text="Dirigindo para a colheitadeira" />
 		<text name="AD_task_unloading_combine"							text="Descarregando a colheitadeira" />
 		<text name="AD_task_reversing_from_combine"					text="Manobrando perto da colheitadeira" />
@@ -434,6 +436,11 @@
 		<text name="AD_task_reverse_tracks_clear" text="Backing up along its tracks to clear the way" />
 		<text name="AD_task_back_to_place" text="Backing up to the unloading place" />
 		<text name="AD_task_uturn" text="Turning around" />
+		<text name="AD_task_plan_field_exit" text="Planning the way out of the field" />
+		<text name="AD_task_no_exit_retry" text="No way out found, next try in" />
+		<text name="AD_task_full_parked_aside" text="Full, parked aside to let the next trailer pass" />
+		<text name="AD_task_full_reverse_tracks" text="Full, backing up along its tracks to let the next one pass" />
+		<text name="AD_task_band_turn_exit" text="U-turn in the strip toward the exit" />
 		<text name="AD_task_planning_way" text="Planning the way" />
 		<text name="AD_task_wait_row_entry" text="In place at the row entry, waiting for" />
 		<text name="AD_task_follow_trail" text="Following the track of" />

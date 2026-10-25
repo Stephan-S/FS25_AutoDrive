@@ -463,7 +463,10 @@ function ADInputManager:input_previousFillType(vehicle)
 end
 
 function ADInputManager:input_continue(vehicle)
+    -- the player's "continue" (button or key), told apart from any other caller
+    vehicle.ad.continueByPlayer = true
     vehicle.ad.stateModule:getCurrentMode():continue()
+    vehicle.ad.continueByPlayer = nil
 end
 
 function ADInputManager:input_callDriver(vehicle)

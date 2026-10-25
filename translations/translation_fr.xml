@@ -328,6 +328,7 @@
 		<text name="gui_ad_debugChannelRoadNetwork"					text="Réseau routier" />
 		<text name="gui_ad_debugChannelBGA"							text="BGA Mode" />
 		<text name="gui_ad_debugChannelTrains"							text="Trains" />
+		<text name="gui_ad_debugChannelChaseDisplay"							text="Poursuite (affichage permanent)" />
 		<text name="gui_ad_debugChannelAll"							text="Tous" />
 		<text name="gui_ad_notificationHistoryTitle"					text="Notifications" />
 		<text name="gui_ad_colorSettingsTitle"							text="Choix des couleurs" />
@@ -368,6 +369,7 @@
 		<text name="AD_task_clearcrop"									text="Destruction de la culture" />
 		<text name="AD_task_drive_to_destination"						text="Conduire jusqu'à destination" />
 		<text name="AD_task_drive_to_vehicle"							text="Conduire vers le véhicule cible" />
+		<text name="AD_task_step_aside"							text="S'écarte pour laisser passer l'ensileuse" />
 		<text name="AD_task_drive_to_combine_pipe"						text="Conduire vers la buse de la moissonneuse" />
 		<text name="AD_task_unloading_combine"							text="Déchargement de la moissonneuse" />
 		<text name="AD_task_reversing_from_combine"					text="Marche arrière depuis la moissonneuse" />
@@ -434,6 +436,11 @@
 		<text name="AD_task_reverse_tracks_clear" text="Recule dans ses traces pour dégager" />
 		<text name="AD_task_back_to_place" text="Recule vers la place de déchargement" />
 		<text name="AD_task_uturn" text="Fait demi-tour" />
+		<text name="AD_task_plan_field_exit" text="Calcule la sortie du champ" />
+		<text name="AD_task_no_exit_retry" text="Pas de sortie trouvée, nouvel essai dans" />
+		<text name="AD_task_full_parked_aside" text="Pleine, rangée pour laisser passer la benne suivante" />
+		<text name="AD_task_full_reverse_tracks" text="Pleine, recule dans ses traces pour laisser passer" />
+		<text name="AD_task_band_turn_exit" text="Demi-tour dans la bande vers la sortie" />
 		<text name="AD_task_planning_way" text="Calcul du trajet" />
 		<text name="AD_task_wait_row_entry" text="En place à l'entrée du rang, attend" />
 		<text name="AD_task_follow_trail" text="Suit la trace de" />

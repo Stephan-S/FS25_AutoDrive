@@ -75,6 +75,12 @@
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_debugChannelTrains"/>
 			</Bitmap>
+			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveDebugSettingRow" onCreateArgs="4096">
+				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onClickDebug" id="ad_debugChannelChaseDisplay">
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_debugChannelChaseDisplay"/>
+				</BinaryOption>
+				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_debugChannelChaseDisplay"/>
+			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveDebugSettingRow" onCreateArgs="65535">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onClickDebug" id="ad_debugChannelAll">
 					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_debugChannelAll"/>

@@ -814,6 +814,26 @@ function ADDrivePathModule:handleBeingStuck()
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "handleBeingStuck")
     end
     if self.vehicle.isServer then
+        -- this safety (8 s without getting closer to the next waypoint) reset the unloaders of the
+        -- forage harvester (stop + restart): queue place, harvester and follow lost, the next unloader called from far
+        -- away. The mode may recover on its own instead
+        local wp = self:getCurrentWayPoint()
+        local x, _, z = getWorldTranslation(self.vehicle.components[1].node)
+        local distance = wp ~= nil and MathUtil.vector2Length(x - wp.x, z - wp.z) or -1
+        local task = self.vehicle.ad.taskModule ~= nil and self.vehicle.ad.taskModule.activeTask or nil
+        local taskName = "none"
+        if task ~= nil then
+            taskName = task.taskType or (task.getI18nInfo ~= nil and task:getI18nInfo()) or "?"
+        end
+        local info = string.format("stuck: 8 s without getting closer to the next point (%.1f m, closest %.1f m, point %d/%d, speed %.1f km/h, reverse %s, task %s)",
+            distance, self.minDistanceToNextWp ~= math.huge and self.minDistanceToNextWp or -1, self.currentWayPoint or 0, self.wayPoints ~= nil and #self.wayPoints or 0,
+            math.abs(self.vehicle.lastSpeedReal or 0) * 3600, tostring(self.isReversing), tostring(taskName))
+        local mode = self.vehicle.ad.stateModule ~= nil and self.vehicle.ad.stateModule:getCurrentMode() or nil
+        if mode ~= nil and mode.onDriveStuck ~= nil and mode:onDriveStuck(info) then
+            self.minDistanceTimer:timer(false)
+            self.minDistanceToNextWp = math.huge
+            return
+        end
         AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_got_stuck;", 5000, self.vehicle.ad.stateModule:getName())
         self.vehicle.ad.taskModule:stopAndRestartAD()
     end
