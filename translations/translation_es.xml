@@ -441,5 +441,6 @@
 		<text name="AD_task_end_row_turn" text="U-turn at the end of the row" />
 		<text name="AD_task_wait_overtake_1" text="Waiting for" />
 		<text name="AD_task_wait_overtake_2" text="to pass" />
+		<text name="AD_task_reverse_to" text="Reversing to" />
 	</texts>
 </l10n>

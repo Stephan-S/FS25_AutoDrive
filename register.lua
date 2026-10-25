@@ -109,6 +109,7 @@ source(Utils.getFilename("scripts/Tasks/HandleHarvesterTurnTask.lua", g_currentM
 
 source(Utils.getFilename("scripts/Modules/DrivePathModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/CollisionDetectionModule.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Modules/BandTurnModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/BandRouteModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/BandTourModule.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Modules/SpecialDrivingModule.lua", g_currentModDirectory))
@@ -150,6 +151,7 @@ source(Utils.getFilename("scripts/Tasks/Turns/AbstractTurn.lua", g_currentModDir
 source(Utils.getFilename("scripts/Tasks/Turns/ReverseOffsetTurn.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/Turns/OffsetTurn.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/Turns/ForwardOffsetTurn.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Tasks/Turns/YTurn.lua", g_currentModDirectory))
 
 AutoDriveRegister = {}
 AutoDriveRegister.version = g_modManager:getModByName(g_currentModName).version
