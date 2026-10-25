@@ -49,10 +49,67 @@ function DriveToDestinationTask:update(dt)
     else
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             self:finished()
+        elseif self:isEntranceHold(dt) then
+            return
+        elseif self:isFieldFullStop(dt) then
+            return
         else
             self.vehicle.ad.drivePathModule:update(dt)
         end
     end
+end
+
+DriveToDestinationTask.FIELD_FULL_STOP_DISTANCE = 60 -- m before the field point: the field being full, it stops on the road here
+DriveToDestinationTask.FIELD_FULL_STOP_MIN = 25     -- m: closer than this it goes on to the field point as before
+DriveToDestinationTask.FIELD_FULL_CHECK = 1000      -- ms between two looks
+
+-- empty unloader back to a field that already holds its unloaders (ADFieldPark.FIELD_CAPACITY): it does not drive up
+-- to the entrance (where it blocks it, nose in the field, with no clean way to the roadside), it stops on the road
+-- before the entrance and WaitForCallTask parks it beside the road from there
+function DriveToDestinationTask:isFieldFullStop(dt)
+    local mode = self.vehicle.ad.modes ~= nil and self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    if mode == nil or ADFieldPark == nil or not ADFieldPark.isEnabled() or self.vehicle.ad.stateModule:getMode() ~= AutoDrive.MODE_UNLOAD
+        or mode.state ~= mode.STATE_DRIVE_TO_START then
+        return false
+    end
+    self.fieldFullCheck = (self.fieldFullCheck or 0) + dt
+    if self.fieldFullCheck < DriveToDestinationTask.FIELD_FULL_CHECK then
+        return false
+    end
+    self.fieldFullCheck = 0
+    local marker = self.vehicle.ad.stateModule:getFirstMarker()
+    local wp = marker ~= nil and ADGraphManager:getWayPointById(marker.id) or nil
+    if wp == nil then
+        return false
+    end
+    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    local distance = MathUtil.vector2Length(wp.x - x, wp.z - z)
+    if distance > DriveToDestinationTask.FIELD_FULL_STOP_DISTANCE or distance < DriveToDestinationTask.FIELD_FULL_STOP_MIN
+        or AutoDrive.checkIsOnField(x, y, z) then
+        return false
+    end
+    local harvester = ADFieldPark.findHarvester(self.vehicle, wp.x, wp.z)
+    if harvester == nil or ADFieldPark.countInField(self.vehicle, harvester) < ADFieldPark.FIELD_CAPACITY then
+        return false
+    end
+    if self.vehicle.ad.trafficYieldModule ~= nil then
+        self.vehicle.ad.trafficYieldModule:log("field park: field full (%d unloaders), stopping on the road %.0f m before the entrance", ADFieldPark.FIELD_CAPACITY, distance)
+    end
+    self.vehicle.ad.specialDrivingModule:stopVehicle()
+    self.vehicle.ad.specialDrivingModule:update(dt)
+    self:finished()
+    return true
+end
+
+-- empty unloader back to the field while a full one drives out by the same entrance: it stops on the road before
+-- the entrance until the full one is out
+function DriveToDestinationTask:isEntranceHold(dt)
+    local mode = self.vehicle.ad.modes ~= nil and self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    if mode == nil or ADFieldPark == nil or self.vehicle.ad.stateModule:getMode() ~= AutoDrive.MODE_UNLOAD
+        or mode.state ~= mode.STATE_DRIVE_TO_START then
+        return false
+    end
+    return ADFieldPark.holdForExit(self.vehicle, dt, "on the road")
 end
 
 function DriveToDestinationTask:abort()
