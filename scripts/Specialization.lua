@@ -198,6 +198,7 @@ function AutoDrive:onLoad(savegame)
     self.ad.drivePathModule = ADDrivePathModule:new(self)
     self.ad.specialDrivingModule = ADSpecialDrivingModule:new(self)
     self.ad.collisionDetectionModule = ADCollisionDetectionModule:new(self)
+    self.ad.obstacleDetourModule = ADObstacleDetourModule:new(self)
     self.ad.pathFinderModule = PathFinderModule:new(self)
     if self.spec_locomotive then
         self.ad.trainModule = ADTrainModule:new(self)

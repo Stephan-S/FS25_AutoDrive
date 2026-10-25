@@ -36,6 +36,7 @@ function ExitFieldTask:update(dt)
                 end
             else
                 self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
+                self.routeStart = g_time
                 self.state = ExitFieldTask.STATE_DRIVING
             end
         else
@@ -58,6 +59,12 @@ function ExitFieldTask:update(dt)
     elseif self.state == ExitFieldTask.STATE_DRIVING then
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             self.state = ExitFieldTask.STATE_FINISHED
+        elseif self.vehicle.ad.routeBlockedTime ~= nil and self.routeStart ~= nil and self.vehicle.ad.routeBlockedTime > self.routeStart then
+            -- the front sensor kept it stopped on this route (wall, post): the place is a forbidden zone now,
+            -- the exit is planned again around it instead of waiting there
+            self.routeStart = nil
+            self.candidates = nil
+            self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
         else
             self.vehicle.ad.drivePathModule:update(dt)
         end

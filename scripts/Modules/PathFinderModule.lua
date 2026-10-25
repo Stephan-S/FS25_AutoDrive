@@ -793,11 +793,19 @@ function PathFinderModule:isFruitIsland(fruitTypeIndex, x, z)
     return isIsland
 end
 
--- zones the pathfinder must avoid although overlapBox finds nothing there (learned by ADDrivePathModule:learnBlockedPlace:
+-- zones the pathfinder must avoid although overlapBox finds nothing there (learned by ADDrivePathModule:learnBlockedPlace, or set by ADObstacleDetourModule:
 -- an obstacle the front sensor stopped on, which the route search does not see). {x, z, radius}
 -- box as given to overlapBox (center, rotation around Y, half extents along local X and Z)
 function PathFinderModule:boxHitsBlockedZone(cx, cz, ry, halfX, halfZ)
     local cosA, sinA = math.cos(ry), math.sin(ry)
+    -- learned zones are tried again after LEARNED_ZONE_TTL: if the obstacle is still there the front sensor adds it back
+    local now = g_time or 0
+    for i = #PathFinderModule.learnedZones, 1, -1 do
+        local zone = PathFinderModule.learnedZones[i]
+        if now - (zone.time or now) > PathFinderModule.LEARNED_ZONE_TTL then
+            table.remove(PathFinderModule.learnedZones, i)
+        end
+    end
     for _, zones in ipairs({self.blockedZones or {}, PathFinderModule.learnedZones}) do
         for _, zone in ipairs(zones) do
             local dx, dz = zone.x - cx, zone.z - cz
@@ -815,6 +823,7 @@ end
 PathFinderModule.learnedZones = {}
 PathFinderModule.LEARNED_ZONE_RADIUS = 4
 PathFinderModule.LEARNED_ZONE_DELAY = 3000
+PathFinderModule.LEARNED_ZONE_TTL = 300000 -- ms
 
 function PathFinderModule.addLearnedZone(x, z, vehicleName)
     for _, zone in ipairs(PathFinderModule.learnedZones) do
@@ -822,8 +831,8 @@ function PathFinderModule.addLearnedZone(x, z, vehicleName)
             return
         end
     end
-    table.insert(PathFinderModule.learnedZones, {x = x, z = z, radius = PathFinderModule.LEARNED_ZONE_RADIUS})
     AutoDrive.debugPrint(nil, AutoDrive.DC_PATHINFO, "PathFinderModule: %s: blocked zone added at %.0f,%.0f (front sensor blocked), %d zone(s)", tostring(vehicleName), x, z, #PathFinderModule.learnedZones)
+    table.insert(PathFinderModule.learnedZones, {x = x, z = z, radius = PathFinderModule.LEARNED_ZONE_RADIUS, time = g_time or 0})
 end
 
 PathFinderModule.FRUIT_MAX_RATIO = 0.10

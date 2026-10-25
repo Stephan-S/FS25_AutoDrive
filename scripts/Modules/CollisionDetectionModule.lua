@@ -32,7 +32,7 @@ function ADCollisionDetectionModule:hasDetectedObstable(dt)
         )
     end
 
-    -- kept to tell a static obstacle from AD traffic (blocked places learned by the pathfinder)
+    -- kept for ADObstacleDetourModule: tells a static obstacle from AD traffic
     self.lastAdTrafficOnRoute = detectAdTrafficOnRoute
     self.lastReverseSectionBlocked = not self.reverseSectionClear:done()
     self.detectedObstable = detectObstacle or detectAdTrafficOnRoute or not self.reverseSectionClear:done()

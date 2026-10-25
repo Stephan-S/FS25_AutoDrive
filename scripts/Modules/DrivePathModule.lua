@@ -53,6 +53,9 @@ function ADDrivePathModule:reset(retainLastUsedWaypoint)
         self.vehicle.spec_aiJobVehicle.aiSteeringSpeed = 0.004
     end
     self.min_lookAhead = AutoDrive.getMinLookaheadByVehicleType(self.vehicle)
+    if self.vehicle.ad ~= nil and self.vehicle.ad.obstacleDetourModule ~= nil then
+        self.vehicle.ad.obstacleDetourModule:reset()
+    end
 end
 
 function ADDrivePathModule:setPathTo(wayPointId)
@@ -175,7 +178,9 @@ function ADDrivePathModule:update(dt)
             self.vehicle.ad.specialDrivingModule:handleReverseDriving(dt)
         else
             self:followWaypoints(dt)
-            self:checkIfStuck(dt)
+            if self.vehicle.ad.obstacleDetourModule == nil or not self.vehicle.ad.obstacleDetourModule:isControlling() then
+                self:checkIfStuck(dt)
+            end
 
             if self:isCloseToWaypoint() then
                 self:handleReachedWayPoint()
@@ -353,6 +358,11 @@ function ADDrivePathModule:followWaypoints(dt)
 
     local obstacleDetected = self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt)
     self:learnBlockedPlace(dt, obstacleDetected)
+    -- static obstacle blocking the route forever: reverse and compute a route around it
+    if self.vehicle.ad.obstacleDetourModule ~= nil and self.vehicle.ad.obstacleDetourModule:handle(dt, obstacleDetected) then
+        return
+    end
+
     if obstacleDetected then
         if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:followWaypoints - stopVehicle")
@@ -869,7 +879,8 @@ end
 -- front sensor keeps the vehicle stopped on a calculated route: the place becomes a forbidden zone for all later route searches
 function ADDrivePathModule:learnBlockedPlace(dt, obstacleDetected)
     local wp = self:getCurrentWayPoint()
-    local blocked = obstacleDetected and self.vehicle.isServer and wp ~= nil and wp.isPathFinderPoint and self:isBlockedByStaticObstacle()
+    local odm = self.vehicle.ad.obstacleDetourModule
+    local blocked = obstacleDetected and self.vehicle.isServer and wp ~= nil and wp.isPathFinderPoint and odm ~= nil and odm:isBlockedByStaticObstacle()
     if not blocked then
         self.learnZoneTimer = 0
         return
@@ -883,36 +894,12 @@ function ADDrivePathModule:learnBlockedPlace(dt, obstacleDetected)
     end
     -- once per stop
     self.learnZoneTimer = -1
-    if self:isVehicleInFront() then
+    if odm:isVehicleInFront() then
         return
     end
     local length = self.vehicle.size ~= nil and self.vehicle.size.length or 5
     local bx, _, bz = AutoDrive.localToWorld(self.vehicle, 0, 0, length / 2 + 1)
+    -- the task driving this route may plan again around the zone (ExitFieldTask)
+    self.vehicle.ad.routeBlockedTime = g_time
     PathFinderModule.addLearnedZone(bx, bz, self.vehicle:getName())
-end
-
--- front short sensor blocked, but not by AD traffic or a reverse section
-function ADDrivePathModule:isBlockedByStaticObstacle()
-    local ad = self.vehicle.ad
-    if self:getIsReversing() then
-        return false
-    end
-    local cdm = ad.collisionDetectionModule
-    if cdm.lastAdTrafficOnRoute or cdm.lastReverseSectionBlocked then
-        return false
-    end
-    return ad.sensors ~= nil and ad.sensors.frontSensorDynamicShort ~= nil and ad.sensors.frontSensorDynamicShort:pollInfo() == true
-end
-
-function ADDrivePathModule:isVehicleInFront()
-    local ad = self.vehicle.ad
-    local excludedList = {}
-    local activeTask = ad.taskModule:getActiveTask()
-    if activeTask ~= nil and activeTask.getExcludedVehiclesForCollisionCheck ~= nil then
-        excludedList = activeTask:getExcludedVehiclesForCollisionCheck()
-    end
-    local box = ad.sensors.frontSensorDynamicLong:getBoxShape()
-    local boundingBox = {box.topLeft, box.topRight, box.downRight, box.downLeft}
-    boundingBox[1].y = box.y
-    return AutoDrive:checkForVehicleCollision(self.vehicle, boundingBox, excludedList) == true
 end

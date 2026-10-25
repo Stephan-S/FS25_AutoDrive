@@ -407,5 +407,14 @@
 		<text name="gui_ad_editorTip_9"								text="1. nó é interseção, segundo é vizinho:" />
 		<text name="gui_ad_editorTip_10"								text="LCTRL: Alternar tipo de segmento (normal/dual)" />
 		<text name="gui_ad_editorTip_11"								text="LSHIFT = Alternar lado da estrada" />
+		<text name="gui_ad_obstacleDetourEnabled" text="Obstacle detour" />
+		<text name="gui_ad_obstacleDetourEnabled_tooltip" text="When a static obstacle (fallen object, wall, tree) blocks the vehicle, it reverses, then computes a route around it and rejoins its route further on" />
+		<text name="gui_ad_obstacleDetourDelay" text="Delay before detour" />
+		<text name="gui_ad_obstacleDetourDelay_tooltip" text="How long the vehicle must be blocked by a static obstacle before trying a detour" />
+		<text name="gui_ad_obstacleDetourReverse" text="Reverse before detour" />
+		<text name="gui_ad_obstacleDetourReverse_tooltip" text="Maximum straight reverse distance before computing the detour (stops earlier if something is behind)" />
+		<text name="AD_obstacleDetour_start" text="is blocked by an obstacle, reversing to drive around it" />
+		<text name="AD_obstacleDetour_found" text="drives around the obstacle" />
+		<text name="AD_obstacleDetour_failed" text="found no way around the obstacle: help needed" />
 	</texts>
 </l10n>

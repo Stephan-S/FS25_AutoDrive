@@ -407,5 +407,14 @@
 		<text name="gui_ad_editorTip_9"								text="1. point est une intersection, 2. point est voisin:" />
 		<text name="gui_ad_editorTip_10"								text="CTRLG: Choix du segment (unique/double sens)" />
 		<text name="gui_ad_editorTip_11"								text="MAJG = Etablir voie de dégagement" />
+		<text name="gui_ad_obstacleDetourEnabled" text="Contournement d'obstacle" />
+		<text name="gui_ad_obstacleDetourEnabled_tooltip" text="Quand un obstacle fixe (objet tombé, muret, arbre) bloque le véhicule, il recule puis calcule un chemin pour le contourner et rejoindre sa route plus loin" />
+		<text name="gui_ad_obstacleDetourDelay" text="Délai avant contournement" />
+		<text name="gui_ad_obstacleDetourDelay_tooltip" text="Durée pendant laquelle le véhicule doit être bloqué par un obstacle fixe avant de tenter le contournement" />
+		<text name="gui_ad_obstacleDetourReverse" text="Recul avant contournement" />
+		<text name="gui_ad_obstacleDetourReverse_tooltip" text="Distance maximale de recul en ligne droite avant de calculer le contournement (s'arrête plus tôt si un obstacle est derrière)" />
+		<text name="AD_obstacleDetour_start" text="est bloqué par un obstacle, recule pour le contourner" />
+		<text name="AD_obstacleDetour_found" text="contourne l'obstacle" />
+		<text name="AD_obstacleDetour_failed" text="ne trouve aucun contournement de l'obstacle : intervention nécessaire" />
 	</texts>
 </l10n>
