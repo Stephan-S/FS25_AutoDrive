@@ -130,6 +130,8 @@ end
 
 -- below this fuel / DEF level the refuel is no longer postponed
 ADTaskModule.REFUEL_EMERGENCY_LEVEL = 0.05
+-- above this damage the workshop trip is no longer postponed
+ADTaskModule.REPAIR_EMERGENCY_DAMAGE = 0.9
 
 -- automatic refuel waits until the current job is done: nothing left on board and,
 -- for a combine unloader, no harvester assigned. A refuel asked by the player
@@ -149,6 +151,13 @@ function ADTaskModule:shouldPostponeRefuel()
         end
     end
 
+    return self:isJobRunning("refuel")
+end
+
+-- the current job is not over: something still on board or, for a combine unloader,
+-- still working for a harvester. The reason is logged once per change.
+function ADTaskModule:isJobRunning(what)
+    local vehicle = self.vehicle
     local reason = nil
     local mode = vehicle.ad.stateModule:getCurrentMode()
     if vehicle.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD and mode ~= nil and mode.state ~= nil
@@ -165,14 +174,15 @@ function ADTaskModule:shouldPostponeRefuel()
             end
         end
     end
+    self.postponedReasons = self.postponedReasons or {}
     if reason ~= nil then
-        if self.refuelPostponedReason ~= reason then
-            AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "ADTaskModule: refuel postponed, %s", reason)
+        if self.postponedReasons[what] ~= reason then
+            AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, "ADTaskModule: %s postponed, %s", what, reason)
         end
-        self.refuelPostponedReason = reason
+        self.postponedReasons[what] = reason
         return true
     end
-    self.refuelPostponedReason = nil
+    self.postponedReasons[what] = nil
     return false
 end
 
@@ -200,13 +210,21 @@ function ADTaskModule:hasToRepair()
         -- repair is forced by user or CP, so send vehicle to workshop independent of damage level
         return true
     end
+    local maxDamage = 0
     if AutoDrive.getSetting("autoRepair", self.vehicle) then
         local attachedObjects = AutoDrive.getAllImplements(self.vehicle, true)
         for _, attachedObject in pairs(attachedObjects) do
             repairNeeded = repairNeeded or (attachedObject.spec_wearable ~= nil and attachedObject.spec_wearable.damage > 0.6)
+            if attachedObject.spec_wearable ~= nil then
+                maxDamage = math.max(maxDamage, attachedObject.spec_wearable.damage)
+            end
         end
     end
 
+    -- automatic repair waits until the current job is done, like the refuel
+    if repairNeeded and maxDamage < ADTaskModule.REPAIR_EMERGENCY_DAMAGE and self:isJobRunning("repair") then
+        return false
+    end
     return repairNeeded
 end
 
