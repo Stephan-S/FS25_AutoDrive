@@ -178,7 +178,10 @@ function ADDrivePathModule:update(dt)
             self.vehicle.ad.specialDrivingModule:handleReverseDriving(dt)
         else
             self:followWaypoints(dt)
-            self:checkIfStuck(dt)
+            -- backing out of a crossing is not being stuck
+            if self.vehicle.ad.intersection == nil or self.vehicle.ad.intersection.retreat == nil then
+                self:checkIfStuck(dt)
+            end
 
             if self:isCloseToWaypoint() then
                 self:handleReachedWayPoint()
