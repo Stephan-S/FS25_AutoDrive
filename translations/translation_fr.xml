@@ -409,6 +409,10 @@
 		<text name="gui_ad_editorTip_11"								text="MAJG = Etablir voie de dégagement" />
 		<text name="gui_ad_obstacleDetourEnabled" text="Contournement d'obstacle" />
 		<text name="gui_ad_obstacleDetourEnabled_tooltip" text="Quand un obstacle fixe (objet tombé, muret, arbre) bloque le véhicule, il recule puis calcule un chemin pour le contourner et rejoindre sa route plus loin" />
+		<text name="gui_ad_cornerSwingEnabled" text="Virages larges" />
+		<text name="gui_ad_cornerSwingEnabled_tooltip" text="Dans les virages serrés du réseau, le véhicule suit un arc à son rayon de braquage et déborde en entrée ou en sortie quand la place est libre" />
+		<text name="gui_ad_avoidEnabled" text="Écart devant un obstacle léger" />
+		<text name="gui_ad_avoidEnabled_tooltip" text="Sur la route, un obstacle d'un seul côté du couloir (poteau, balle, véhicule arrêté) est contourné par un léger décalage sans s'arrêter, si l'autre côté est libre" />
 		<text name="gui_ad_obstacleDetourDelay" text="Délai avant contournement" />
 		<text name="gui_ad_obstacleDetourDelay_tooltip" text="Durée pendant laquelle le véhicule doit être bloqué par un obstacle fixe avant de tenter le contournement" />
 		<text name="gui_ad_obstacleDetourReverse" text="Recul avant contournement" />

@@ -811,7 +811,12 @@ function PathFinderModule:boxHitsBlockedZone(cx, cz, ry, halfX, halfZ)
             local dx, dz = zone.x - cx, zone.z - cz
             local lx = dx * cosA - dz * sinA
             local lz = dx * sinA + dz * cosA
-            if math.abs(lx) < halfX + zone.radius and math.abs(lz) < halfZ + zone.radius then
+            if zone.byCenter then
+                -- detour zones: only the cells whose center lies inside the zone, the box is not enlarged
+                if dx * dx + dz * dz < zone.radius * zone.radius then
+                    return true
+                end
+            elseif math.abs(lx) < halfX + zone.radius and math.abs(lz) < halfZ + zone.radius then
                 return true
             end
         end

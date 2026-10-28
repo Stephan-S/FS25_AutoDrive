@@ -56,11 +56,22 @@ function ADDrivePathModule:reset(retainLastUsedWaypoint)
     if self.vehicle.ad ~= nil and self.vehicle.ad.obstacleDetourModule ~= nil then
         self.vehicle.ad.obstacleDetourModule:reset()
     end
+    if self.vehicle.ad ~= nil and self.vehicle.ad.approachModule ~= nil then
+        self.vehicle.ad.approachModule:reset()
+    end
+    if self.vehicle.ad ~= nil and self.vehicle.ad.avoidModule ~= nil then
+        self.vehicle.ad.avoidModule:reset()
+    end
+    self.lateralOffset = 0
 end
 
 function ADDrivePathModule:setPathTo(wayPointId)
     self:reset(self.atTarget)
     self.wayPoints = ADGraphManager:getPathTo(self.vehicle, wayPointId, self.lastUsedWayPoint)
+    -- sharp corners replaced by arcs of the real turning radius (ADCornerModule); the first points stay as they are
+    if self.wayPoints ~= nil and #self.wayPoints >= 3 and self.vehicle.ad.cornerModule ~= nil then
+        self.wayPoints = self.vehicle.ad.cornerModule:smoothRoute(self.wayPoints, 3)
+    end
     local destination = ADGraphManager:getMapMarkerByWayPointId(self:getLastWayPointId())
     self.vehicle.ad.stateModule:setCurrentDestination(destination)
     self:setDirtyFlag()
@@ -98,6 +109,9 @@ end
 
 function ADDrivePathModule:appendPathTo(startWayPointId, wayPointId)
     local appendWayPoints = ADGraphManager:getPathTo(self.vehicle, wayPointId)
+    if appendWayPoints ~= nil and #appendWayPoints >= 3 and self.vehicle.ad.cornerModule ~= nil then
+        appendWayPoints = self.vehicle.ad.cornerModule:smoothRoute(appendWayPoints, 2)
+    end
 
     if appendWayPoints == nil or (appendWayPoints[2] == nil and (appendWayPoints[1] == nil or (appendWayPoints[1] ~= nil and appendWayPoints[1].id ~= wayPointId))) then
         self.vehicle.ad.isStoppingWithError = true
@@ -223,7 +237,8 @@ function ADDrivePathModule:isCloseToWaypoint()
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:isCloseToWaypoint - start, wpIdx=%d, maxSkip=%d"
         , self:getCurrentWayPointIndex(), maxSkipWayPoints)
     end
-    local min_distance = self.min_distance
+    -- the followed line is shifted while avoiding: the waypoint itself stays as far as the offset
+    local min_distance = self.min_distance + math.abs(self.lateralOffset or 0)
     if self.vehicle:getLastSpeed() > 100 then
         min_distance = min_distance * 3
     elseif self.vehicle:getLastSpeed() > 60 then
@@ -341,6 +356,15 @@ function ADDrivePathModule:followWaypoints(dt)
         end
     end
 
+    -- anticipated slow-down in front of an obstacle further on the route (ADApproachModule)
+    if self.vehicle.ad.approachModule ~= nil then
+        self.speedLimit = math.min(self.speedLimit, self.vehicle.ad.approachModule:getSpeedLimit(dt))
+    end
+    -- light obstacle on one side: lateral offset of the followed line, without stopping (ADAvoidModule)
+    if self.vehicle.ad.avoidModule ~= nil then
+        self.speedLimit = math.min(self.speedLimit, self.vehicle.ad.avoidModule:update(dt))
+    end
+
     local maxAngle = 60
     if self.vehicle.maxRotation then
         if self.vehicle.maxRotation > (2 * math.pi) then
@@ -357,12 +381,20 @@ function ADDrivePathModule:followWaypoints(dt)
     end
 
     local obstacleDetected = self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt)
+    -- traffic car stopped nose to nose: the lane change backs up first and drives meanwhile (ADAvoidModule)
+    if self.vehicle.ad.avoidModule ~= nil and self.vehicle.ad.avoidModule:handle(dt) then
+        return
+    end
     self:learnBlockedPlace(dt, obstacleDetected)
     -- static obstacle blocking the route forever: reverse and compute a route around it
     if self.vehicle.ad.obstacleDetourModule ~= nil and self.vehicle.ad.obstacleDetourModule:handle(dt, obstacleDetected) then
         return
     end
 
+    -- another AutoDrive vehicle closer than the gap on the route: stop here, like the sensors would
+    if not obstacleDetected and self.vehicle.ad.approachModule ~= nil and self.vehicle.ad.approachModule:shouldStop() then
+        obstacleDetected = true
+    end
     if obstacleDetected then
         if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:followWaypoints - stopVehicle")
@@ -755,6 +787,19 @@ function ADDrivePathModule:getLookAheadTarget()
         targetX = targetX + addX
         targetZ = targetZ + addZ
     end
+    -- lateral offset while avoiding a light obstacle (ADAvoidModule): along the left normal of the stretch
+    local offset = self.lateralOffset or 0
+    if offset ~= 0 then
+        local dx, dz = wp_ahead.x - wp_current.x, wp_ahead.z - wp_current.z
+        if distanceToNextTarget <= 0.1 then
+            dx, dz = wp_current.x - x, wp_current.z - z
+        end
+        local l = MathUtil.vector2Length(dx, dz)
+        if l > 0.1 then
+            targetX = targetX + dz / l * offset
+            targetZ = targetZ - dx / l * offset
+        end
+    end
 
     if AutoDrive.isEditorModeEnabled() and AutoDrive.getDebugChannelIsSet(AutoDrive.DC_VEHICLEINFO) then
         ADDrawingManager:addLineTask(x, y+2.2, z, wp_current.x, y+2.2, wp_current.z, 1.5, 0, 0, 1)
@@ -805,7 +850,9 @@ end
 function ADDrivePathModule:checkIfStuck(dt)
     if self.vehicle.isServer then
         local wp = self:getCurrentWayPoint()
-        if not self.vehicle.ad.specialDrivingModule:isStoppingVehicle() and wp ~= nil then
+        local manoeuvre = (self.vehicle.ad.obstacleDetourModule ~= nil and self.vehicle.ad.obstacleDetourModule:isControlling())
+            or (self.vehicle.ad.avoidModule ~= nil and self.vehicle.ad.avoidModule:isControlling())
+        if not self.vehicle.ad.specialDrivingModule:isStoppingVehicle() and wp ~= nil and not manoeuvre then
             local x, _, z = getWorldTranslation(self.vehicle.components[1].node)
             local distanceToNextWayPoint = MathUtil.vector2Length(x - wp.x, z - wp.z)
             self.minDistanceTimer:timer(distanceToNextWayPoint >= self.minDistanceToNextWp, 8000, dt)
@@ -824,6 +871,14 @@ function ADDrivePathModule:handleBeingStuck()
         AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "handleBeingStuck")
     end
     if self.vehicle.isServer then
+        -- stuck against something (wall, house corner): a plain restart puts the vehicle back on the same
+        -- route from the same spot. Reversing first and planning a way around (ADObstacleDetourModule) is tried before
+        local detour = self.vehicle.ad.obstacleDetourModule
+        if detour ~= nil and detour.startFromStuck ~= nil and detour:startFromStuck() then
+            self.minDistanceTimer:timer(false)
+            self.minDistanceToNextWp = math.huge
+            return
+        end
         AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_got_stuck;", 5000, self.vehicle.ad.stateModule:getName())
         self.vehicle.ad.taskModule:stopAndRestartAD()
     end

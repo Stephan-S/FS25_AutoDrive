@@ -409,6 +409,10 @@
 		<text name="gui_ad_editorTip_11"								text="左SHIFT = 更改支線" />
 		<text name="gui_ad_obstacleDetourEnabled" text="Obstacle detour" />
 		<text name="gui_ad_obstacleDetourEnabled_tooltip" text="When a static obstacle (fallen object, wall, tree) blocks the vehicle, it reverses, then computes a route around it and rejoins its route further on" />
+		<text name="gui_ad_cornerSwingEnabled" text="Wide corners" />
+		<text name="gui_ad_cornerSwingEnabled_tooltip" text="In sharp corners of the road network the vehicle follows an arc of its turning radius and swings wide on entry or exit when the room is free" />
+		<text name="gui_ad_avoidEnabled" text="Sidestep light obstacles" />
+		<text name="gui_ad_avoidEnabled_tooltip" text="On the road, an obstacle on one side of the corridor (pole, bale, stopped vehicle) is passed with a small lateral shift without stopping, when the other side is free" />
 		<text name="gui_ad_obstacleDetourDelay" text="Delay before detour" />
 		<text name="gui_ad_obstacleDetourDelay_tooltip" text="How long the vehicle must be blocked by a static obstacle before trying a detour" />
 		<text name="gui_ad_obstacleDetourReverse" text="Reverse before detour" />

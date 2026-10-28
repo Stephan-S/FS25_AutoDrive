@@ -46,6 +46,18 @@
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_obstacleDetourEnabled"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
+				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="cornerSwingEnabled" id="cornerSwingEnabled">
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_cornerSwingEnabled_tooltip"/>
+				</BinaryOption>
+				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_cornerSwingEnabled"/>
+			</Bitmap>
+			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
+				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="avoidEnabled" id="avoidEnabled">
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_avoidEnabled_tooltip"/>
+				</BinaryOption>
+				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_avoidEnabled"/>
+			</Bitmap>
+			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="obstacleDetourDelay" id="obstacleDetourDelay">
 					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_obstacleDetourDelay_tooltip"/>
 				</MultiTextOption>

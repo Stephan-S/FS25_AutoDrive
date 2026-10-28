@@ -614,6 +614,28 @@ AutoDrive.settings.obstacleDetourEnabled = {
     isVehicleSpecific = false
 }
 
+AutoDrive.settings.cornerSwingEnabled = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_cornerSwingEnabled",
+    tooltip = "gui_ad_cornerSwingEnabled_tooltip",
+    translate = true,
+    isVehicleSpecific = false
+}
+
+AutoDrive.settings.avoidEnabled = {
+    values = {false, true},
+    texts = {"gui_ad_no", "gui_ad_yes"},
+    default = 2,
+    current = 2,
+    text = "gui_ad_avoidEnabled",
+    tooltip = "gui_ad_avoidEnabled_tooltip",
+    translate = true,
+    isVehicleSpecific = false
+}
+
 AutoDrive.settings.obstacleDetourDelay = {
     values = {5, 10, 15, 20, 30, 45, 60},
     texts = {"5 s", "10 s", "15 s", "20 s", "30 s", "45 s", "60 s"},
