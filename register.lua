@@ -154,6 +154,7 @@ source(Utils.getFilename("scripts/Tasks/Turns/ReverseOffsetTurn.lua", g_currentM
 source(Utils.getFilename("scripts/Tasks/Turns/OffsetTurn.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/Turns/ForwardOffsetTurn.lua", g_currentModDirectory))
 source(Utils.getFilename("scripts/Tasks/Turns/YTurn.lua", g_currentModDirectory))
+source(Utils.getFilename("scripts/Tasks/Turns/SquareTurn.lua", g_currentModDirectory))
 
 AutoDriveRegister = {}
 AutoDriveRegister.version = g_modManager:getModByName(g_currentModName).version
