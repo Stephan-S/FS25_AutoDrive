@@ -97,7 +97,7 @@ function HandleHarvesterTurnTask:new(vehicle, combine)
         startPosition = startPos, -- ~0.5m ahead of vehicle,
         targetDir = { x= targetDirX, z = targetDirZ},
         startDir = { x = startDirX, z = startDirZ },
-        minRadius = AutoDrive.getDriverRadius(vehicle),
+        minRadius = o:getTurnRadius(),
         handleHarvesterTask = o,
         angle = math.abs(AutoDrive.angleBetween({x = startDirZ.x, z = startDirZ.z}, {x = targetDirZ.x, z = targetDirZ.z}))
     }
@@ -106,6 +106,30 @@ function HandleHarvesterTurnTask:new(vehicle, combine)
 
     AutoDrive.debugPrint(vehicle, AutoDrive.DC_COMBINEINFO, "HandleHarvesterTurnTask  - turnleft: " .. tostring(turnLeft) .. " angle: " .. o.turnParameters.angle)
     return o
+end
+
+HandleHarvesterTurnTask.OWN_RADIUS_FACTOR = 1.1 -- applied to the tractor's own turning radius at the end of a row
+HandleHarvesterTurnTask.OWN_RADIUS_MIN = 5      -- m
+
+-- turning radius of the fixed turns. End of row (one full-lock turn, the trailer follows inside the tractor's track):
+-- the tractor's own radius, not the one AutoDrive inflates for the trailer (9 m and more, which left the field at
+-- every row end)
+function HandleHarvesterTurnTask:getTurnRadius()
+    if self.endRow then
+        local ok, own = pcall(AutoDrive.getDriverRadius, self.vehicle, true)
+        if ok and type(own) == "number" and own > 0 then
+            return math.max(HandleHarvesterTurnTask.OWN_RADIUS_MIN, own * HandleHarvesterTurnTask.OWN_RADIUS_FACTOR)
+        end
+    end
+    return AutoDrive.getDriverRadius(self.vehicle)
+end
+
+-- how far inside the tractor's track the trailer axle runs on an arc of radius r (off-tracking)
+function HandleHarvesterTurnTask:getTrailerOfftrack(r)
+    local ok, len = pcall(AutoDrive.getTractorTrainLength, self.vehicle, false, true)
+    local trailer = ok and type(len) == "number" and len or 7
+    trailer = math.min(trailer, r * 0.95)
+    return r - math.sqrt(math.max(0, r * r - trailer * trailer))
 end
 
 function HandleHarvesterTurnTask:setUp()
@@ -676,16 +700,17 @@ end
 
 function HandleHarvesterTurnTask:tryNextTurn()
     if self.endRow then
-        if self.endRowTries >= 4 and not self.trailTried then
-            -- 4th way: drive its own trail
+        if self.endRowTries >= 5 and not self.trailTried then
+            -- next way: drive the harvester's trail and turn behind it
             self.trailTried = true
             if self:tryCombineTrail() then
                 return
             end
         end
-        if self.endRowTries >= 4 then
-            -- fresh flag: the catch task tries the own U-turn (3 points...) before any route
-            self.vehicle.ad.endRowUTurn = g_time or 0
+        if self.endRowTries >= 5 then
+            -- the multi-step band manoeuvre is no longer tried at the end of a row, the route search takes over at
+            -- once
+            self.vehicle.ad.endRowUTurn = nil
             self:finished(ADTaskModule.DONT_PROPAGATE)
             self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:setToWaitForCall(true)
             self.endRowGaveUp = true
@@ -693,8 +718,8 @@ function HandleHarvesterTurnTask:tryNextTurn()
         end
         self.endRowTries = self.endRowTries + 1
     end
-    -- 4 turns: the Y manoeuvre of his drawing added to the AutoDrive list
-    self.nextTurnToTry = (self.nextTurnToTry + 1) % 4
+    -- 5 turns: the square and the Y manoeuvres added to the AutoDrive list
+    self.nextTurnToTry = (self.nextTurnToTry + 1) % 5
     if self.nextTurnToTry == 0 and self.endRow then
         self.currentTurn = OffsetTurn:new(self.turnParameters)
     elseif self.nextTurnToTry == 0 then
@@ -712,6 +737,8 @@ function HandleHarvesterTurnTask:tryNextTurn()
     elseif self.nextTurnToTry == 2 then
         self.currentTurn = ForwardOffsetTurn:new(self.turnParameters)
     elseif self.nextTurnToTry == 3 then
+        self.currentTurn = SquareTurn:new(self.turnParameters)
+    elseif self.nextTurnToTry == 4 then
         self.currentTurn = YTurn:new(self.turnParameters)
     end
 
@@ -719,8 +746,8 @@ function HandleHarvesterTurnTask:tryNextTurn()
     -- the Y manoeuvre turns until the new row heading: 90-270 deg (an unloader was at 103 deg, nothing passed)
     local valid
     local window = "150-210"
-    if self.endRow and self.nextTurnToTry == 3 then
-        valid = YTurn.checkValidity(self.turnParameters)
+    if self.endRow and self.nextTurnToTry >= 3 then
+        valid = self.currentTurn.checkValidity(self.turnParameters)
         window = "90-270"
     elseif self.endRow then
         valid = self.turnParameters.angle > 150 and self.turnParameters.angle < 210
@@ -774,7 +801,8 @@ function HandleHarvesterTurnTask:tryCombineTrail()
     return true
 end
 
-HandleHarvesterTurnTask.turnNames = {[0] = "forward U-turn", [1] = "reverse then U-turn", [2] = "forward offset U-turn", [3] = "Y manoeuvre (diagonal forward, long straight reverse, forward U-turn)"}
+HandleHarvesterTurnTask.turnNames = {[0] = "forward U-turn", [1] = "reverse then U-turn", [2] = "forward offset U-turn",
+    [3] = "square manoeuvre (forward arc, straight reverse, forward arc; reverse first when right behind)", [4] = "Y manoeuvre (diagonal forward, long straight reverse, forward U-turn)"}
 
 -- field and crop under the whole width of the train along the turn, by the AutoDrive settings:
 -- Strict refuses, otherwise allowed. The last reverse points toward the harvester (its own cut track) are kept
@@ -797,7 +825,27 @@ function HandleHarvesterTurnTask:checkGround(points, widthFactor, ignoreCrop)
         local len = math.sqrt(dx * dx + dz * dz)
         if len > 0.01 then
             dx, dz = dx / len, dz / len
-            for _, w in ipairs({-half, 0, half}) do
+            local widths = {-half, 0, half}
+            -- tight arc: the trailer runs inside the tractor's track, its track is checked too
+            local c = points[i + 1]
+            if c ~= nil then
+                local ex, ez = c.x - b.x, c.z - b.z
+                local elen = math.sqrt(ex * ex + ez * ez)
+                if elen > 0.01 then
+                    ex, ez = ex / elen, ez / elen
+                    local turn = math.atan2(dx * ez - dz * ex, dx * ex + dz * ez)
+                    local arc = (len + elen) / 2
+                    if math.abs(turn) > 1e-3 and arc / math.abs(turn) < 30 then
+                        local r = arc / math.abs(turn)
+                        local off = self:getTrailerOfftrack(r)
+                        -- probe below: (b.x - dz * w, b.z + dx * w), so w > 0 is the RIGHT of heading (dx, dz)
+                        local inside = turn > 0 and 1 or -1
+                        widths[#widths + 1] = inside * off
+                        widths[#widths + 1] = inside * (off + half)
+                    end
+                end
+            end
+            for _, w in ipairs(widths) do
                 local px, pz = b.x - dz * w, b.z + dx * w
                 if strictField and not pf.getMapOnFieldAt(px, pz) and not (mode ~= nil and mode.isOnCombineTrail ~= nil
                     and mode:isOnCombineTrail(px, pz, HandleHarvesterTurnTask.TRAIL_GROUND_RADIUS)) then
@@ -836,7 +884,7 @@ function HandleHarvesterTurnTask:cleanPoints(points)
 end
 
 function HandleHarvesterTurnTask:getUturnOffsetValues(left)
-    local radius = AutoDrive.getDriverRadius(self.vehicle)
+    local radius = self:getTurnRadius()
     local offsetTurn = (radius*2) > (AutoDrive.getFrontToolWidth(self.combine) + 2)
     if offsetTurn then
         local offset = (radius*2) - AutoDrive.getFrontToolWidth(self.combine)
@@ -853,7 +901,7 @@ function HandleHarvesterTurnTask:getUturnOffsetValues(left)
 end
 
 function HandleHarvesterTurnTask:generateUTurn(startPos, startDirX, startDirZ, left, offsetValues)
-    local radius = AutoDrive.getDriverRadius(self.vehicle)
+    local radius = self:getTurnRadius()
     local vehX, vehY, vehZ = getWorldTranslation(self.vehicle.components[1].node)
     local resolution = 20
 
