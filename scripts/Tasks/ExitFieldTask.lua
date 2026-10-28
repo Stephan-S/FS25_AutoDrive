@@ -124,7 +124,7 @@ end
 ExitFieldTask.CANDIDATE_MAX_DISTANCE = 200   -- m, network points considered to leave the field
 ExitFieldTask.CANDIDATE_SPACING = 15         -- m between two tried points
 ExitFieldTask.CANDIDATE_COUNT = 6
-ExitFieldTask.FIELD_POINT_MAX_DISTANCE = 500 -- m, field entrance point tried first
+ExitFieldTask.FIELD_POINT_MAX_DISTANCE = 2000 -- m, field entrance point tried first (the exit should be the entrance, even on a large field)
 ExitFieldTask.BEHIND_PENALTY = 60            -- m added to points behind the vehicle
 
 -- network points that lead to the destination, easiest first: the closest ones in front of the vehicle,
