@@ -42,6 +42,7 @@ ADTrafficYieldModule.STATE_PARKER_PASS = 14
 ADTrafficYieldModule.STATE_YIELDER_APPROACH = 21
 ADTrafficYieldModule.STATE_PRIORITY_APPROACH = 22
 ADTrafficYieldModule.STATE_WAIT_DETACHED = 31
+ADTrafficYieldModule.STATE_SECTION_CLEAR = 41
 
 ADTrafficYieldModule.STATE_NAMES = {
     [0] = "IDLE",
@@ -56,7 +57,8 @@ ADTrafficYieldModule.STATE_NAMES = {
     [14] = "PARKER_PASS",
     [21] = "YIELDER_APPROACH",
     [22] = "PRIORITY_APPROACH",
-    [31] = "WAIT_DETACHED"
+    [31] = "WAIT_DETACHED",
+    [41] = "SECTION_CLEAR"
 }
 
 ADTrafficYieldModule.ANTICIPATION_DISTANCE = 250 -- m of route looked ahead to find an oncoming AD vehicle
@@ -70,9 +72,15 @@ ADTrafficYieldModule.PATH_STEP = 2               -- m between two points of the 
 ADTrafficYieldModule.PATH_EXTRA = 8              -- m of parallel path after the parking point (alignment, aim)
 ADTrafficYieldModule.CANDIDATE_STEP = 5          -- m between two leaving points tested along the route
 ADTrafficYieldModule.SECTION_WAIT_CLEAR = 15     -- m kept free before the start of a single track when the yielder waits there
+ADTrafficYieldModule.SECTION_BACKOFF_MAX = 50    -- m, longest reverse of a yielder already in the mouth of the single track
+ADTrafficYieldModule.JUNCTION_GAP = 5           -- m between my front and the node where my route leaves the road, when I wait before the turn-off
+ADTrafficYieldModule.SECTION_BACKOFF_MIN = 6     -- m, a back-off stopped before (vehicle queue behind) falls back to the standard manoeuvre
+ADTrafficYieldModule.SECTION_CLEAR_MAX = 150     -- m, longest reverse of the vehicle in the single track that gives way to one stuck in the mouth
+ADTrafficYieldModule.SECTION_BACKOFF_INSIDE = 8  -- m, front already this far inside the single track: too deep, no back-off
+ADTrafficYieldModule.YIELDER_STOPPED_FALLBACK = 10000 -- ms stopped without a spot nor a hold of its own: standard manoeuvre
 ADTrafficYieldModule.YIELDER_SHARE = 0.65        -- part of the free distance given to the vehicle that pulls over
 ADTrafficYieldModule.DETOUR_MAX = 400            -- m, longest detour taken to avoid meeting an oncoming vehicle
-ADTrafficYieldModule.DETOUR_MIN_AHEAD = 15       -- m, the detour must leave the route before the head-on section
+ADTrafficYieldModule.DETOUR_MIN_AHEAD = 5        -- m, the detour must leave the route before the head-on section
 ADTrafficYieldModule.DETOUR_PENALTY = 1000000    -- added weight of the head-on section waypoints when looking for a detour
 ADTrafficYieldModule.SPOT_CLEARANCE = 6          -- m kept free between the oncoming vehicle and the end of the roadside path
 ADTrafficYieldModule.COOLDOWN_SUCCESS = 3000    -- ms, after a successful plan (another conflict may follow at once)
@@ -118,6 +126,7 @@ function ADTrafficYieldModule:reset()
     self.pathIndex = nil
     self.reverseBlockedTimer = AutoDriveTON:new()
     self.stateTimer = AutoDriveTON:new()
+    self.yielderStoppedTimer = AutoDriveTON:new()
     self.lastSearchTime = 0
     self.alignmentDone = nil
     self.alignmentTime = 0
@@ -288,8 +297,14 @@ function ADTrafficYieldModule.isAdVehicleUsable(vehicle)
 end
 
 function ADTrafficYieldModule:isControlling()
+    if self.state == ADTrafficYieldModule.STATE_YIELDER_APPROACH then
+        -- backing off from the mouth of a single track or holding before it: the module drives (otherwise the
+        -- "stuck" safety of DrivePathModule resets the vehicle in the middle of its back-off)
+        local plan = self.plan
+        return plan ~= nil and (plan.sectionBackOff ~= nil or (plan.parked == true and not plan.straightOn))
+    end
     return self.state ~= ADTrafficYieldModule.STATE_IDLE and self.state ~= ADTrafficYieldModule.STATE_REVERSER_PASS and self.state ~= ADTrafficYieldModule.STATE_PARKER_PASS
-        and self.state ~= ADTrafficYieldModule.STATE_YIELDER_APPROACH and self.state ~= ADTrafficYieldModule.STATE_PRIORITY_APPROACH
+        and self.state ~= ADTrafficYieldModule.STATE_PRIORITY_APPROACH
 end
 
 function ADTrafficYieldModule:isBusy()
@@ -326,6 +341,14 @@ end
 function ADTrafficYieldModule:handle(dt, obstacleDetected)
     if not self.vehicle.isServer then
         return false
+    end
+    -- the approach module stops the vehicle a few metres behind an AD vehicle on its route, before the front sensors
+    -- see it: that stop counts as "blocked by a vehicle" for the face to face detection
+    if not obstacleDetected then
+        local approach = self.vehicle.ad.approachModule
+        if approach ~= nil and approach.shouldStop ~= nil and approach:shouldStop() then
+            obstacleDetected = true
+        end
     end
 
     -- parked / hidden vehicle waiting for a given vehicle to pass, no longer linked to a plan
@@ -383,6 +406,8 @@ function ADTrafficYieldModule:handle(dt, obstacleDetected)
         self:updateParkerMove(dt)
     elseif self.state == ADTrafficYieldModule.STATE_PARKER_WAIT then
         self:updateParkerWait(dt)
+    elseif self.state == ADTrafficYieldModule.STATE_SECTION_CLEAR then
+        self:updateSectionClear(dt)
     end
 
     -- while driving inside a plan (passing / approaching), keep anticipating any OTHER oncoming vehicle
@@ -536,10 +561,27 @@ end
 -- anticipation: compare the routes of the AD vehicles to see an oncoming one long before the sensors
 ------------------------------------------------------------------------------------------------
 
+-- route ahead of each vehicle computed once per frame and shared by every vehicle that looks at it
+-- (the tables returned are only read, never changed)
+ADTrafficYieldModule.routeCache = setmetatable({}, {__mode = "k"})
+
 -- graph ids of the next waypoints of a route with the distance along the route to each of them
+
 function ADTrafficYieldModule.collectRouteAhead(vehicle, maxDistance)
-    local list, distById = {}, {}
     local wayPoints, currentIndex = vehicle.ad.drivePathModule:getWayPoints()
+    local cached = ADTrafficYieldModule.routeCache[vehicle]
+    if cached ~= nil and cached.loop == g_updateLoopIndex and cached.maxDistance == maxDistance
+        and cached.wayPoints == wayPoints and cached.currentIndex == currentIndex then
+        return cached.list, cached.distById
+    end
+    local list, distById = ADTrafficYieldModule.buildRouteAhead(vehicle, wayPoints, currentIndex, maxDistance)
+    ADTrafficYieldModule.routeCache[vehicle] = {loop = g_updateLoopIndex, maxDistance = maxDistance, wayPoints = wayPoints,
+                                                currentIndex = currentIndex, list = list, distById = distById}
+    return list, distById
+end
+
+function ADTrafficYieldModule.buildRouteAhead(vehicle, wayPoints, currentIndex, maxDistance)
+    local list, distById = {}, {}
     if wayPoints == nil or currentIndex == nil then
         return list, distById
     end
@@ -696,9 +738,18 @@ end
 
 -- slows the vehicle down so that both oncoming vehicles stop at a safe distance, then starts the
 -- passing manoeuvre. Returns true while the vehicle is held at the stop point.
+-- the crossing has priority over the face to face (otherwise a vehicle may switch from one to the other): the
+-- crossing has priority: a vehicle committed on a red section (or backing out of it) either waits or goes, no face to face
+-- plan starts for it or with it until it is through
+function ADTrafficYieldModule.intersectionHasPriority(vehicle)
+    local c = vehicle ~= nil and vehicle.ad ~= nil and vehicle.ad.intersection or nil
+    return c ~= nil and (c.committed ~= nil or c.retreat ~= nil)
+end
+
 function ADTrafficYieldModule:updateAnticipation(dt)
     if g_time >= (self.nextAnticipationCheck or 0) then
-        self.nextAnticipationCheck = g_time + ADTrafficYieldModule.ANTICIPATION_INTERVAL
+        -- every vehicle checks in the same frame, so each route ahead is computed once and shared (routeCache)
+        self.nextAnticipationCheck = (math.floor(g_time / ADTrafficYieldModule.ANTICIPATION_INTERVAL) + 1) * ADTrafficYieldModule.ANTICIPATION_INTERVAL
         self.conflictPartner, self.conflictGap = self:findOncomingConflict()
         if self.conflictPartner ~= nil then
             local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
@@ -714,11 +765,17 @@ function ADTrafficYieldModule:updateAnticipation(dt)
         return false
     end
 
+    -- the crossing first: no plan while one of us is engaged on a red section
+    if ADTrafficYieldModule.intersectionHasPriority(self.vehicle) or ADTrafficYieldModule.intersectionHasPriority(partner) then
+        self.anticipationTimer = nil
+        return false
+    end
     -- first choice: one of them pulls over in advance on its own route (early yield)
     local partnerModuleEarly = partner.ad.trafficYieldModule
     if not self:isBusy() and not partnerModuleEarly:isBusy() then
-        -- better still: another way to my destination that avoids the head-on section, if the detour is short
-        if self:tryDetour(partner) then
+        -- better still: another way to my destination that avoids the head-on section, if the detour is short.
+        -- Both vehicles try, the one with an alternative lane takes it
+        if self:tryDetour(partner) or partnerModuleEarly:tryDetour(self.vehicle) then
             self.conflictPartner = nil
             return false
         end
@@ -799,7 +856,11 @@ function ADTrafficYieldModule:tryDetour(partner)
     local myList, myDist = ADTrafficYieldModule.collectRouteAhead(self.vehicle, ADTrafficYieldModule.ANTICIPATION_DISTANCE)
     local otherList, otherDist = ADTrafficYieldModule.collectRouteAhead(partner, ADTrafficYieldModule.ANTICIPATION_DISTANCE)
     local mine, _, section = ADTrafficYieldModule.findHeadOnSection(self.vehicle, myList, myDist, partner, otherList, otherDist)
-    if mine == nil or mine < ADTrafficYieldModule.DETOUR_MIN_AHEAD then
+    if mine == nil then
+        return false
+    end
+    if mine < ADTrafficYieldModule.DETOUR_MIN_AHEAD then
+        self:log("no other way to avoid %s: the shared section starts %.0f m ahead", ADTrafficYieldModule.getName(partner), mine)
         return false
     end
     local avoid = {}
@@ -807,6 +868,7 @@ function ADTrafficYieldModule:tryDetour(partner)
         avoid[id] = true
     end
     if avoid[startWp.id] then
+        self:log("no other way to avoid %s: I am already on the shared section", ADTrafficYieldModule.getName(partner))
         return false
     end
 
@@ -822,6 +884,7 @@ function ADTrafficYieldModule:tryDetour(partner)
     local ok, path = pcall(ADGraphManager.pathFromTo, ADGraphManager, startWp.id, lastWp.id, {nextWp.id})
     ADPathCalculator.getDetourWeights = originalWeights
     if not ok or path == nil or #path < 2 or path[1].id ~= startWp.id or path[#path].id ~= lastWp.id then
+        self:log("no other way to avoid %s: no route found", ADTrafficYieldModule.getName(partner))
         return false
     end
     for _, wp in ipairs(path) do
@@ -857,11 +920,11 @@ function ADTrafficYieldModule:getOncomingGap(other)
     end
     local myList, myDist = ADTrafficYieldModule.collectRouteAhead(self.vehicle, ADTrafficYieldModule.ANTICIPATION_DISTANCE)
     local otherList, otherDist = ADTrafficYieldModule.collectRouteAhead(other, ADTrafficYieldModule.ANTICIPATION_DISTANCE)
-    local mine, da = ADTrafficYieldModule.findHeadOnSection(self.vehicle, myList, myDist, other, otherList, otherDist)
+    local mine, da, section = ADTrafficYieldModule.findHeadOnSection(self.vehicle, myList, myDist, other, otherList, otherDist)
     if mine == nil then
         return nil
     end
-    return mine + da, mine
+    return mine + da, mine, section
 end
 
 -- speed limit / hold to stop before the oncoming partner (same rule as the anticipation)
@@ -871,7 +934,7 @@ function ADTrafficYieldModule:limitSpeedTowards(dt, partner, share)
     share = share or 0.5
     if g_time >= (self.nextGapCheck or 0) then
         self.nextGapCheck = g_time + ADTrafficYieldModule.ANTICIPATION_INTERVAL
-        self.earlyGap, self.earlySectionMine = self:getOncomingGap(partner)
+        self.earlyGap, self.earlySectionMine, self.earlySection = self:getOncomingGap(partner)
         self.earlyGapTime = g_time
         local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
         local otherFront = ADTrafficYieldModule.getTrainExtents(partner)
@@ -1212,11 +1275,645 @@ function ADTrafficYieldModule:followParkPath(dt, spot)
 end
 
 
+-- the yielder is already in the mouth of the single track (closer than SECTION_WAIT_CLEAR): it reverses along its
+-- own route until its front is SECTION_WAIT_CLEAR m before the start of the track, then waits there.
+-- Returns true while the module drives the vehicle
+function ADTrafficYieldModule:updateSectionBackOff(dt)
+    local plan = self.plan
+    local backOff = plan.sectionBackOff
+    if self.reverseTargets == nil then
+        self.reverseTargets = self:buildReverseTargets()
+        self.reverseTargetIndex = 1
+        local x, y, z = ADTrafficYieldModule.getPosition(self.vehicle)
+        self.reverseStart = {x = x, y = y, z = z}
+        -- the back-off follows my own route behind me, never a straight line into the unknown (a train that has just
+        -- started its route would end in the grass)
+        self.backOffLine = {{x = x, z = z}}
+        for _, t in ipairs(self.reverseTargets) do
+            if t.straight then
+                break
+            end
+            table.insert(self.backOffLine, {x = t.x, z = t.z})
+        end
+    end
+    local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    local reversed = MathUtil.vector2Length(x - self.reverseStart.x, z - self.reverseStart.z)
+    local blockedBehind = self.vehicle.ad.collisionDetectionModule:checkReverseCollision()
+    local blockedTooLong = self.reverseBlockedTimer:timer(blockedBehind, 8000, dt)
+    local target = self.reverseTargets[self.reverseTargetIndex]
+    if target ~= nil and target.straight then
+        target = nil -- end of my route behind me: no further
+    end
+    -- drifted off my route (trailer): stop here
+    local offRoute = #self.backOffLine >= 2 and ADTrafficYieldModule.distanceToPolyline(self.backOffLine, x, z) > 3.5
+    if offRoute and not backOff.offRouteLogged then
+        backOff.offRouteLogged = true
+        self:log("back-off left my route (%.1f m aside), I stop here", ADTrafficYieldModule.distanceToPolyline(self.backOffLine, x, z))
+    end
+    if #self.backOffLine < 2 and not backOff.noRouteLogged then
+        backOff.noRouteLogged = true
+        self:log("no route behind me to back off along")
+    end
+    backOff.time = backOff.time or g_time
+    -- the way of the other one may run along my own route before its first network point
+    -- (pathfinder lead-in, field entrance, same dirt track): the wait line is only good once my whole train is off its
+    -- remaining route, else I keep reversing up to SECTION_BACKOFF_MAX
+    if g_time >= (backOff.nextClearCheck or 0) then
+        backOff.nextClearCheck = g_time + 500
+        backOff.clear = not self:isOnPartnerOffNetworkWay()
+    end
+    local reached = reversed >= backOff.distance
+    if reached and not backOff.clear and not backOff.extended and not backOff.extra and reversed < ADTrafficYieldModule.SECTION_BACKOFF_MAX and target ~= nil then
+        backOff.extended = true
+        self:log("backed off %.0f m but still on the way of %s, I keep reversing (%d m at most)", reversed, ADTrafficYieldModule.getName(self.partner), ADTrafficYieldModule.SECTION_BACKOFF_MAX)
+    end
+    local done = (reached and (backOff.clear or reversed >= ADTrafficYieldModule.SECTION_BACKOFF_MAX)) or target == nil or blockedTooLong or offRoute or g_time - backOff.time > 60000
+    if done then
+        plan.sectionBackOff = nil
+        self.backOffLine = nil
+        -- far enough: at the wait line (3 m), or, when the wait line is only the single track itself, at least 8 m
+        -- before it, and off the way of the other one; still in the mouth, across the turn-off or on its way: the other
+        -- one gives way instead
+        local remaining = backOff.distance - reversed
+        local farEnough = (remaining <= 3 or (backOff.where ~= "road" and remaining <= ADTrafficYieldModule.SECTION_WAIT_CLEAR - 8)) and backOff.clear == true
+        if not farEnough and backOff.clear ~= true then
+            self:log("back-off stopped after %.0f m, still on the way of %s", reversed, ADTrafficYieldModule.getName(self.partner))
+        end
+        if not farEnough then
+            -- blocked behind (vehicle queue) before getting out of the mouth: classic manoeuvre, I park on the roadside
+            self:log("back-off before the single track stopped after %.0f m of %.0f m", reversed, backOff.distance)
+            -- a vehicle right behind me: I go first and the other one gives way, the vehicle in the single track
+            -- backs out of my way, I drive in first
+            if self:startSectionClear() then
+                return true
+            end
+            local history = ADTrafficYieldModule.pairHistory[plan.pairKey] or {failures = 0, time = g_time}
+            history.earlyTried = g_time
+            ADTrafficYieldModule.pairHistory[plan.pairKey] = history
+            self:endPlan("back-off blocked, fall back to the standard manoeuvre", nil)
+            return false
+        end
+        -- off the shared way: wait here like a yielder that stopped before the single track
+        plan.waitBeforeSection = true
+        plan.parked = true
+        self.vehicle.ad.specialDrivingModule:releaseVehicle()
+        self:log("backed off %.0f m of %.0f m before the single track%s, %s may come out", reversed, backOff.distance,
+            blockedTooLong and " (blocked behind)" or "", ADTrafficYieldModule.getName(self.partner))
+        self:holdVehicle(dt)
+        return true
+    end
+    -- stop first (it may still roll into the mouth), then reverse
+    if not backOff.stopped then
+        self:holdVehicle(dt)
+        if ADTrafficYieldModule.getSpeedKmh(self.vehicle) < 1 then
+            backOff.stopped = true
+        end
+        return true
+    end
+    if self:reverseTowards(dt, target) then
+        if target.routeIndex ~= nil then
+            self.reachedRouteIndex = target.routeIndex
+        end
+        self.reverseTargetIndex = self.reverseTargetIndex + 1
+    end
+    return true
+end
+
+-- the node where my route turns off (a node with two ways out) last before the single track, as a signed
+-- distance along my route from my position (negative: already behind me, searched up to 40 m back), nil if none
+function ADTrafficYieldModule:findTurnOffBeforeSection()
+    local section = self.earlySection
+    local wayPoints, currentIndex = self.vehicle.ad.drivePathModule:getWayPoints()
+    if section == nil or section[1] == nil or wayPoints == nil or currentIndex == nil or ADGraphManager == nil then
+        return nil
+    end
+    local function isBranch(wp)
+        if wp == nil or wp.id == nil or wp.id == section[1] then
+            return false
+        end
+        local node = ADGraphManager:getWayPointById(wp.id)
+        return node ~= nil and node.out ~= nil and #node.out >= 2
+    end
+    local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    -- ahead, up to the start of the single track
+    local found, foundIndex = nil, nil
+    local lastX, lastZ, distance = x, z, 0
+    for i = math.max(1, currentIndex), #wayPoints do
+        local wp = wayPoints[i]
+        if wp == nil then
+            break
+        end
+        distance = distance + MathUtil.vector2Length(wp.x - lastX, wp.z - lastZ)
+        lastX, lastZ = wp.x, wp.z
+        if wp.id == section[1] then
+            break
+        end
+        if isBranch(wp) then
+            found, foundIndex = distance, i
+        end
+        if distance > ADTrafficYieldModule.ANTICIPATION_DISTANCE then
+            break
+        end
+    end
+    if found ~= nil then
+        return found, foundIndex
+    end
+    -- behind me (I am already in the turn)
+    lastX, lastZ, distance = x, z, 0
+    for i = currentIndex - 1, 1, -1 do
+        local wp = wayPoints[i]
+        if wp == nil then
+            break
+        end
+        distance = distance + MathUtil.vector2Length(wp.x - lastX, wp.z - lastZ)
+        lastX, lastZ = wp.x, wp.z
+        if distance > 40 then
+            break
+        end
+        if isBranch(wp) then
+            return -distance, i
+        end
+    end
+    return nil
+end
+
+-- rather than reversing, the yielder is at the turn-off into the single track and cannot wait before it: it drives straight on along the
+-- other branch of the junction, AutoDrive brings it back to its destination afterwards. Returns true when the route
+-- was changed
+function ADTrafficYieldModule:tryStraightOn(turnOffIndex)
+    local drivePathModule = self.vehicle.ad.drivePathModule
+    local wayPoints, currentIndex = drivePathModule:getWayPoints()
+    if turnOffIndex == nil or wayPoints == nil or currentIndex == nil or ADGraphManager == nil or self.partner == nil then
+        return false
+    end
+    local junction, towardsTrack, before, lastWp = wayPoints[turnOffIndex], wayPoints[turnOffIndex + 1], wayPoints[turnOffIndex - 1], wayPoints[#wayPoints]
+    if junction == nil or junction.id == nil or towardsTrack == nil or lastWp == nil or lastWp.id == nil then
+        return false
+    end
+    -- the junction must still be ahead of my front axle (otherwise I am already turning in)
+    local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+    local _, _, junctionLocalZ = AutoDrive.worldToLocal(self.vehicle, junction.x, junction.y, junction.z)
+    if junctionLocalZ < myFront - 1 then
+        return false
+    end
+    local node = ADGraphManager:getWayPointById(junction.id)
+    if node == nil or node.out == nil then
+        return false
+    end
+    local _, otherDist = ADTrafficYieldModule.collectRouteAhead(self.partner, ADTrafficYieldModule.ANTICIPATION_DISTANCE)
+    -- incoming direction at the junction
+    local inX, inZ
+    if before ~= nil then
+        local l = math.max(0.01, MathUtil.vector2Length(junction.x - before.x, junction.z - before.z))
+        inX, inZ = (junction.x - before.x) / l, (junction.z - before.z) / l
+    else
+        inX, inZ = ADTrafficYieldModule.getDirection(self.vehicle)
+    end
+    -- the most straight-on branch that is neither the track nor the way I came from nor the way of the partner
+    local best, bestDot = nil, -math.huge
+    for _, outId in pairs(node.out) do
+        local candidate = ADGraphManager:getWayPointById(outId)
+        if candidate ~= nil and outId ~= towardsTrack.id and (before == nil or outId ~= before.id) and otherDist[outId] == nil then
+            local l = math.max(0.01, MathUtil.vector2Length(candidate.x - junction.x, candidate.z - junction.z))
+            local dot = ((candidate.x - junction.x) * inX + (candidate.z - junction.z) * inZ) / l
+            if dot > bestDot then
+                best, bestDot = candidate, dot
+            end
+        end
+    end
+    if best == nil or bestDot < 0.3 then
+        return false
+    end
+    -- follow that branch for 40 m (single way out at each step), never on the way of the partner
+    local chain = {best}
+    local length = MathUtil.vector2Length(best.x - junction.x, best.z - junction.z)
+    local current = best
+    while length < 40 do
+        local graphNode = ADGraphManager:getWayPointById(current.id)
+        if graphNode == nil or graphNode.out == nil or #graphNode.out < 1 then
+            break
+        end
+        local nextWp = ADGraphManager:getWayPointById(graphNode.out[1])
+        if nextWp == nil or otherDist[nextWp.id] ~= nil or nextWp.id == junction.id then
+            break
+        end
+        table.insert(chain, nextWp)
+        length = length + MathUtil.vector2Length(nextWp.x - current.x, nextWp.z - current.z)
+        current = nextWp
+    end
+    if length < 15 then
+        return false
+    end
+    -- way back to my destination from the end of that stretch
+    local ok, path = pcall(ADGraphManager.pathFromTo, ADGraphManager, current.id, lastWp.id, {})
+    if not ok or path == nil or #path < 2 or path[1].id ~= current.id or path[#path].id ~= lastWp.id then
+        self:log("straight on at the junction: no way back to my destination")
+        return false
+    end
+    local newWayPoints = {}
+    for k = 1, turnOffIndex do
+        newWayPoints[k] = wayPoints[k]
+    end
+    for _, wp in ipairs(chain) do
+        table.insert(newWayPoints, wp)
+    end
+    for k = 2, #path do
+        table.insert(newWayPoints, path[k])
+    end
+    local extra = ADTrafficYieldModule.getPathLength(newWayPoints, currentIndex) - ADTrafficYieldModule.getPathLength(wayPoints, currentIndex)
+    drivePathModule.wayPoints = newWayPoints
+    drivePathModule:setCurrentWayPointIndex(currentIndex)
+    drivePathModule.minDistanceToNextWp = math.huge
+    self:log("at the turn-off into the single track: I drive straight on and come back later (%.0f m more), %s comes out first", math.max(extra, 0), ADTrafficYieldModule.getName(self.partner))
+    return true
+end
+
+-- point of my route 'distance' metres ahead of my position (world x, z), nil when the route is shorter
+function ADTrafficYieldModule:getRoutePointAhead(distance)
+    local wayPoints, currentIndex = self.vehicle.ad.drivePathModule:getWayPoints()
+    if wayPoints == nil or currentIndex == nil then
+        return nil
+    end
+    local lastX, _, lastZ = ADTrafficYieldModule.getPosition(self.vehicle)
+    local travelled = 0
+    for i = math.max(1, currentIndex), #wayPoints do
+        local wp = wayPoints[i]
+        if wp == nil then
+            break
+        end
+        local seg = MathUtil.vector2Length(wp.x - lastX, wp.z - lastZ)
+        if travelled + seg >= distance and seg > 0.01 then
+            local t = (distance - travelled) / seg
+            return {x = lastX + (wp.x - lastX) * t, y = wp.y, z = lastZ + (wp.z - lastZ) * t}
+        end
+        travelled = travelled + seg
+        lastX, lastZ = wp.x, wp.z
+    end
+    return nil
+end
+
+-- first node of the head-on section on my route (world position), nil when not found
+function ADTrafficYieldModule:findSectionStart()
+    local section = self.earlySection
+    local wayPoints, currentIndex = self.vehicle.ad.drivePathModule:getWayPoints()
+    if section == nil or section[1] == nil or wayPoints == nil or currentIndex == nil then
+        return nil
+    end
+    for i = math.max(1, currentIndex), #wayPoints do
+        local wp = wayPoints[i]
+        if wp ~= nil and wp.id == section[1] then
+            return {x = wp.x, z = wp.z}
+        end
+    end
+    return nil
+end
+
+-- I already drive on the way of the partner (the two waypoints behind me are on its route): I am inside the
+-- single track, not in its mouth, a short reverse would not get me out of it
+function ADTrafficYieldModule:isInsideSection()
+    local wayPoints, currentIndex = self.vehicle.ad.drivePathModule:getWayPoints()
+    if wayPoints == nil or currentIndex == nil or self.partner == nil then
+        return false
+    end
+    local _, otherDist = ADTrafficYieldModule.collectRouteAhead(self.partner, ADTrafficYieldModule.ANTICIPATION_DISTANCE)
+    local behind1, behind2 = wayPoints[currentIndex - 1], wayPoints[currentIndex - 2]
+    return behind1 ~= nil and behind2 ~= nil and behind1.id ~= nil and behind2.id ~= nil and otherDist[behind1.id] ~= nil and otherDist[behind2.id] ~= nil
+end
+
+-- the partner (the vehicle coming out of the single track) is clear of its entrance, trailer included
+function ADTrafficYieldModule:isPartnerClearOfSection()
+    local start = self.plan.sectionStart
+    if start == nil or self.partner == nil then
+        return true
+    end
+    local px, _, pz = ADTrafficYieldModule.getPosition(self.partner)
+    local _, partnerRear = ADTrafficYieldModule.getTrainExtents(self.partner)
+    -- past the entrance in its own direction of travel (still inside the track: the entrance is ahead of it)
+    local dx, dz = ADTrafficYieldModule.getDirection(self.partner)
+    return (px - start.x) * dx + (pz - start.z) * dz > partnerRear + 8
+end
+
+-- the part of the remaining route of the partner that is off the network (pathfinder lead-in: exit of a field, detour):
+-- those points have no id, the route comparison cannot see them, the single track may begin before its first network
+-- point and run over the place where I wait (e.g. a vehicle leaving its field). True when my train (front, centre, rear) is within passing distance of one of those segments.
+-- (network lanes side by side are never compared here: two lanes of a road are closer than that and are fine)
+-- extra: more room asked (m), e.g. before ending the plan (the sensors stop both earlier than the routes touch)
+function ADTrafficYieldModule:isOnPartnerOffNetworkWay(extra)
+    local partner = self.partner
+    if partner == nil or partner.ad == nil or partner.ad.drivePathModule == nil then
+        return false
+    end
+    local wayPoints, currentIndex = partner.ad.drivePathModule:getWayPoints()
+    if wayPoints == nil or currentIndex == nil then
+        return false
+    end
+    local px, _, pz = ADTrafficYieldModule.getPosition(partner)
+    local points = {{x = px, z = pz, off = not partner.ad.drivePathModule:isOnRoadNetwork()}}
+    local distance = 0
+    for i = math.max(1, currentIndex), #wayPoints do
+        local wp = wayPoints[i]
+        if wp == nil then
+            break
+        end
+        local last = points[#points]
+        distance = distance + MathUtil.vector2Length(wp.x - last.x, wp.z - last.z)
+        table.insert(points, {x = wp.x, z = wp.z, off = wp.id == nil})
+        if distance > 150 then
+            break
+        end
+    end
+    local segments = {}
+    for k = 1, #points - 1 do
+        if points[k].off or points[k + 1].off then
+            table.insert(segments, {points[k], points[k + 1]})
+        end
+    end
+    if #segments == 0 then
+        return false
+    end
+    local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    local dirX, dirZ = ADTrafficYieldModule.getDirection(self.vehicle)
+    local myFront, myRear = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+    local margin = AutoDrive.getSetting("trafficYieldMargin") or ADTrafficYieldModule.LATERAL_MARGIN
+    local needed = (ADTrafficYieldModule.getWidth(self.vehicle) + ADTrafficYieldModule.getWidth(partner)) / 2 + margin + 1 + (extra or 0)
+    for _, f in ipairs({myFront, 0, -myRear}) do
+        local tx, tz = x + dirX * f, z + dirZ * f
+        for _, seg in ipairs(segments) do
+            if ADTrafficYieldModule.distanceToPolyline(seg, tx, tz) < needed then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- the partner came out and stopped right in front of me (its sensor sees me): I am on its way, whatever the routes say
+function ADTrafficYieldModule:isPartnerStoppedInFront(dt)
+    local partner = self.partner
+    if partner == nil then
+        return false
+    end
+    local px, py, pz = ADTrafficYieldModule.getPosition(partner)
+    local localX, _, localZ = AutoDrive.worldToLocal(self.vehicle, px, py, pz)
+    local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+    local partnerFront = ADTrafficYieldModule.getTrainExtents(partner)
+    -- a cone ahead of me, not a corridor (a partner stopped at an angle in a bend is in front too)
+    local gap = MathUtil.vector2Length(localX, localZ) - myFront - partnerFront
+    local inFront = localZ > 0 and gap < 12 and math.abs(localX) < math.max(4, localZ * 0.7) and ADTrafficYieldModule.getSpeedKmh(partner) < 1
+    self.partnerStoppedTimer = self.partnerStoppedTimer or AutoDriveTON:new()
+    return self.partnerStoppedTimer:timer(inFront, 3000, dt)
+end
+
+-- the yielder waits on its road SECTION_WAIT_CLEAR m before the single track until the other one is out of it
+function ADTrafficYieldModule:updateSectionWait(dt)
+    local plan = self.plan
+    local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+    local remaining
+    if plan.waitPoint ~= nil then
+        local _, _, localZ = AutoDrive.worldToLocal(self.vehicle, plan.waitPoint.x, plan.waitPoint.y or 0, plan.waitPoint.z)
+        remaining = localZ - myFront
+        -- (its way out may still run over my place after its last network point of the single track: wait until it is past)
+        if self.earlyGap == nil and self:isPartnerClearOfSection() and not self:isOnPartnerOffNetworkWay(8) then
+            self:endPlan("partner out of the single track", true)
+            return false
+        end
+    elseif self.earlyGap ~= nil then
+        local elapsed = (g_time - (self.earlyGapTime or g_time)) / 1000
+        remaining = (self.earlySectionMine or 0) - myFront - ADTrafficYieldModule.SECTION_WAIT_CLEAR - ADTrafficYieldModule.getSpeedKmh(self.vehicle) / 3.6 * elapsed
+    else
+        local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+        remaining = MathUtil.vector2Length(plan.sectionStart.x - x, plan.sectionStart.z - z) - myFront - ADTrafficYieldModule.SECTION_WAIT_CLEAR
+        if self:isPartnerClearOfSection() and not self:isOnPartnerOffNetworkWay(8) then
+            self:endPlan("partner out of the single track", true)
+            return false
+        end
+    end
+    -- stopped short of the wait line by something else (sensor: the other one already at the mouth):
+    -- I am waiting anyway, go on as if parked (the nose to nose rule below may back me off)
+    self.waitStoppedTimer = self.waitStoppedTimer or AutoDriveTON:new()
+    local stoppedShort = self.waitStoppedTimer:timer(not plan.parked and remaining > 0.5 and ADTrafficYieldModule.getSpeedKmh(self.vehicle) < 1, 3000, dt)
+    if remaining > 0.5 and not plan.parked and not stoppedShort then
+        local allowedSpeed = math.sqrt(2 * ADTrafficYieldModule.ANTICIPATION_DECEL * remaining) * 3.6
+        local drivePathModule = self.vehicle.ad.drivePathModule
+        if drivePathModule.speedLimit ~= nil then
+            drivePathModule.speedLimit = math.min(drivePathModule.speedLimit, math.max(allowedSpeed, 3))
+        end
+        return false
+    end
+    -- stopped before the single track: off the shared way, the other one may drive through
+    if not plan.parked then
+        self:log("waiting before the single track%s (%.1f m to the wait point%s), %s may come out", stoppedShort and string.format(" (stopped %.0f m short of the line)", remaining) or "",
+            remaining, plan.waitPoint ~= nil and "" or ", no wait point", ADTrafficYieldModule.getName(self.partner))
+    end
+    plan.parked = true
+    -- the wait line comes from the network points, the other one may still have to drive over my place
+    -- (pathfinder lead-in before its first network point): once it is close, check that my train is off its remaining route,
+    -- else back off some more (once)
+    do
+        local reason = nil
+        -- nose to nose: at most twice (it may be stopped by something else, a crossing, a third vehicle)
+        if self:isPartnerStoppedInFront(dt) then
+            if (plan.noseBackOffs or 0) < 2 then
+                plan.noseBackOffs = (plan.noseBackOffs or 0) + 1
+                reason = "stopped nose to nose with me"
+            end
+        elseif g_time >= (plan.nextWaitClearCheck or 0) then
+            plan.nextWaitClearCheck = g_time + 1000
+            local px, _, pz = ADTrafficYieldModule.getPosition(self.partner)
+            local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+            if MathUtil.vector2Length(px - x, pz - z) < 60 and self:isOnPartnerOffNetworkWay() then
+                reason = "its way out runs over my place"
+            end
+        end
+        if reason ~= nil then
+            plan.extraBackOff = (plan.extraBackOff or 0) + 10
+            if plan.extraBackOff > ADTrafficYieldModule.SECTION_BACKOFF_MAX then
+                -- reversing does not get me off its way: it backs out of the single track instead, or the standard manoeuvre
+                self:log("still on the way of %s after %d m more: I give up backing off", ADTrafficYieldModule.getName(self.partner), plan.extraBackOff - 10)
+                if self:startSectionClear() then
+                    return true
+                end
+                local history = ADTrafficYieldModule.pairHistory[plan.pairKey] or {failures = 0, time = g_time}
+                history.earlyTried = g_time
+                ADTrafficYieldModule.pairHistory[plan.pairKey] = history
+                self:endPlan("still on the way of the partner after backing off, fall back to the standard manoeuvre", nil)
+                return false
+            end
+            plan.sectionBackOff = {distance = 10, where = plan.waitWhere or "track", extra = true}
+            self.reverseTargets = nil
+            self:log("%s %s: I back off 10 m more", ADTrafficYieldModule.getName(self.partner), reason)
+            return self:updateSectionBackOff(dt)
+        end
+    end
+    self:holdVehicle(dt)
+    if self.stateTimer:timer(true, 120000, dt) then
+        self:endPlan("wait before the single track: timeout", false)
+    end
+    return true
+end
+
+-- I am stuck in the mouth of the single track (vehicle queue behind me): roles swapped, the partner in the
+-- single track reverses along its own route until it is off my way (or parks beside the track), I drive in first
+function ADTrafficYieldModule:startSectionClear()
+    local plan = self.plan
+    local other = self.partner
+    if other == nil or plan == nil or plan.sectionCleared then
+        return false
+    end
+    if ADTrafficYieldModule.hasFollowerBehind(other, 20, self.vehicle) then
+        return false
+    end
+    plan.sectionCleared = true
+    plan.mode = "sectionClear"
+    plan.reverser, plan.parker = self.vehicle, other -- I drive on (REVERSER_PASS), it gets off the way
+    plan.parked = false
+    plan.waitBeforeSection = nil
+    plan.reverserMayStop = true
+    self:log("back-off blocked behind me: %s backs out of the single track, I go first", ADTrafficYieldModule.getName(other))
+    local otherModule = other.ad.trafficYieldModule
+    self.vehicle.ad.specialDrivingModule:releaseVehicle()
+    other.ad.specialDrivingModule:releaseVehicle()
+    otherModule.reverseTargets = nil
+    self:setState(ADTrafficYieldModule.STATE_REVERSER_WAIT)
+    self:holdVehicle(0)
+    otherModule:setState(ADTrafficYieldModule.STATE_SECTION_CLEAR)
+    return true
+end
+
+-- the remaining route of a vehicle as a polyline (its position first), at most maxDistance metres
+function ADTrafficYieldModule.getRoutePolyline(vehicle, maxDistance)
+    local x, _, z = ADTrafficYieldModule.getPosition(vehicle)
+    local points = {{x = x, z = z}}
+    local wayPoints, currentIndex = vehicle.ad.drivePathModule:getWayPoints()
+    if wayPoints == nil or currentIndex == nil then
+        return points
+    end
+    local distance = 0
+    for i = math.max(1, currentIndex), #wayPoints do
+        local wp = wayPoints[i]
+        if wp == nil then
+            break
+        end
+        local last = points[#points]
+        distance = distance + MathUtil.vector2Length(wp.x - last.x, wp.z - last.z)
+        table.insert(points, {x = wp.x, z = wp.z})
+        if distance > maxDistance then
+            break
+        end
+    end
+    return points
+end
+
+function ADTrafficYieldModule.distanceToPolyline(points, x, z)
+    local best = math.huge
+    for k = 1, #points - 1 do
+        local a, b = points[k], points[k + 1]
+        local dx, dz = b.x - a.x, b.z - a.z
+        local l2 = dx * dx + dz * dz
+        local t = 0
+        if l2 > 0.0001 then
+            t = math.max(0, math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2))
+        end
+        best = math.min(best, MathUtil.vector2Length(x - (a.x + dx * t), z - (a.z + dz * t)))
+    end
+    if #points == 1 then
+        best = MathUtil.vector2Length(x - points[1].x, z - points[1].z)
+    end
+    return best
+end
+
+-- my whole train (front, centre, rear) is far enough from the route the partner still has to drive
+function ADTrafficYieldModule:isClearOfPartnerRoute()
+    local partner = self.partner
+    local route = ADTrafficYieldModule.getRoutePolyline(partner, ADTrafficYieldModule.SECTION_CLEAR_MAX + 100)
+    local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    local dirX, dirZ = ADTrafficYieldModule.getDirection(self.vehicle)
+    local myFront, myRear = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+    local margin = AutoDrive.getSetting("trafficYieldMargin") or ADTrafficYieldModule.LATERAL_MARGIN
+    local needed = (ADTrafficYieldModule.getWidth(self.vehicle) + ADTrafficYieldModule.getWidth(partner)) / 2 + margin + 1
+    -- its route may end at the field entrance and go on into the field: keep 20 m more around that end
+    local last = route[#route]
+    for _, f in ipairs({myFront, 0, -myRear}) do
+        local px, pz = x + dirX * f, z + dirZ * f
+        if ADTrafficYieldModule.distanceToPolyline(route, px, pz) < needed or MathUtil.vector2Length(px - last.x, pz - last.z) < needed + 20 then
+            return false
+        end
+    end
+    return true
+end
+
+-- the vehicle in the single track backs out of the way of the one stuck in the mouth, then waits until it passed
+function ADTrafficYieldModule:updateSectionClear(dt)
+    local plan = self.plan
+    if plan.parked then
+        self:holdVehicle(dt)
+        local partner = self.partner
+        if self:hasPassedMe(partner) or not partner.ad.drivePathModule:isOnRoadNetwork() then
+            plan.passed = true
+            self:endPlan("the other one went through the single track", true)
+            return
+        end
+        if self.stateTimer:timer(true, 120000, dt) then
+            self:endPlan("single track clear: wait timeout", false)
+        end
+        return
+    end
+    if self.reverseTargets == nil then
+        self.reverseTargets = self:buildReverseTargets(ADTrafficYieldModule.SECTION_CLEAR_MAX)
+        self.reverseTargetIndex = 1
+        local x, y, z = ADTrafficYieldModule.getPosition(self.vehicle)
+        self.reverseStart = {x = x, y = y, z = z}
+        self.clearStartTime = g_time
+    end
+    -- a free place beside the track (field): park there, the other one passes (roles of the standard plan)
+    if self:tryOwnParkingSpot(dt) then
+        return
+    end
+    local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    local reversed = MathUtil.vector2Length(x - self.reverseStart.x, z - self.reverseStart.z)
+    local blockedBehind = self.vehicle.ad.collisionDetectionModule:checkReverseCollision()
+    local blockedTooLong = self.reverseBlockedTimer:timer(blockedBehind, 8000, dt)
+    local target = self.reverseTargets[self.reverseTargetIndex]
+    local clear = self:isClearOfPartnerRoute()
+    if clear or target == nil or blockedTooLong or reversed >= ADTrafficYieldModule.SECTION_CLEAR_MAX or g_time - self.clearStartTime > 150000 then
+        plan.parked = true
+        self.vehicle.ad.specialDrivingModule:releaseVehicle()
+        self:holdVehicle(dt)
+        self:log("backed %.0f m out of the single track (%s), %s goes through", reversed, clear and "off its way" or (blockedTooLong and "blocked behind" or "limit"),
+            ADTrafficYieldModule.getName(self.partner))
+        return
+    end
+    if self:reverseTowards(dt, target) then
+        if target.routeIndex ~= nil then
+            self.reachedRouteIndex = target.routeIndex
+        end
+        self.reverseTargetIndex = self.reverseTargetIndex + 1
+    end
+end
+
 function ADTrafficYieldModule:updateYielderApproach(dt)
     local plan = self.plan
+    if plan.sectionBackOff ~= nil then
+        return self:updateSectionBackOff(dt)
+    end
+    if plan.straightOn then
+        -- driving away along the road: done once the other one is out of the single track (or no longer oncoming)
+        self.vehicle.ad.specialDrivingModule:releaseVehicle()
+        if self:isPartnerClearOfSection() then
+            self:endPlan("partner out of the single track (straight on)", true)
+        elseif self.stateTimer:timer(true, 120000, dt) then
+            self:endPlan("straight on: timeout", true)
+        end
+        return false
+    end
     -- the yielder gets most of the free distance to find a spot (the other one stops earlier)
     local holding, stopDistance = self:limitSpeedTowards(dt, self.partner, ADTrafficYieldModule.YIELDER_SHARE)
     if self.earlyGap == nil then
+        -- waiting before the single track: the partner may still be in the mouth (its last node passed but its trailer
+        -- not out yet): keep waiting until it is clear of the entrance
+        if plan.waitBeforeSection and plan.sectionStart ~= nil then
+            return self:updateSectionWait(dt)
+        end
         -- not oncoming any more (route changed): nothing to do
         self:endPlan("no more oncoming", nil)
         return false
@@ -1225,34 +1922,49 @@ function ADTrafficYieldModule:updateYielderApproach(dt)
     -- the single track starts ahead of me: I wait on my road SECTION_WAIT_CLEAR m before it, so that my nose
     -- does not block its mouth, the other one comes out first, then I go
     if plan.waitBeforeSection == nil and self.earlySectionMine ~= nil then
-        local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
-        plan.waitBeforeSection = self.earlySectionMine - myFront > ADTrafficYieldModule.SECTION_WAIT_CLEAR + 2
+        local myFront, myRear = ADTrafficYieldModule.getTrainExtents(self.vehicle)
+        plan.sectionStart = self:findSectionStart()
+        -- where my front stops: SECTION_WAIT_CLEAR m before the single track. When the single track starts shortly
+        -- after the turn-off, the train would stand across it with its trailer on the road: when my whole train cannot wait between the turn-off and the single track, I wait on my road before the turn-off
+        local waitLine = self.earlySectionMine - ADTrafficYieldModule.SECTION_WAIT_CLEAR
+        local turnOff, turnOffIndex = self:findTurnOffBeforeSection()
+        local where = "track"
+        if turnOff ~= nil and self.earlySectionMine - turnOff < myFront + myRear + ADTrafficYieldModule.SECTION_WAIT_CLEAR + 3 then
+            local beforeTurnOff = turnOff - ADTrafficYieldModule.JUNCTION_GAP
+            if beforeTurnOff < waitLine then
+                waitLine = beforeTurnOff
+                where = "road"
+            end
+        end
+        plan.waitBeforeSection = waitLine - myFront > 2
+        -- cannot wait before the turn-off any more: straight on along the road rather than reversing
+        if not plan.waitBeforeSection and where == "road" and self:tryStraightOn(turnOffIndex) then
+            plan.straightOn = true
+            plan.waitBeforeSection = false
+            plan.parked = true -- the other one drives on
+            self.vehicle.ad.specialDrivingModule:releaseVehicle()
+            return false
+        end
+        plan.waitWhere = where
         if plan.waitBeforeSection then
-            self:log("single track %.0f m ahead: I wait %d m before it, %s comes out first", self.earlySectionMine, ADTrafficYieldModule.SECTION_WAIT_CLEAR, ADTrafficYieldModule.getName(self.partner))
+            plan.waitPoint = self:getRoutePointAhead(waitLine)
+            self:log("single track %.0f m ahead (turn-off %s m): I wait with my front %.0f m ahead (%s), %s comes out first", self.earlySectionMine,
+                turnOff ~= nil and string.format("%.0f", turnOff) or "-", waitLine, where, ADTrafficYieldModule.getName(self.partner))
+        else
+            -- already in the mouth (too close for the other one to come out): I back off along my route to the wait line
+            local frontDistance = self.earlySectionMine - myFront
+            local distance = myFront - waitLine
+            if plan.sectionStart ~= nil and frontDistance > -ADTrafficYieldModule.SECTION_BACKOFF_INSIDE and distance <= ADTrafficYieldModule.SECTION_BACKOFF_MAX
+                and not self:isInsideSection() then
+                plan.sectionBackOff = {distance = math.max(distance, 3), where = where}
+                self:log("single track %.0f m ahead (front at %.0f m): too close, I back off %.0f m, %s comes out first", self.earlySectionMine, frontDistance,
+                    plan.sectionBackOff.distance, ADTrafficYieldModule.getName(self.partner))
+                return self:updateSectionBackOff(dt)
+            end
         end
     end
     if plan.waitBeforeSection and plan.parkSpot == nil then
-        local myFront = ADTrafficYieldModule.getTrainExtents(self.vehicle)
-        local elapsed = (g_time - (self.earlyGapTime or g_time)) / 1000
-        local remaining = (self.earlySectionMine or 0) - myFront - ADTrafficYieldModule.SECTION_WAIT_CLEAR - ADTrafficYieldModule.getSpeedKmh(self.vehicle) / 3.6 * elapsed
-        if remaining > 0.5 and not plan.parked then
-            local allowedSpeed = math.sqrt(2 * ADTrafficYieldModule.ANTICIPATION_DECEL * remaining) * 3.6
-            local drivePathModule = self.vehicle.ad.drivePathModule
-            if drivePathModule.speedLimit ~= nil then
-                drivePathModule.speedLimit = math.min(drivePathModule.speedLimit, math.max(allowedSpeed, 3))
-            end
-            return false
-        end
-        -- stopped before the single track: off the shared way, the other one may drive through
-        if not plan.parked then
-            self:log("waiting before the single track, %s may come out", ADTrafficYieldModule.getName(self.partner))
-        end
-        plan.parked = true
-        self:holdVehicle(dt)
-        if self.stateTimer:timer(true, 120000, dt) then
-            self:endPlan("wait before the single track: timeout", false)
-        end
-        return true
+        return self:updateSectionWait(dt)
     end
 
     if plan.parkSpot == nil then
@@ -1264,7 +1976,10 @@ function ADTrafficYieldModule:updateYielderApproach(dt)
                 self:log("early spot found: side=%s at %.0f m, field=%s", plan.parkSpot.side, plan.parkSpot.entryDistance, tostring(plan.parkSpot.onField))
             end
         end
-        if plan.parkSpot == nil and holding then
+        -- stopped by something else (sensor, crossing) without any spot ahead: waiting for the plan timeout
+        -- would block both for 3 min
+        local stoppedTooLong = self.yielderStoppedTimer:timer(ADTrafficYieldModule.getSpeedKmh(self.vehicle) < 1, ADTrafficYieldModule.YIELDER_STOPPED_FALLBACK, dt)
+        if plan.parkSpot == nil and (holding or stoppedTooLong) then
             -- stopped without any spot ahead: classic manoeuvre (reverse + roadside / side branch)
             local history = ADTrafficYieldModule.pairHistory[plan.pairKey] or {failures = 0, time = g_time}
             history.earlyTried = g_time
@@ -1345,8 +2060,17 @@ function ADTrafficYieldModule:checkForHeadOnDeadlock(dt, obstacleDetected)
         return
     end
 
+    if ADTrafficYieldModule.intersectionHasPriority(self.vehicle) then
+        return -- engaged on a red section: the crossing decides (wait or go)
+    end
     local other = self:findHeadOnPartner()
-    if other ~= nil then
+    if other ~= nil and not ADTrafficYieldModule.intersectionHasPriority(other) then
+        -- nose to nose, before anybody reverses, either of us takes another lane when there is one
+        local otherModule = other.ad.trafficYieldModule
+        if self:tryDetour(other) or (otherModule ~= nil and otherModule.tryDetour ~= nil and otherModule:tryDetour(self.vehicle)) then
+            self.blockedTimer:timer(false)
+            return
+        end
         ADTrafficYieldModule.startPlan(self.vehicle, other)
     end
 end
@@ -1494,6 +2218,10 @@ function ADTrafficYieldModule:endPlan(reason, success)
             history.failures = history.failures + 1
             history.time = g_time
             history.lastReverser = plan.firstReverser or plan.reverser
+            if plan.mode == "early" then
+                -- the same early plan would start again at once and block both again
+                history.earlyTried = g_time
+            end
             ADTrafficYieldModule.pairHistory[plan.pairKey] = history
         end
     end
@@ -1539,7 +2267,14 @@ function ADTrafficYieldModule:checkPlanStillValid()
         self:endPlan("partner not available any more", false)
         return false
     end
-    if not self.vehicle.ad.drivePathModule:isOnRoadNetwork() and self.state ~= ADTrafficYieldModule.STATE_PARKER_MOVE and self.state ~= ADTrafficYieldModule.STATE_PARKER_WAIT then
+    if plan.mode == "sectionClear" and plan.parked and not self.vehicle.ad.drivePathModule:isOnRoadNetwork() and self.state == ADTrafficYieldModule.STATE_REVERSER_PASS then
+        -- through the single track and into the field: done
+        plan.passed = true
+        self:endPlan("through the single track", true)
+        return false
+    end
+    if not self.vehicle.ad.drivePathModule:isOnRoadNetwork() and self.state ~= ADTrafficYieldModule.STATE_PARKER_MOVE and self.state ~= ADTrafficYieldModule.STATE_PARKER_WAIT
+        and self.state ~= ADTrafficYieldModule.STATE_SECTION_CLEAR then
         self:endPlan("vehicle left the road network", false)
         return false
     end
@@ -1552,6 +2287,8 @@ function ADTrafficYieldModule:checkPlanStillValid()
     local maxApart = 120
     if plan.mode == "early" then
         maxApart = 3 * ADTrafficYieldModule.ANTICIPATION_DISTANCE
+    elseif plan.mode == "sectionClear" then
+        maxApart = ADTrafficYieldModule.SECTION_CLEAR_MAX + 100
     end
     if MathUtil.vector2Length(px - x, pz - z) > maxApart then
         self:endPlan("vehicles too far apart", plan.passed)
@@ -1602,10 +2339,10 @@ end
 -- REVERSER
 ------------------------------------------------------------------------------------------------
 
-function ADTrafficYieldModule:buildReverseTargets()
+function ADTrafficYieldModule:buildReverseTargets(maxDistance)
     local targets = {}
     local x, y, z = ADTrafficYieldModule.getPosition(self.vehicle)
-    local maxReverse = (AutoDrive.getSetting("trafficYieldMaxReverse") or 50) + 5
+    local maxReverse = maxDistance or (AutoDrive.getSetting("trafficYieldMaxReverse") or 50) + 5
     local wayPoints, currentIndex = self.vehicle.ad.drivePathModule:getWayPoints()
 
     local lastX, lastZ = x, z
@@ -1647,7 +2384,7 @@ function ADTrafficYieldModule:buildReverseTargets()
             lastZ = lastZ + dirZ * ADTrafficYieldModule.REVERSE_STEP
             travelled = travelled + ADTrafficYieldModule.REVERSE_STEP
             local ty = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, lastX, y, lastZ)
-            table.insert(targets, {x = lastX, y = ty, z = lastZ})
+            table.insert(targets, {x = lastX, y = ty, z = lastZ, straight = true})
         end
     end
 
@@ -1962,9 +2699,43 @@ function ADTrafficYieldModule:updateReverserWait(dt)
             return
         end
         if self.stateTimer:timer(true, 6000, dt) then
+            -- no roadside spot on either side (both would stay there): rather than giving up, I keep reversing along my route until I am off the
+            -- way of the other one (junction, end of the single track, up to SECTION_CLEAR_MAX), it follows and passes
+            if self:startClearAsReverser() then
+                return
+            end
             self:endPlan("no free roadside spot found", false)
         end
     end
+end
+
+-- the reverser of the standard plan reached its limit and the parker found no spot: the plan goes on as a
+-- "single track clear" (the reverser backs until it is off the way of the other one, which then drives on)
+function ADTrafficYieldModule:startClearAsReverser()
+    local plan = self.plan
+    local other = self.partner
+    if other == nil or plan == nil or plan.sectionCleared or plan.mode == "branch" then
+        return false
+    end
+    if ADTrafficYieldModule.hasFollowerBehind(self.vehicle, 20, other) then
+        return false
+    end
+    plan.sectionCleared = true
+    plan.mode = "sectionClear"
+    plan.reverser, plan.parker = other, self.vehicle -- it drives on (REVERSER_PASS), I get off its way
+    plan.parked = false
+    plan.waitBeforeSection = nil
+    plan.reverserMayStop = true
+    plan.reverserAtLimit = false
+    self:log("no roadside spot on either side: I keep reversing until I am off the way of %s (%d m at most)", ADTrafficYieldModule.getName(other), ADTrafficYieldModule.SECTION_CLEAR_MAX)
+    local otherModule = other.ad.trafficYieldModule
+    self.vehicle.ad.specialDrivingModule:releaseVehicle()
+    other.ad.specialDrivingModule:releaseVehicle()
+    self.reverseTargets = nil
+    otherModule:setState(ADTrafficYieldModule.STATE_REVERSER_WAIT)
+    otherModule:holdVehicle(0)
+    self:setState(ADTrafficYieldModule.STATE_SECTION_CLEAR)
+    return true
 end
 
 -- the reverser searches a roadside spot from its own position (towards the other vehicle). When it
