@@ -69,7 +69,8 @@ function WaitForCallTask:update(dt)
             elseif self:goRoadsideIfFieldFull() then
                 -- the field already holds its unloaders: wait beside the road
             else
-                self.search = ADFieldPark.newSearch(self.vehicle)
+                -- backed off along the road because the field had no place yet: looks again from the entrance
+                self.search = ADFieldPark.newSearch(self.vehicle, self.noPlaceRoadside and self.noPlaceOrigin or nil)
                 self.state = WaitForCallTask.STATE_SEARCHING
             end
         end
@@ -83,7 +84,16 @@ function WaitForCallTask:update(dt)
             end
             local search = self.search
             self.search = nil
-            if search.waitSense and #spots == 0 then
+            if self.probeFromRoadside then
+                self.probeFromRoadside = nil
+                if #spots > 0 and not search.waitSense then
+                    self.noPlaceRoadside = nil
+                    self:leaveRoadside()
+                else
+                    self.vehicle.ad.trafficYieldModule:log("field park: still no place in the field, staying beside the road")
+                    self.state = WaitForCallTask.STATE_WAITING
+                end
+            elseif search.waitSense and #spots == 0 then
                 -- the sense of the first headland is not known yet: wait beside the road until it is
                 self.vehicle.ad.trafficYieldModule:log("field park: sense of the first headland not known yet, waiting beside the road")
                 self:goRoadside(search.harvester)
@@ -104,9 +114,11 @@ function WaitForCallTask:update(dt)
                 self.failedPathFinder = self.failedPathFinder + 1
                 self.vehicle.ad.trafficYieldModule:log("field park: no path to spot %d", self.spotIndex)
                 self:planToNextSpot()
-            elseif pathFinder.fallBackMode3 then
+            elseif pathFinder.fallBackMode3 or self:pathCrossesCrop(wayPoints, pathFinder) then
                 -- the pathfinder only got there by driving through the crop: not worth it. Lifting the field
-                -- restriction (fallback modes 1 and 2) is normal here: the unloader waits outside the field
+                -- restriction (fallback modes 1 and 2) is normal here: the unloader waits outside the field.
+                -- Its grid is coarse and follows the avoidFruit setting: the route is checked again every meter
+                -- (a place on the far side must not be reached through the crop)
                 self.failedPathFinder = self.failedPathFinder + 1
                 self.vehicle.ad.trafficYieldModule:log("field park: path to spot %d crosses the crop, rejected", self.spotIndex)
                 self:planToNextSpot()
@@ -162,6 +174,15 @@ function WaitForCallTask:update(dt)
                 self.retryTime = 0
             end
             self:hold(dt)
+        elseif self.backOffTargets ~= nil and backed > WaitForCallTask.ROUTE_BACK_OFF_MIN
+            and AutoDrive.checkIsOnField(x, getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 0, z), z) then
+            -- backing along the route with a trailer drifts; as soon as the train is on a field again (the one opposite the entrance), it stops there
+            self.vehicle.ad.trafficYieldModule:log("field park: backed off %.1f m along the route, on a field: stopping here", backed)
+            self.backOffTargets = nil
+            self.vehicle.ad.specialDrivingModule:releaseVehicle()
+            self.state = WaitForCallTask.STATE_CHECK
+            self.checkTimer = AutoDriveTON:new()
+            self:hold(dt)
         elseif self.backOffTargets ~= nil then
             if self.vehicle.ad.trafficYieldModule:reverseTowards(dt, target) then
                 self.backOffIndex = self.backOffIndex + 1
@@ -192,7 +213,20 @@ function WaitForCallTask:update(dt)
         end
     else
         -- beside the road: into the field when a place is free there, else closer to the entrance
-        if self.parkedSpot ~= nil and self.parkedSpot.roadside then
+        if self.parkedSpot ~= nil and self.parkedSpot.roadside and self.noPlaceRoadside then
+            -- beside the road because the field had no place yet: the search runs again from the entrance it came
+            -- to, without driving there; it goes in only when a place exists
+            self.retryTime = nil
+            self.noPlaceTimer = (self.noPlaceTimer or 0) + dt
+            if self.noPlaceTimer > WaitForCallTask.NO_PLACE_RETRY then
+                self.noPlaceTimer = 0
+                self.search = ADFieldPark.newSearch(self.vehicle, self.noPlaceOrigin)
+                self.probeFromRoadside = true
+                self.state = WaitForCallTask.STATE_SEARCHING
+                self:hold(dt)
+                return
+            end
+        elseif self.parkedSpot ~= nil and self.parkedSpot.roadside then
             self.moveUpTimer = (self.moveUpTimer or 0) + dt
             if self.moveUpTimer > WaitForCallTask.MOVE_UP_CHECK then
                 self.moveUpTimer = 0
@@ -329,29 +363,36 @@ function WaitForCallTask:startRouteBackOff()
     return true
 end
 
+WaitForCallTask.ROUTE_BACK_OFF_MIN = 8 -- m backed along the route before a field under the train stops the back-off (the entrance itself may be on the field)
+WaitForCallTask.NO_PLACE_RETRY = 45000 -- ms between two looks for a place in the field from beside the road
+
+-- leaves its roadside place for the field: back on the network to the field point first, the search of a place
+-- in the field starts there as for any arrival
+function WaitForCallTask:leaveRoadside()
+    self.vehicle.ad.trafficYieldModule:log("field park: free place in the field, going there")
+    self.parkedSpot = nil
+    -- keeps its roadside place until the search reserves one in the field
+    self.state = WaitForCallTask.STATE_CHECK
+    self.checkTimer = AutoDriveTON:new()
+    self.backOffCount = 0
+    local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+    local marker = self.vehicle.ad.stateModule ~= nil and self.vehicle.ad.stateModule:getFirstMarker() or nil
+    local wp = marker ~= nil and ADGraphManager:getWayPointById(marker.id) or nil
+    if wp ~= nil and MathUtil.vector2Length(wp.x - x, wp.z - z) > WaitForCallTask.ENTRANCE_NEAR then
+        self.vehicle.ad.trafficYieldModule:log("field park: back on the network to the field point (%.0f m)", MathUtil.vector2Length(wp.x - x, wp.z - z))
+        self.vehicle.ad.specialDrivingModule:releaseVehicle()
+        self.vehicle.ad.drivePathModule:setPathTo(marker.id)
+        self.state = WaitForCallTask.STATE_TO_ENTRANCE
+    end
+end
+
 -- waiting beside the road: the first one in the line goes into the field as soon as a place is free there; the
 -- others move to a free place closer to the entrance
 function WaitForCallTask:moveUpRoadside()
     local spot = self.parkedSpot
     if ADFieldPark.countInField(self.vehicle, spot.harvester) < ADFieldPark.FIELD_CAPACITY
         and ADFieldPark.isFirstOnRoadside(self.vehicle, spot.harvester) and ADFieldPark.canParkFor(self.vehicle, spot.harvester) then
-        self.vehicle.ad.trafficYieldModule:log("field park: free place in the field, going there")
-        self.parkedSpot = nil
-        -- keeps its roadside place until the search reserves one in the field
-        self.state = WaitForCallTask.STATE_CHECK
-        self.checkTimer = AutoDriveTON:new()
-        self.backOffCount = 0
-        -- parked beside the road before the entrance: back on the network to the field point first,
-        -- the search of a place in the field starts there as for any arrival
-        local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
-        local marker = self.vehicle.ad.stateModule ~= nil and self.vehicle.ad.stateModule:getFirstMarker() or nil
-        local wp = marker ~= nil and ADGraphManager:getWayPointById(marker.id) or nil
-        if wp ~= nil and MathUtil.vector2Length(wp.x - x, wp.z - z) > WaitForCallTask.ENTRANCE_NEAR then
-            self.vehicle.ad.trafficYieldModule:log("field park: back on the network to the field point (%.0f m)", MathUtil.vector2Length(wp.x - x, wp.z - z))
-            self.vehicle.ad.specialDrivingModule:releaseVehicle()
-            self.vehicle.ad.drivePathModule:setPathTo(marker.id)
-            self.state = WaitForCallTask.STATE_TO_ENTRANCE
-        end
+        self:leaveRoadside()
         return true
     end
     local spots = ADFieldPark.findRoadsideSpots(self.vehicle, spot.harvester, spot.entrance.x, spot.entrance.z)
@@ -382,6 +423,30 @@ function WaitForCallTask:planToNextSpot()
         self.state = WaitForCallTask.STATE_WAITING
         self.retryTime = 0
         local roadside = self.spots ~= nil and self.spots[1] ~= nil and self.spots[1].roadside
+        if self.spotIndex == 1 and not roadside and self.noPlaceRoadside then
+            -- already backed off on the road for that reason: just wait and look again later, no more backing off
+            return
+        end
+        if self.spotIndex == 1 and not roadside and not self.ignoreCapacity and not self.loaded then
+            -- the job has just started, no harvested
+            -- ground to park on yet: it does not wait at the entrance in everybody's way, it waits beside the road
+            -- before the entrance and looks again from there (see probeFromRoadside)
+            local x, _, z = ADTrafficYieldModule.getPosition(self.vehicle)
+            local harvester = ADFieldPark.findHarvester(self.vehicle, x, z)
+            if harvester ~= nil then
+                local dx, dz = ADTrafficYieldModule.getDirection(self.vehicle)
+                self.noPlaceOrigin = {x = x, z = z, dx = dx, dz = dz}
+                self.noPlaceRoadside = true
+                self.noPlaceTimer = 0
+                self:goRoadside(harvester)
+                if self.spots == nil or #self.spots == 0 then
+                    if not self:startRouteBackOff() then
+                        self:startBackOff()
+                    end
+                end
+                return
+            end
+        end
         if roadside and self:startRouteBackOff() then
             return
         elseif roadside and not self.ignoreCapacity then
@@ -436,6 +501,64 @@ function WaitForCallTask:planToNextSpot()
     self.vehicle.ad.pathFinderModule:reset()
     self.vehicle.ad.pathFinderModule:startPathPlanningTo({x = target.x, y = target.y, z = target.z}, {x = target.dirX, z = target.dirZ})
     self.state = WaitForCallTask.STATE_PATHPLANNING
+end
+
+-- the route of the AutoDrive pathfinder checked every meter over the width of the train: standing crop
+-- (small forgotten patches and the border fringe excepted) is never driven through to park
+function WaitForCallTask:pathCrossesCrop(wayPoints, pathFinder)
+    if wayPoints == nil or #wayPoints < 2 or ADFieldPark.isPathClear == nil then
+        return false
+    end
+    -- the same width as the pathfinder's own crop check (the tyres, no margin, behind a forage harvester):
+    -- twice narrower than the body with its margin, which read the edge rows beside the route as crossed
+    -- (every route would be refused a few metres from the entrance)
+    local halfW = ADTrafficYieldModule.getWidth(self.vehicle) / 2 + (ADFieldPark.CROP_MARGIN or 0.7)
+    if pathFinder ~= nil and pathFinder.getCropHalfWidth ~= nil then
+        halfW = math.min(halfW, pathFinder:getCropHalfWidth())
+    end
+    local path = {}
+    for _, wp in ipairs(wayPoints) do
+        local last = path[#path]
+        if last == nil or MathUtil.vector2Length(wp.x - last.x, wp.z - last.z) <= 1 then
+            if last == nil then
+                table.insert(path, {x = wp.x, y = wp.y, z = wp.z})
+            end
+        else
+            -- a point every meter at most: the check reads the crop at the points of the path
+            local dx, dz = wp.x - last.x, wp.z - last.z
+            local length = MathUtil.vector2Length(dx, dz)
+            local steps = math.ceil(length)
+            for i = 1, steps do
+                table.insert(path, {x = last.x + dx * i / steps, y = wp.y, z = last.z + dz * i / steps})
+            end
+        end
+    end
+    -- the first meters are where the train already stands (it came in that way): the edge rows at the
+    -- entrance are not a crossing
+    local startX, startZ = path[1].x, path[1].z
+    local firstFree = #path
+    for i = 1, #path do
+        if MathUtil.vector2Length(path[i].x - startX, path[i].z - startZ) > (ADFieldPark.START_FREE or 15) then
+            firstFree = i
+            break
+        end
+    end
+    if firstFree > 1 then
+        local trimmed = {}
+        for i = firstFree, #path do
+            table.insert(trimmed, path[i])
+        end
+        path = trimmed
+    end
+    if #path < 2 then
+        return false
+    end
+    local blocked, bx, bz, index = ADFieldPark.isPathClear(self.vehicle, path, halfW, nil, false)
+    if blocked == "crop" then
+        self.vehicle.ad.trafficYieldModule:log("field park: pathfinder route crosses the crop at x=%.0f z=%.0f (point %d/%d)", bx, bz, index, #path)
+        return true
+    end
+    return false
 end
 
 -- something in the trailers: the unloader comes from a harvester, not from the road

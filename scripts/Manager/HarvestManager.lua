@@ -335,6 +335,39 @@ function ADHarvestManager:getAssignedUnloader(harvester)
     return nil
 end
 
+-- the unloaders of a harvester: attached, followers and the ones waiting for its call (same field target)
+function ADHarvestManager:getUnloadersOf(harvester)
+    local list = {}
+    local target = harvester.ad ~= nil and harvester.ad.stateModule ~= nil and harvester.ad.stateModule:getFirstMarker() or nil
+    local function add(v)
+        if v ~= nil and v.ad ~= nil and v.ad.stateModule ~= nil and v.ad.stateModule:isActive() and v.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD and not table.contains(list, v) then
+            table.insert(list, v)
+        end
+    end
+    for _, v in pairs(self.activeUnloaders) do
+        local mode = v.ad ~= nil and v.ad.modes ~= nil and v.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+        if mode ~= nil and (mode.combine == harvester or (target ~= nil and v.ad.stateModule:getFirstMarker() == target)) then
+            add(v)
+        end
+    end
+    for _, v in pairs(self.idleUnloaders) do
+        if target ~= nil and v.ad ~= nil and v.ad.stateModule ~= nil and v.ad.stateModule:getFirstMarker() == target then
+            add(v)
+        end
+    end
+    -- followers and unloaders on their way to a follower
+    if g_currentMission ~= nil and g_currentMission.vehicleSystem ~= nil then
+        for _, v in pairs(g_currentMission.vehicleSystem.vehicles) do
+            local mode = v.ad ~= nil and v.ad.modes ~= nil and v.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+            if mode ~= nil and v.ad.stateModule ~= nil and v.ad.stateModule:isActive() and v.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD
+                and (mode.combine == harvester or (target ~= nil and v.ad.stateModule:getFirstMarker() == target)) then
+                add(v)
+            end
+        end
+    end
+    return list
+end
+
 function ADHarvestManager:getClosestIdleUnloader(harvester)
     local closestUnloader = nil
     local closestDistance = math.huge

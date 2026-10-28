@@ -51,6 +51,8 @@ function DriveToDestinationTask:update(dt)
             self:finished()
         elseif self:isEntranceHold(dt) then
             return
+        elseif self:isZoneBusyHold(dt) then
+            return
         elseif self:isFieldFullStop(dt) then
             return
         else
@@ -112,10 +114,87 @@ function DriveToDestinationTask:isEntranceHold(dt)
     return ADFieldPark.holdForExit(self.vehicle, dt, "on the road")
 end
 
+DriveToDestinationTask.ZONE_RADIUS = 35          -- m around the field point: the entrance zone
+DriveToDestinationTask.ZONE_HOLD_MAX = 60        -- m before the field point: the unloader holds on the road from here
+DriveToDestinationTask.ZONE_HOLD_TIMEOUT = 180000 -- ms, then it drives on as before
+
+-- at the start of a job the first unloader may still be on the grass beside the harvester, outside the field, and the
+-- next ones would drive up to the entrance and queue nose to tail behind its trailer. An unloader coming to
+-- the field point holds on the road before the entrance while another unloader of this harvester is in the entrance
+-- zone and not on the field (the called one not yet in place, or one still waiting at the entrance)
+function DriveToDestinationTask:isZoneBusyHold(dt)
+    local mode = self.vehicle.ad.modes ~= nil and self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    if mode == nil or ADFieldPark == nil or not ADFieldPark.isEnabled() or self.vehicle.ad.stateModule:getMode() ~= AutoDrive.MODE_UNLOAD
+        or mode.state ~= mode.STATE_DRIVE_TO_START or self.routeIsPartial then
+        return false
+    end
+    local hold = self.vehicle.ad.zoneHold
+    self.zoneCheck = (self.zoneCheck or 0) + dt
+    if self.zoneCheck < DriveToDestinationTask.FIELD_FULL_CHECK then
+        if hold ~= nil then
+            hold.waited = hold.waited + dt
+            self.vehicle.ad.specialDrivingModule:stopVehicle()
+            self.vehicle.ad.specialDrivingModule:update(dt)
+            return true
+        end
+        return false
+    end
+    self.zoneCheck = 0
+    local marker = self.vehicle.ad.stateModule:getFirstMarker()
+    local wp = marker ~= nil and ADGraphManager:getWayPointById(marker.id) or nil
+    if wp == nil then
+        return false
+    end
+    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    local distance = MathUtil.vector2Length(wp.x - x, wp.z - z)
+    local busy = nil
+    if distance <= DriveToDestinationTask.ZONE_HOLD_MAX and distance >= DriveToDestinationTask.FIELD_FULL_STOP_MIN
+        and not AutoDrive.checkIsOnField(x, y, z) then
+        local harvester = ADFieldPark.findHarvester(self.vehicle, wp.x, wp.z)
+        if harvester ~= nil and ADHarvestManager ~= nil and ADHarvestManager.getUnloadersOf ~= nil then
+            for _, other in pairs(ADHarvestManager:getUnloadersOf(harvester)) do
+                if other ~= self.vehicle and other.components ~= nil and other.isDeleted ~= true then
+                    local ox, oy, oz = getWorldTranslation(other.components[1].node)
+                    local od = MathUtil.vector2Length(wp.x - ox, wp.z - oz)
+                    local spot = ADFieldPark.parked ~= nil and ADFieldPark.parked[other] or nil
+                    -- in the entrance zone, not on the field, and not parked in a field spot: still in the way
+                    if od < DriveToDestinationTask.ZONE_RADIUS and not AutoDrive.checkIsOnField(ox, oy, oz)
+                        and (spot == nil or spot.roadside) then
+                        busy = other
+                        break
+                    end
+                end
+            end
+        end
+    end
+    if busy == nil then
+        if hold ~= nil then
+            self.vehicle.ad.zoneHold = nil
+        end
+        return false
+    end
+    if hold == nil or hold.other ~= busy then
+        hold = {other = busy, name = busy:getName(), waited = hold ~= nil and hold.waited or 0}
+        self.vehicle.ad.zoneHold = hold
+    end
+    hold.waited = hold.waited + dt
+    if hold.waited > DriveToDestinationTask.ZONE_HOLD_TIMEOUT then
+        if not hold.gaveUp then
+            hold.gaveUp = true
+        end
+        return false
+    end
+    self.vehicle.ad.specialDrivingModule:stopVehicle()
+    self.vehicle.ad.specialDrivingModule:update(dt)
+    return true
+end
+
 function DriveToDestinationTask:abort()
+    self.vehicle.ad.zoneHold = nil
 end
 
 function DriveToDestinationTask:finished(propagate)
+    self.vehicle.ad.zoneHold = nil
     self.vehicle.ad.taskModule:setCurrentTaskFinished(propagate)
 end
 

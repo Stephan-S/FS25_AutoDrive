@@ -255,7 +255,40 @@ function ADFieldPark.isGroundFree(cx, cz, dx, dz, halfW, halfL, nearbyWayPoints,
         ADFieldPark.reject = "crop within 20 m"
         return nil
     end
+    if not ADFieldPark.hasRunOut(cx, cz, dx, dz, halfW, halfL, py) then
+        ADFieldPark.reject = "no run-out"
+        return nil
+    end
     return maxH
+end
+
+ADFieldPark.RUN_OUT = 15                            -- m of free ground needed ahead of the nose to drive away again
+ADFieldPark.RUN_OUT_STEP = 2.5
+
+-- the train must be able to leave its place straight ahead (not parked with its nose in a corner of the field,
+-- against the border): the ground ahead of the nose, over the width of the train, is field or the grass
+-- along the border, with no standing crop
+function ADFieldPark.hasRunOut(cx, cz, dx, dz, halfW, halfL, py)
+    local nx, nz = cx + dx * halfL, cz + dz * halfL
+    local d = ADFieldPark.RUN_OUT_STEP
+    while d <= ADFieldPark.RUN_OUT do
+        for _, side in ipairs({0, -1, 1}) do
+            -- GIANTS local +x (left) of the heading is (dz, -dx)
+            local x, z = nx + dx * d + dz * side * halfW, nz + dz * d - dx * side * halfW
+            local h = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, py, z)
+            local onField = ADFieldPark.isOnField(x, h, z)
+            local onGrass = not onField and not AutoDrive.checkIsOnField(x, h, z) and ADFieldPark.isNearField(x, z, halfW + 1)
+            if not onField and not onGrass then
+                return false
+            end
+            local crop, fruitTypeIndex = ADFieldPark.hasGrowingCrop(x, z)
+            if crop and not ADFieldPark.isCropIsland(fruitTypeIndex, x, z, {}) and not ADFieldPark.isBorderFringe(x, z) then
+                return false
+            end
+        end
+        d = d + ADFieldPark.RUN_OUT_STEP
+    end
+    return true
 end
 
 -- true when the current position is already a good waiting place: on harvested ground along the border, away from
@@ -294,6 +327,9 @@ function ADFieldPark.isGoodWaitingPlace(vehicle)
         if crop and not ADFieldPark.isCropIsland(fruitTypeIndex, p[1], p[2], {}) and not ADFieldPark.isBorderFringe(p[1], p[2]) then
             return false, "crop"
         end
+    end
+    if not ADFieldPark.hasRunOut(cx, cz, dx, dz, halfW, halfL, py) then
+        return false, "no run-out"
     end
     -- and parked parallel to the border, close to it
     local bx, bz, tx, tz, nx, nz = ADFieldPark.findBorder(cx, cz, py)
@@ -815,11 +851,17 @@ end
 
 -- starts a search of waiting places inside the field around the vehicle. The search is spread over several
 -- frames (one candidate position per call of ADFieldPark.searchStep) to avoid a hitch
-function ADFieldPark.newSearch(vehicle)
+-- origin (optional): {x, z, dx, dz} the search starts from instead of where the vehicle stands (an unloader waiting
+-- beside the road looks again from the entrance it came to, without driving there)
+function ADFieldPark.newSearch(vehicle, origin)
     ADTrafficYieldModule.measureTrain(vehicle)
     local search = {vehicle = vehicle}
     search.x, search.py, search.z = ADTrafficYieldModule.getPosition(vehicle)
     search.vdx, search.vdz = ADTrafficYieldModule.getDirection(vehicle)
+    if origin ~= nil then
+        search.x, search.z, search.vdx, search.vdz = origin.x, origin.z, origin.dx, origin.dz
+        search.py = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, origin.x, 0, origin.z)
+    end
     search.halfW = ADTrafficYieldModule.getWidth(vehicle) / 2 + 0.5
     search.front, search.rear = ADTrafficYieldModule.getTrainExtents(vehicle)
     search.length = search.front + search.rear
@@ -1100,7 +1142,7 @@ function ADFieldPark.isSpotAllowed(search, cx, cz, dx, dz, queued)
             search.stats["harvester way"] = (search.stats["harvester way"] or 0) + 1
             return false
         end
-        if ADFieldPark.getPassWidth(cx, cz, dx, dz, search.halfW, search.halfL) < ADFieldPark.PASS_MIN_WIDTH then
+        if not search.narrow and ADFieldPark.getPassWidth(cx, cz, dx, dz, search.halfW, search.halfL) < ADFieldPark.PASS_MIN_WIDTH then
             search.stats = search.stats or {}
             search.stats["no room to pass"] = (search.stats["no room to pass"] or 0) + 1
             return false
@@ -1289,7 +1331,25 @@ function ADFieldPark.pickSpots(search)
     end
     search.vehicle.ad.trafficYieldModule:log("field park: %d places, refused: %s (side %s, at x=%.0f z=%.0f)", #candidates,
         table.concat(parts, ", "), tostring(search.side), search.x, search.z)
+    search.lastStats = search.stats or {}
     search.stats = {}
+    -- the places facing the wrong way do not count: the next passes run before giving up (otherwise one place facing
+    -- the wrong way sends the unloader to wait beside the road while the harvested strip is wide)
+    local sense = ADFieldPark.getHarvesterSense(search)
+    local facing = #candidates
+    if sense ~= nil then
+        facing = 0
+        for _, c in ipairs(candidates) do
+            if c.nx == nil or ((c.nx * c.dz - c.nz * c.dx) > 0 and 1 or -1) == sense then
+                facing = facing + 1
+            end
+        end
+        if facing == 0 and #candidates > 0 and not search.wide then
+            search.vehicle.ad.trafficYieldModule:log("field park: %d places but none faces the harvester's way, next pass", #candidates)
+            search.candidates = {}
+            candidates = search.candidates
+        end
+    end
     if #candidates == 0 and not search.relaxed and not search.memoFree then
         -- nothing away from the standing crop (the harvester is still on its headlands): look again without the
         -- harvester clearance, the unloader must not stay on the road
@@ -1298,6 +1358,18 @@ function ADFieldPark.pickSpots(search)
         search.radiusIndex = 1
         search.angle = 0
         search.vehicle.ad.trafficYieldModule:log("field park: no spot away from the crop, trying the harvested strip")
+        return nil
+    end
+    if #candidates == 0 and search.relaxed and search.chopper and not search.narrow and not search.memoFree and (search.lastStats["no room to pass"] or 0) > 0 then
+        -- the forage harvester has only cut its first strip along the border, too narrow for another trailer to pass
+        -- beside a parked one: the unloaders queue in that strip anyway (the called one at the front drives on to the
+        -- harvester, the next moves up), rather than places on the far side reached through the crop or a wait at the
+        -- entrance
+        search.narrow = true
+        search.queueDone = false
+        search.radiusIndex = 1
+        search.angle = 0
+        search.vehicle.ad.trafficYieldModule:log("field park: only the narrow first strip is cut, queuing in it without room to pass")
         return nil
     end
     if #candidates == 0 and search.relaxed and not search.wide and not search.memoFree then
@@ -1318,7 +1390,6 @@ function ADFieldPark.pickSpots(search)
         search.result = "no harvested ground along the border"
     end
     -- nose the way the harvester sets off along the border (its first headland)
-    local sense = ADFieldPark.getHarvesterSense(search)
     if sense ~= nil then
         local kept = {}
         for _, c in ipairs(candidates) do
@@ -1554,8 +1625,11 @@ end
 function ADFieldPark.countInField(vehicle, harvester)
     local count = 0
     for other, spot in pairs(ADFieldPark.parked) do
+        -- a full unloader stuck in the field (no clean way out, ExitFieldTask) does not take a place: the next one may
+        -- come in so that the harvester goes on and opens the way
         if other ~= vehicle and spot ~= nil and not spot.roadside and other.isDeleted ~= true
-            and (spot.harvester == nil or spot.harvester == harvester) then
+            and (spot.harvester == nil or spot.harvester == harvester)
+            and not (other.ad ~= nil and other.ad.exitStuckFull ~= nil) then
             count = count + 1
         end
     end
