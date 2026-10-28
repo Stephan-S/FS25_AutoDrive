@@ -156,6 +156,8 @@ function PathFinderModule:reset()
     self.startPose = nil -- set by the caller after reset: plan from this pose {x, y, z, rx, rz} instead of the vehicle (next piece of a route)
     self.chasingVehicle = false
     self.isSecondChasingVehicle = false
+    self.followingTrack = false -- 2nd unloader on its way to the 1st's crumbs: the fine grid is allowed
+    self.edgeGoal = nil -- crop edge following toward this point instead of the harvester (the follower's crumb)
     self.pathFinderTime = AutoDrive.getSetting("pathFinderTime")
     self.max_pathfinder_steps = 0
     -- obstacle check up to the real height of the train + 0.5 m: branches above it are not a wall
@@ -496,6 +498,11 @@ function PathFinderModule:startPathPlanningToFollow(targetVehicle, targetPoint, 
     if targetVehicle.ad ~= nil and targetVehicle.ad.pathFinderModule ~= nil and targetVehicle.ad.pathFinderModule.fruitToCheck ~= nil then
         self.fruitToCheck = targetVehicle.ad.pathFinderModule.fruitToCheck
     end
+    -- the follower may refine the grid like any other trip (8 m cells do not fit in a 9 m strip), and follows the
+    -- crop edge first (toward its crumb)
+    self.followingTrack = true
+    self.edgeGoal = {x = targetPoint.x, z = targetPoint.z}
+    self:tryEdgeFollow()
 end
 
 function PathFinderModule:getTrainWidth()
@@ -2080,6 +2087,10 @@ PathFinderModule.PARTIAL_HEADING_LENGTH = 3
 PathFinderModule.PARTIAL_FACING_MAX_DISTANCE = 60 -- the rule only matters near the harvester
 PathFinderModule.PARTIAL_FACING_LIFT_FAILURES = 5 -- after so many waits in a row, the rule is lifted
 PathFinderModule.PARTIAL_SHORT_MIN_GAIN = 2 -- a partial route shortened to a clean stop must still move this much
+-- a stop heading against the harvester but well beside its line is not "face to face": only a stop in the corridor
+-- ahead of it counts
+PathFinderModule.PARTIAL_FACING_CORRIDOR = 10 -- m each side of the harvester's line
+PathFinderModule.PARTIAL_FACING_BEHIND = 5 -- m: a stop further behind its rear is out of its way
 
 function PathFinderModule:isPartialEndFacingCombine(index)
     local wps = self.wayPoints
@@ -2105,6 +2116,11 @@ function PathFinderModule:isPartialEndFacingCombine(index)
         end
         local cx, _, cz = getWorldTranslation(self.pipeCombine.components[1].node)
         if MathUtil.vector2Length(b.x - cx, b.z - cz) > PathFinderModule.PARTIAL_FACING_MAX_DISTANCE then
+            return false
+        end
+        -- out of the harvester's corridor (beside its line or behind it): it never drives into that stop
+        local lx, _, lz = AutoDrive.worldToLocal(self.pipeCombine, b.x, b.y or 0, b.z)
+        if lx ~= nil and (math.abs(lx) > PathFinderModule.PARTIAL_FACING_CORRIDOR or lz < -PathFinderModule.PARTIAL_FACING_BEHIND) then
             return false
         end
     end
@@ -2687,7 +2703,7 @@ function PathFinderModule:tryLane()
 end
 
 function PathFinderModule:tryEdgeFollow()
-    if not self:isChopperWork() or not (self.strictFruit or self.strictField) or self.pipeCombine == nil or self.startX == nil then
+    if not self:isChopperWork() or not (self.strictFruit or self.strictField) or (self.pipeCombine == nil and self.edgeGoal == nil) or self.startX == nil then
         return false
     end
     local name = self:getLogName()
@@ -2730,7 +2746,11 @@ function PathFinderModule:tryEdgeFollow()
     local radius = self.realTurnRadius or self.minTurnRadius or 8
     local step = PathFinderModule.EDGE_STEP
     local maxShift = step * math.tan(math.min(step / radius, math.rad(30)))
-    local cx, _, cz = getWorldTranslation(self.pipeCombine.components[1].node)
+    -- the goal: the harvester, or the follower's crumb (edgeGoal)
+    local cx, cz = self.edgeGoal ~= nil and self.edgeGoal.x or 0, self.edgeGoal ~= nil and self.edgeGoal.z or 0
+    if self.pipeCombine ~= nil then
+        cx, _, cz = getWorldTranslation(self.pipeCombine.components[1].node)
+    end
     local closeRange = CatchCombinePipeTask ~= nil and type(CatchCombinePipeTask.CLOSE_RANGE) == "number" and CatchCombinePipeTask.CLOSE_RANGE or 30
     local points = {{x = x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, x, 1, z), z = z}}
     local px, pz, dx, dz = x, z, hx, hz
@@ -4513,7 +4533,8 @@ function PathFinderModule:update(dt)
 
         -- Only allow auto restart when planning path to network and we can adjust target wayPoint
         local retryAllowed = self.destinationId ~= nil and self.retryCounter < self.PATHFINDER_MAX_RETRIES
-        local smallerGridAllowed = (not self.chasingVehicle) and (not self.isSecondChasingVehicle) and self.gridScaleStep ~= nil and self.gridScaleStep < PathFinderModule.GRID_STEPS
+        -- the follower refines the grid too
+        local smallerGridAllowed = (not self.chasingVehicle or self.followingTrack) and (not self.isSecondChasingVehicle or self.followingTrack) and self.gridScaleStep ~= nil and self.gridScaleStep < PathFinderModule.GRID_STEPS
 
         if not smallerGridAllowed and self.gridScaleStep ~= nil then
             PathFinderModule.debugMsg(self.vehicle, "PathFinderModule: no path with %.1f m cells (%s)", self.minTurnRadius, self:getDiagText())
@@ -6646,6 +6667,41 @@ PathFinderModule.BAND_PATH_CORNER = 12       -- deg: a heading change above this
 PathFinderModule.BAND_PATH_START_AHEAD = 1.5 -- m: the first point is ahead of the tractor at least
 PathFinderModule.BAND_PATH_MAX_HEADING = 100 -- deg between the tractor heading and the first piece
 PathFinderModule.BAND_PATH_END_TOLERANCE = 6 -- m between the end of the trace and the target at most
+-- fixed objects only (vehicles are left to the chase), the first one hit is named in the reason
+local function bandCollisionCallback(probe, transformId)
+    if transformId ~= 0 and transformId ~= g_currentMission.terrainRootNode then
+        local object = g_currentMission:getNodeObject(transformId)
+        if object == nil or object.rootVehicle == nil then
+            probe.hits = probe.hits + 1
+            if probe.name == nil then
+                local ok, n = pcall(function()
+                    if object ~= nil and object.getName ~= nil then
+                        return object:getName()
+                    end
+                    return getName ~= nil and getName(transformId) or nil
+                end)
+                probe.name = (ok and n ~= nil) and tostring(n) or tostring(transformId)
+            end
+        end
+    end
+    return true
+end
+
+-- obstacle box over one straight piece a -> b of the band route: hits, name of the first object
+function PathFinderModule:bandPieceHits(a, b, height, halfWidth)
+    local dx, dz = b.x - a.x, b.z - a.z
+    local len = math.sqrt(dx * dx + dz * dz)
+    if len <= 0.1 then
+        return 0, nil
+    end
+    local angleRad = AutoDrive.normalizeAngle(math.atan2(-dz / len, dx / len))
+    local midX, midZ = (a.x + b.x) / 2, (a.z + b.z) / 2
+    local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, midX, 1, midZ)
+    local probe = {hits = 0, callback = bandCollisionCallback}
+    overlapBox(midX, y + height / 2, midZ, 0, angleRad, 0, len / 2, height / 2, halfWidth, "callback", probe, AutoDrive.collisionMaskTerrain, true, true, true, true)
+    return probe.hits, probe.name
+end
+
 function PathFinderModule:getBandPath()
     local flood = self.bandFlood
     if flood == nil then
@@ -6697,7 +6753,7 @@ function PathFinderModule:getBandPath()
             corner = math.abs(AutoDrive.angleBetween(lastDir, {x = q.x - p.x, z = q.z - p.z})) > PathFinderModule.BAND_PATH_CORNER
         end
         if (i == #raw or corner or d >= PathFinderModule.BAND_PATH_THIN) and d > 0.5 then
-            kept[#kept + 1] = {x = p.x, z = p.z}
+            kept[#kept + 1] = {x = p.x, z = p.z, raw = i}
             lastDir = {x = dx / d, z = dz / d}
             lastKept = kept[#kept]
         end
@@ -6705,30 +6761,42 @@ function PathFinderModule:getBandPath()
     if #kept < 2 then
         return nil, "strip too short"
     end
-    -- obstacles along each piece (walls, trees, learned blocked zones): the flood only knows crop and field
+    -- obstacles along each piece (walls, trees, learned blocked zones): the flood only knows crop and field.
+    -- A straight piece between two kept points may cut the corner of the band and touch what stands beside it
+    -- (field corner): such a piece is checked again point by point along the band itself, and only refused when
+    -- the band really touches, the object named
     local halfWidth = self:getTrainWidth() / 2 + FollowCombineTask.LINE_WIDTH_MARGIN
     local height = PathFinderModule.getTrainHeight(self.vehicle) + PathFinderModule.OBSTACLE_HEIGHT_MARGIN
+    local out = {kept[1]}
     for i = 2, #kept do
         local a, b = kept[i - 1], kept[i]
         local dx, dz = b.x - a.x, b.z - a.z
         local len = math.sqrt(dx * dx + dz * dz)
         if len > 0.1 then
-            dx, dz = dx / len, dz / len
-            local angleRad = AutoDrive.normalizeAngle(math.atan2(-dz, dx))
+            local angleRad = AutoDrive.normalizeAngle(math.atan2(-dz / len, dx / len))
             local midX, midZ = (a.x + b.x) / 2, (a.z + b.z) / 2
-            local y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, midX, 1, midZ)
-            local probe = {hits = 0, callback = FollowCombineTask.lineCollisionCallback}
-            overlapBox(midX, y + height / 2, midZ, 0, angleRad, 0, len / 2, height / 2, halfWidth, "callback", probe, AutoDrive.collisionMaskTerrain, true, true, true, true)
-            if probe.hits > 0 then
-                return nil, string.format("obstacle on the strip at %.0f,%.0f", midX, midZ)
+            local hits, hitName = self:bandPieceHits(a, b, height, halfWidth)
+            if hits > 0 then
+                if a.raw == nil or b.raw == nil or b.raw <= a.raw + 1 then
+                    return nil, string.format("obstacle on the strip at %.0f,%.0f (%s)", midX, midZ, tostring(hitName))
+                end
+                for j = a.raw + 1, b.raw do
+                    if self:bandPieceHits(raw[j - 1], raw[j], height, halfWidth) > 0 then
+                        return nil, string.format("obstacle on the strip at %.0f,%.0f (%s, confirmed point by point at %.0f,%.0f)", midX, midZ, tostring(hitName), raw[j].x, raw[j].z)
+                    end
+                end
+                for j = a.raw + 1, b.raw - 1 do
+                    out[#out + 1] = {x = raw[j].x, z = raw[j].z, raw = j}
+                end
             end
             if self:boxHitsBlockedZone(midX, midZ, angleRad, len / 2, halfWidth) then
                 return nil, string.format("blocked zone on the strip at %.0f,%.0f", midX, midZ)
             end
         end
+        out[#out + 1] = b
     end
     local path = {}
-    for i, p in ipairs(kept) do
+    for i, p in ipairs(out) do
         path[i] = {x = p.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, p.x, 1, p.z), z = p.z, isPathFinderPoint = true}
     end
     return path
