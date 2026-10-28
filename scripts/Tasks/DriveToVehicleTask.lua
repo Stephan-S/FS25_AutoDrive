@@ -33,6 +33,24 @@ DriveToVehicleTask.STATE_BAND_WAIT = 3
 DriveToVehicleTask.STATE_STRAIGHT = 4
 DriveToVehicleTask.STATE_RETRY_WAIT = 5
 DriveToVehicleTask.STATE_WAIT_HERE = 6
+-- called while the 1st is not in place yet and standing in the entrance or on the road, the follower first drives to
+-- a field park place (same rules as the waiting places) and waits there, the entrance stays free
+DriveToVehicleTask.STATE_PARK_SEARCH = 7
+DriveToVehicleTask.STATE_PARK_PLAN = 8
+DriveToVehicleTask.STATE_PARK_DRIVE = 9
+DriveToVehicleTask.PARK_PLAN_TIMEOUT = 30000 -- ms of pathfinding to one place at most
+-- after PARK_AFTER_FAILURES failed plans in a row the follower goes to a field park place first (the entrance stays
+-- free), and plans again from there
+DriveToVehicleTask.PARK_AFTER_FAILURES = 2
+-- the way the 1st drove (its track to the harvester, kept on the harvester, then its crumbs) is a coherent way through
+-- the crop: it is taken before any search, joined where it passes near the train, every stretch checked (crop at the
+-- tyres, fixed obstacles)
+DriveToVehicleTask.TRACK_JOIN_DISTANCE = 25  -- m: the track must pass this close ahead of the tractor
+DriveToVehicleTask.TRACK_JOIN_AHEAD = 3      -- m: joined at a point at least this far ahead
+DriveToVehicleTask.TRACK_MIN_LENGTH = 10
+DriveToVehicleTask.TRACK_MIN_GAIN = 5        -- m closer to the target at least
+DriveToVehicleTask.TRACK_MAX_AGE = 1200000   -- ms: the 1st's track to the harvester this old at most
+DriveToVehicleTask.TRACK_STOP_OVERRUN = 4    -- m cut back before a blocked spot
 
 local function logName(vehicle)
     return vehicle ~= nil and vehicle.getName ~= nil and tostring(vehicle:getName()) or "?"
@@ -63,7 +81,114 @@ function DriveToVehicleTask:setUp()
         self:startPlanning(self.why)
     else
         self.state = DriveToVehicleTask.STATE_WAIT_FOR_FIRST
+        self:parkInFieldFirst()
     end
+end
+
+-- ---------------------------------------------------------------- waiting for the 1st: out of the entrance
+
+-- standing in the entrance or on the road while waiting: a field park place is looked for (ADFieldPark rules)
+function DriveToVehicleTask:parkInFieldFirst()
+    if ADFieldPark == nil or ADFieldPark.isEnabled == nil or not ADFieldPark.isEnabled() or self.vehicle.ad.trafficYieldModule == nil then
+        return false
+    end
+    local good, why = ADFieldPark.isGoodWaitingPlace(self.vehicle)
+    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+    local onField = AutoDrive.checkIsOnField(x, y, z)
+    if good or (why ~= "road" and why ~= "off field" and onField) then
+        return false
+    end
+    self.parkSearch = ADFieldPark.newSearch(self.vehicle)
+    self.state = DriveToVehicleTask.STATE_PARK_SEARCH
+    return true
+end
+
+function DriveToVehicleTask:parkGiveUp()
+    ADFieldPark.setParked(self.vehicle, nil)
+    self.parkSpot = nil
+    self.state = DriveToVehicleTask.STATE_WAIT_FOR_FIRST
+end
+
+function DriveToVehicleTask:planToParkSpot()
+    self.parkIndex = (self.parkIndex or 0) + 1
+    local spot = self.parkSpots ~= nil and self.parkSpots[self.parkIndex] or nil
+    if spot == nil or self.parkIndex > ADFieldPark.MAX_TRIES then
+        self:parkGiveUp()
+        return
+    end
+    self.parkSpot = spot
+    ADFieldPark.setParked(self.vehicle, spot, true)
+    local wayPoints = ADFieldPark.getMemoPath(self.vehicle, spot)
+    if wayPoints ~= nil then
+        self.vehicle.ad.drivePathModule:setWayPoints(wayPoints)
+        self.state = DriveToVehicleTask.STATE_PARK_DRIVE
+        return
+    end
+    local target, leadIn = ADFieldPark.getLeadIn(self.vehicle, spot)
+    self.parkLeadIn = leadIn
+    wayPoints = ADFieldPark.findDirectPath(self.vehicle, target)
+    if wayPoints ~= nil then
+        self.vehicle.ad.drivePathModule:setWayPoints(ADFieldPark.appendLeadIn(wayPoints, leadIn))
+        self.state = DriveToVehicleTask.STATE_PARK_DRIVE
+        return
+    end
+    if spot.roadside then
+        self:planToParkSpot()
+        return
+    end
+    self.parkPlanTime = 0
+    local pfm = self.vehicle.ad.pathFinderModule
+    pfm:reset()
+    pfm:startPathPlanningTo({x = target.x, y = target.y, z = target.z}, {x = target.dirX, z = target.dirZ})
+    self.state = DriveToVehicleTask.STATE_PARK_PLAN
+end
+
+function DriveToVehicleTask:updatePark(dt)
+    if self.state == DriveToVehicleTask.STATE_PARK_SEARCH then
+        self:stopHere(dt)
+        local spots = ADFieldPark.searchStep(self.parkSearch)
+        if spots ~= nil then
+            self.parkSearch = nil
+            self.parkSpots = spots
+            self.parkIndex = 0
+            self:planToParkSpot()
+        end
+    elseif self.state == DriveToVehicleTask.STATE_PARK_PLAN then
+        local pfm = self.vehicle.ad.pathFinderModule
+        self.parkPlanTime = (self.parkPlanTime or 0) + dt
+        if pfm:hasFinished() then
+            local wayPoints = pfm:getPath()
+            local crosses = wayPoints ~= nil and #wayPoints > 1 and WaitForCallTask ~= nil and WaitForCallTask.pathCrossesCrop ~= nil and WaitForCallTask.pathCrossesCrop(self, wayPoints, pfm)
+            if wayPoints == nil or #wayPoints <= 1 or pfm.fallBackMode3 or crosses then
+                self:planToParkSpot()
+            else
+                self.vehicle.ad.drivePathModule:setWayPoints(ADFieldPark.appendLeadIn(wayPoints, self.parkLeadIn))
+                self.state = DriveToVehicleTask.STATE_PARK_DRIVE
+            end
+        elseif self.parkPlanTime > DriveToVehicleTask.PARK_PLAN_TIMEOUT then
+            pfm:reset()
+            self:planToParkSpot()
+        else
+            pfm:update(dt)
+            self:stopHere(dt)
+        end
+    elseif self.state == DriveToVehicleTask.STATE_PARK_DRIVE then
+        if self.vehicle.ad.drivePathModule:isTargetReached() then
+            ADFieldPark.setParked(self.vehicle, self.parkSpot, false)
+            self.parkedInField = true
+            self.state = DriveToVehicleTask.STATE_WAIT_FOR_FIRST
+        else
+            self.vehicle.ad.drivePathModule:update(dt)
+        end
+    end
+end
+
+function DriveToVehicleTask:leaveParkSpot()
+    if self.parkSpot ~= nil and ADFieldPark ~= nil then
+        ADFieldPark.setParked(self.vehicle, nil)
+    end
+    self.parkSpot = nil
+    self.parkedInField = nil
 end
 
 -- ---------------------------------------------------------------- the 1st unloader and its crumbs
@@ -167,16 +292,147 @@ function DriveToVehicleTask:startPlanning(why)
         return
     end
     local vx, _, vz = getWorldTranslation(self.vehicle.components[1].node)
-    local pfm = self.vehicle.ad.pathFinderModule
-    pfm:reset()
-    pfm:startPathPlanningToFollow(self.targetVehicle, target, vector)
     self.target = target
     self.targetKind = kind
     self.targetIsCrumb = index ~= nil
     local tx, _, tz = getWorldTranslation(self.targetVehicle.components[1].node)
     self.targetPos = {x = tx, z = tz, time = g_time or 0}
     self.straight = MathUtil.vector2Length(target.x - vx, target.z - vz)
+    -- order: the 1st's track, the crop edge, the cut strips, the (fine) grid, a straight line
+    if self:tryTrack(target, index, why) then
+        return
+    end
+    local pfm = self.vehicle.ad.pathFinderModule
+    pfm:reset()
+    pfm:startPathPlanningToFollow(self.targetVehicle, target, vector)
+    self.bandTried = false
     self.state = DriveToVehicleTask.STATE_PATHPLANNING
+end
+
+-- ---------------------------------------------------------------- the 1st's track
+
+-- the way the 1st drove: its track to the harvester (shared on the harvester for the next ones, TRACK_MAX_AGE at most)
+-- then its crumbs up to the one aimed at. Returns the points and how many of them belong to the track to the harvester
+function DriveToVehicleTask:getFirstTrack(targetIndex)
+    local points = {}
+    local mode = self:getFirstMode()
+    local combine = mode ~= nil and mode.combine or nil
+    local shared = combine ~= nil and combine.ad ~= nil and combine.ad.sharedLane or nil
+    if shared ~= nil and shared.points ~= nil and (g_time or 0) - (shared.time or 0) <= DriveToVehicleTask.TRACK_MAX_AGE then
+        for _, p in ipairs(shared.points) do
+            points[#points + 1] = {x = p.x, y = p.y, z = p.z}
+        end
+    end
+    local laneCount = #points
+    local items = self:getCrumbs()
+    if items ~= nil then
+        local last = math.min(targetIndex or #items, #items)
+        for i = 1, last do
+            local c = items[i]
+            points[#points + 1] = {x = c.x, y = c.y, z = c.z}
+        end
+    end
+    return points, laneCount
+end
+
+-- one stretch of the 1st's track: crop at the tyres and fixed obstacles. The field test is left out on purpose: the
+-- 1st drove there, and the entrance where the follower stands is road
+function DriveToVehicleTask:trackStretchClear(pfm, a, b, cropHalf)
+    local dx, dz = b.x - a.x, b.z - a.z
+    local l = math.sqrt(dx * dx + dz * dz)
+    if l < 0.05 then
+        return true
+    end
+    local nx, nz = -dz / l, dx / l
+    local n = math.max(1, math.ceil(l / 0.5))
+    local samples = math.ceil(cropHalf * 4)
+    for i = 0, n do
+        local px, pz = a.x + dx * i / n, a.z + dz * i / n
+        for k = 0, samples do
+            local w = -cropHalf + 2 * cropHalf * k / samples
+            if pfm:edgeCropAt(px + nx * w, pz + nz * w) then
+                return false, "crop"
+            end
+        end
+    end
+    if not pfm:isStretchClear(a, b, nil, true, true) then
+        return false, "obstacle"
+    end
+    return true
+end
+
+-- the 1st's track joined where it passes ahead of the train and followed up to the crumb aimed at
+function DriveToVehicleTask:tryTrack(target, targetIndex, why)
+    local pfm = self.vehicle.ad.pathFinderModule
+    if pfm == nil or pfm.isStretchClear == nil or pfm.edgeCropAt == nil or pfm.getCropHalfWidth == nil then
+        return false
+    end
+    local track = self:getFirstTrack(targetIndex)
+    if #track < 2 then
+        return false
+    end
+    local vx, vy, vz = getWorldTranslation(self.vehicle.components[1].node)
+    local hx, _, hz = AutoDrive.localDirectionToWorld(self.vehicle, 0, 0, 1)
+    local hl = math.sqrt(hx * hx + hz * hz)
+    if hl < 0.01 then
+        return false
+    end
+    hx, hz = hx / hl, hz / hl
+    -- join point: the nearest track point ahead of the tractor, the track running roughly our way there
+    local best, bestD = nil, DriveToVehicleTask.TRACK_JOIN_DISTANCE
+    for i = 1, #track - 1 do
+        local p, q = track[i], track[i + 1]
+        local ahead = (p.x - vx) * hx + (p.z - vz) * hz
+        local d = MathUtil.vector2Length(p.x - vx, p.z - vz)
+        local ldx, ldz = q.x - p.x, q.z - p.z
+        local ll = math.sqrt(ldx * ldx + ldz * ldz)
+        if ahead >= DriveToVehicleTask.TRACK_JOIN_AHEAD and d < bestD and ll > 0.1 and (ldx * hx + ldz * hz) / ll > 0.3 then
+            best, bestD = i, d
+        end
+    end
+    if best == nil then
+        return false
+    end
+    local cropHalf = pfm:getCropHalfWidth()
+    local points = {{x = vx, y = vy, z = vz}}
+    local length, blocked = 0, false
+    local i = best
+    while i <= #track do
+        local a, b = points[#points], track[i]
+        if not self:trackStretchClear(pfm, a, b, cropHalf) then
+            blocked = true
+            break
+        end
+        length = length + MathUtil.vector2Length(b.x - a.x, b.z - a.z)
+        points[#points + 1] = {x = b.x, y = b.y, z = b.z}
+        i = i + 1
+    end
+    if blocked then
+        -- stopped short of the blocked spot: the train overruns its last point
+        local cut = 0
+        while #points > 2 and cut < DriveToVehicleTask.TRACK_STOP_OVERRUN do
+            local p1, p2 = points[#points - 1], points[#points]
+            local l = MathUtil.vector2Length(p2.x - p1.x, p2.z - p1.z)
+            cut = cut + l
+            length = length - l
+            table.remove(points, #points)
+        end
+    end
+    if length < DriveToVehicleTask.TRACK_MIN_LENGTH then
+        return false
+    end
+    local last = points[#points]
+    local startD = MathUtil.vector2Length(target.x - vx, target.z - vz)
+    local endD = MathUtil.vector2Length(target.x - last.x, target.z - last.z)
+    if endD > startD - DriveToVehicleTask.TRACK_MIN_GAIN then
+        return false
+    end
+    self.wayPoints = points
+    self.vehicle.ad.drivePathModule:setWayPoints(points)
+    self.state = DriveToVehicleTask.STATE_DRIVING
+    self.failures = 0
+    self.retryDelay = DriveToVehicleTask.RETRY_WAIT
+    return true
 end
 
 function DriveToVehicleTask:getRouteLength(wayPoints)
@@ -250,7 +506,9 @@ function DriveToVehicleTask:tryBandOrStraight()
     local pfm = self.vehicle.ad.pathFinderModule
     local name, targetName = logName(self.vehicle), logName(self.targetVehicle)
     local path, bandWhy = nil, "no strip flood"
-    if pfm.getBandPath ~= nil then
+    if self.bandTried then
+        bandWhy = "already tried before the grid"
+    elseif pfm.getBandPath ~= nil then
         path, bandWhy = pfm:getBandPath()
     end
     if path ~= nil and #path >= 2 then
@@ -269,6 +527,12 @@ function DriveToVehicleTask:tryBandOrStraight()
         return
     end
     self.failures = self.failures + 1
+    if self.failures >= DriveToVehicleTask.PARK_AFTER_FAILURES and not self.failParkTried then
+        self.failParkTried = true
+        if self:parkInFieldFirst() then
+            return
+        end
+    end
     self:startRetryWait(self.retryDelay, "no route")
     self.retryDelay = math.min(self.retryDelay * 2, DriveToVehicleTask.RETRY_WAIT_MAX)
 end
@@ -317,11 +581,16 @@ function DriveToVehicleTask:update(dt)
     end
     if self.promoted then
         -- the 1st unloader left while this one was still on its way to it: straight to the harvester
-        if self.state == DriveToVehicleTask.STATE_PATHPLANNING or self.state == DriveToVehicleTask.STATE_BAND_WAIT then
+        if self.state == DriveToVehicleTask.STATE_PATHPLANNING or self.state == DriveToVehicleTask.STATE_BAND_WAIT or self.state == DriveToVehicleTask.STATE_PARK_PLAN then
             self.vehicle.ad.pathFinderModule:reset()
         end
+        self:leaveParkSpot()
         self.targetVehicle.ad.modes[AutoDrive.MODE_UNLOAD]:unregisterFollowingUnloader()
         self.vehicle.ad.taskModule:setCurrentTaskFinished()
+        return
+    end
+    if self.state == DriveToVehicleTask.STATE_PARK_SEARCH or self.state == DriveToVehicleTask.STATE_PARK_PLAN or self.state == DriveToVehicleTask.STATE_PARK_DRIVE then
+        self:updatePark(dt)
         return
     end
     -- the harvester or the 1st comes toward this follower: it steps aside (StepAsideTask) and comes back
@@ -332,9 +601,11 @@ function DriveToVehicleTask:update(dt)
     if state == DriveToVehicleTask.STATE_WAIT_FOR_FIRST then
         self:stopHere(dt)
         if self:isFirstReady() then
+            self:leaveParkSpot()
             self:startPlanning(self.why .. ", the 1st is in place")
         elseif (g_time or 0) - (self.waitStart or 0) > DriveToVehicleTask.WAIT_FIRST_MAX then
             self.forceOldTarget = true
+            self:leaveParkSpot()
             self:startPlanning("waited too long")
         end
     elseif state == DriveToVehicleTask.STATE_PATHPLANNING then
@@ -357,6 +628,19 @@ function DriveToVehicleTask:update(dt)
         else
             pfm:update(dt)
             self:stopHere(dt)
+            -- the cut strips before the grid (the grid waits for the same flood anyway)
+            if not self.bandTried and pfm.bandFlood ~= nil and pfm.bandFlood.done and pfm.getBandPath ~= nil then
+                self.bandTried = true
+                local path, bandWhy = pfm:getBandPath()
+                if path ~= nil and #path >= 2 then
+                    pfm:reset()
+                    self.wayPoints = path
+                    self.vehicle.ad.drivePathModule:setWayPoints(path)
+                    self.state = DriveToVehicleTask.STATE_DRIVING
+                    self.failures = 0
+                    self.retryDelay = DriveToVehicleTask.RETRY_WAIT
+                end
+            end
         end
     elseif state == DriveToVehicleTask.STATE_BAND_WAIT then
         self:stopHere(dt)
@@ -423,13 +707,15 @@ function DriveToVehicleTask:update(dt)
 end
 
 function DriveToVehicleTask:abort()
-    if self.state == DriveToVehicleTask.STATE_PATHPLANNING or self.state == DriveToVehicleTask.STATE_BAND_WAIT then
+    if self.state == DriveToVehicleTask.STATE_PATHPLANNING or self.state == DriveToVehicleTask.STATE_BAND_WAIT or self.state == DriveToVehicleTask.STATE_PARK_PLAN then
         self.vehicle.ad.pathFinderModule:reset()
     end
+    self:leaveParkSpot()
     self.targetVehicle.ad.modes[AutoDrive.MODE_UNLOAD]:unregisterFollowingUnloader()
 end
 
 function DriveToVehicleTask:finished(propagate)
+    self:leaveParkSpot()
     if self.targetVehicle ~= nil and self.targetVehicle.ad ~= nil and self.targetVehicle.ad.modes ~= nil then
         self.targetVehicle.ad.modes[AutoDrive.MODE_UNLOAD]:unregisterFollowingUnloader()
     end

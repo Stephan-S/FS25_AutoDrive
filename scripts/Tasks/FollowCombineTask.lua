@@ -32,6 +32,10 @@ FollowCombineTask.LINE_WIDTH_MARGIN = 0.5
 -- combine turn: the unloader waits until the combine is aligned again and drives forward, a stop alone does not end the turn
 FollowCombineTask.TURN_END_FORWARD_TIME = 3000
 FollowCombineTask.TURN_END_MAX_HEADING_CHANGE = 5
+-- a Courseplay turn of the forage harvester starts the wait only with a real heading change between its red and
+-- green turn points; a jog or a row finish handed to its pathfinder (8-37 deg) is driven through, the trailer stays
+-- beside
+FollowCombineTask.CP_TURN_WAIT_MIN_DEG = 90
 FollowCombineTask.TURN_HEADING_SAMPLE_TIME = 2000
 FollowCombineTask.TRACK_REVERSE_DISTANCE = 80 -- m backed off along its own track at most (forage harvester)
 FollowCombineTask.TURN_STOPPED_RELEASE_TIME = 8000 -- ms standing still: the harvester waits for the trailer, no turn
@@ -43,6 +47,9 @@ FollowCombineTask.INNER_TURN_REVERSE_TOLERANCE = 1.5 -- m behind the tractor bef
 FollowCombineTask.INNER_TURN_REVERSE_SPEED = 8 -- km/h
 FollowCombineTask.INNER_TURN_REAR_CHECK = 4 -- m behind the train free of crop to back up
 FollowCombineTask.INNER_TURN_MAX_TIME = 60000
+-- the 3/4 rear place is left at once when the harvester stands still (it waits for the trailer) or when the line to
+-- it is blocked, else both wait for each other; it is not taken again before the harvester has finished that turn
+FollowCombineTask.INNER_TURN_STANDING = 3000 -- ms the harvester stands before the 3/4 place is left
 
 function FollowCombineTask:new(vehicle, combine)
     local o = FollowCombineTask:create()
@@ -354,7 +361,8 @@ function FollowCombineTask:update(dt)
                 FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_TURN - combine turn finished - Heading looks good - start chasing again")
                 self.state = FollowCombineTask.STATE_CHASING
                 return
-            elseif self.angleToCombineHeading > 150 and self.angleToCombineHeading < 210 and self.distanceToCombine < 80 and self.combine.ad.isHarvester then
+            elseif self.angleToCombineHeading > 150 and self.angleToCombineHeading < 210 and self.distanceToCombine < 80 and self.combine.ad.isHarvester
+                and not FollowCombineTask.combineStandsStill(self.combine) then
                 -- Instead of directly trying a long way around to get behind the harvester, let's wait for him to pass us by and then U-turn
                 FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_TURN - combine turn finished - Heading inverted - wait for passby, then U-turn")
                 self.state = FollowCombineTask.STATE_WAIT_FOR_COMBINE_TO_PASS_BY
@@ -477,6 +485,12 @@ function FollowCombineTask:update(dt)
         self.waitForPassByTimer:timer(true, 15000, dt)
         self.vehicle.ad.specialDrivingModule:stopVehicle()
         self.vehicle.ad.specialDrivingModule:update(dt)
+        -- a harvester standing still will not pass by
+        if FollowCombineTask.combineStandsStill(self.combine) then
+            self.stayOnField = true
+            self.state = FollowCombineTask.STATE_WAIT_BEFORE_FINISH
+            return
+        end
         if self.waitForPassByTimer:done() then
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_COMBINE_TO_PASS_BY - passby timer elapsed - heading looks bad - set finished now")
             self.stayOnField = true
@@ -626,6 +640,18 @@ function FollowCombineTask:followChasePoint(dt)
         self.vehicle.ad.specialDrivingModule:stopVehicle()
         self.vehicle.ad.specialDrivingModule:update(dt)
         return
+    end
+    -- another vehicle on the line (e.g. the full unloader still leaving): wait for it, VEHICLE_WAIT_MAX at most
+    if not self.lineClear and self.lineBlockReason ~= nil and string.sub(self.lineBlockReason, 1, 8) == "vehicle " then
+        self.vehicleWaitSince = self.vehicleWaitSince or (g_time or 0)
+        if (g_time or 0) - self.vehicleWaitSince < FollowCombineTask.VEHICLE_WAIT_MAX then
+            self.lineBlockedTimer:timer(false, FollowCombineTask.LINE_BLOCKED_TIME, dt)
+            self.vehicle.ad.specialDrivingModule:stopVehicle()
+            self.vehicle.ad.specialDrivingModule:update(dt)
+            return
+        end
+    else
+        self.vehicleWaitSince = nil
     end
     self.lineBlockedTimer:timer(not self.lineClear, FollowCombineTask.LINE_BLOCKED_TIME, dt)
     if not self.lineClear then
@@ -825,6 +851,8 @@ FollowCombineTask.ROLL_MIN_COMBINE_KMH = 4 -- the harvester slower than this is 
 FollowCombineTask.ROLL_AIM_AHEAD = 8 -- m ahead of the tractor along the harvester
 FollowCombineTask.ROLL_SIDE_ROOM = 0.5 -- m between the header side and the train side at least
 FollowCombineTask.ROLL_CATCH_TIME = 3 -- s: the speed lets the harvester bring a place behind up in about this time
+FollowCombineTask.ROLL_CATCH_MAX_KMH = 6 -- km/h faster than the harvester at most while closing up behind it
+FollowCombineTask.ROLL_CLOSE_TOLERANCE = 0.5 -- m: closer than this to the REAR_CHASE_GAP place, harvester speed
 function FollowCombineTask:rollInsteadOfWait(dt)
     if not AutoDrive.isChopperUnloading(self.vehicle) or self.chasePos == nil or self.combineInTurn
         or FollowCombineTask.isCombineReversing(self.combine) then
@@ -851,6 +879,11 @@ function FollowCombineTask:rollInsteadOfWait(dt)
     if not beside and not behind then
         return false
     end
+    -- behind the harvester the tractor closes up until its nose is REAR_CHASE_GAP behind the harvester rear
+    local rearGap = CombineUnloaderMode ~= nil and CombineUnloaderMode.REAR_CHASE_GAP or 0.5
+    local closeTo = -(combineRear + tractorFront + rearGap)
+    local behindHarvester = (not beside) and behind
+    local catchUp = behindHarvester and oz < closeTo - FollowCombineTask.ROLL_CLOSE_TOLERANCE
     local ax, ay, az = AutoDrive.localToWorld(self.combine, ox, 0, oz + FollowCombineTask.ROLL_AIM_AHEAD, self.combine.ad.ADRootNode)
     local aim = {x = ax, y = ay, z = az}
     self.rollCheckTimer = (self.rollCheckTimer or 0) - dt
@@ -867,6 +900,14 @@ function FollowCombineTask:rollInsteadOfWait(dt)
     local _, _, lz = AutoDrive.worldToLocal(self.vehicle, self.chasePos.x, self.chasePos.y or 0, self.chasePos.z)
     local behind = math.max(0, -lz)
     local speed = math.max(math.min(combineSpeed - FollowCombineTask.ROLL_SLOWER_KMH, combineSpeed - behind / FollowCombineTask.ROLL_CATCH_TIME * 3.6), FollowCombineTask.ROLL_MIN_KMH)
+    if catchUp then
+        -- faster than the harvester while the gap is open, its speed once the nose is REAR_CHASE_GAP behind
+        local gap = closeTo - oz
+        speed = combineSpeed + math.min(FollowCombineTask.ROLL_CATCH_MAX_KMH, gap / FollowCombineTask.ROLL_CATCH_TIME * 3.6)
+    elseif behindHarvester then
+        -- closed up: the harvester's speed, the gap stays
+        speed = combineSpeed
+    end
     self.vehicle.ad.specialDrivingModule:driveToPoint(dt, aim, speed, false, 1, speed, true)
     return true
 end
@@ -880,6 +921,13 @@ FollowCombineTask.END_ROW_BEND_WITHIN = 15 -- m ahead of the harvester
 FollowCombineTask.END_ROW_STOP_ADVANCE = 2 -- m the harvester drives on (trailer under the pipe) after the red point is within reach, before the stop
 FollowCombineTask.END_ROW_DONE_DEG = 120 -- heading change of the harvester before the wait can end
 FollowCombineTask.END_ROW_WAIT_STOPPED = 2000 -- ms: turned and standing = done
+FollowCombineTask.PASS_BY_STOPPED = 3000 -- ms standing: the harvester will not pass by, no wait for it
+
+-- true when the harvester has been standing for PASS_BY_STOPPED ms
+function FollowCombineTask.combineStandsStill(combine)
+    local timer = combine ~= nil and combine.ad ~= nil and combine.ad.noMovementTimer or nil
+    return timer ~= nil and timer.elapsedTime ~= nil and timer.elapsedTime > FollowCombineTask.PASS_BY_STOPPED
+end
 FollowCombineTask.END_ROW_PAUSE = 30000 -- ms after a wait before another one
 FollowCombineTask.END_ROW_STRAIGHT_AHEAD = 30 -- m of Courseplay course read to see the harvester in its row again
 FollowCombineTask.END_ROW_STRAIGHT_DEG = 20 -- deg: course ahead counted as straight below this
@@ -1417,6 +1465,12 @@ function FollowCombineTask:updateInnerTurn(dt)
     end
     if self.innerTurn then
         self.innerTurnTime = self.innerTurnTime + dt
+        local timer = combine.ad ~= nil and combine.ad.noMovementTimer or nil
+        if timer ~= nil and timer.elapsedTime ~= nil and timer.elapsedTime > FollowCombineTask.INNER_TURN_STANDING then
+            self.innerTurnBanned = true
+            self:endInnerTurn(string.format("harvester standing for %.0f s, it waits for me: back to the normal point", timer.elapsedTime / 1000))
+            return
+        end
         local steady = #samples > FollowCombineTask.TURN_HEADING_SAMPLE_TIME / 500 and diff <= FollowCombineTask.TURN_END_MAX_HEADING_CHANGE
         local forward = combine.ad.driveForwardTimer.elapsedTime >= FollowCombineTask.TURN_END_FORWARD_TIME
         if steady and forward and not AutoDrive:getIsCPTurning(combine) then
@@ -1427,7 +1481,10 @@ function FollowCombineTask:updateInnerTurn(dt)
         return
     end
     local turning = self.combineInTurn or AutoDrive:getIsCPTurning(combine)
-    if self.endRowTurn ~= nil or not turning or diff < FollowCombineTask.INNER_TURN_MIN_DEG then
+    if not turning then
+        self.innerTurnBanned = nil
+    end
+    if self.innerTurnBanned or self.endRowTurn ~= nil or not turning or diff < FollowCombineTask.INNER_TURN_MIN_DEG then
         return
     end
     -- 3/4 only in bends under CP_TURN_MAX_DEG
@@ -1549,6 +1606,12 @@ function FollowCombineTask:driveInnerTurn(dt)
     if self.lineCheckTimer < 0 then
         self.lineCheckTimer = FollowCombineTask.LINE_CHECK_INTERVAL
         local clear, reason = FollowCombineTask.isChaseLineClear(self.vehicle, self.combine, point, self.chaseSide)
+        if not clear then
+            -- no stop on a blocked 3/4 line (the harvester then waits for us): back to the normal point
+            self.innerTurnBanned = true
+            self:endInnerTurn(string.format("line to the 3/4 point blocked (%s), no stop, back to the normal point", tostring(reason)))
+            return
+        end
         self.lineClear = clear
     end
     if not self.lineClear then
@@ -1590,9 +1653,22 @@ function FollowCombineTask.getTurnStartReason(combine, heading, samples, chopper
     if FollowCombineTask.isCombineReversing(combine) then
         return prefix .. "reversing"
     end
+    -- Courseplay's turning flag also rises on a jog or a row finish, the harvester turning 8-11 deg. Only its own
+    -- turn points (red/green) with a real heading change count; the rest is driven through
+    if flag == "Courseplay turning" and CombineUnloaderMode ~= nil and CombineUnloaderMode.getCpRowTurn ~= nil then
+        local row = CombineUnloaderMode.getCpRowTurn(combine)
+        if row ~= nil then
+            if not row.turning then
+                return nil, string.format("%s (not in its U-turn, red point %s)", flag, row.dist ~= nil and string.format("at %.0f m", row.dist) or "missing")
+            end
+            if row.deg ~= nil and not row.headland and row.deg < FollowCombineTask.CP_TURN_WAIT_MIN_DEG then
+                return nil, string.format("%s (only %.0f deg between its turn points, a jog)", flag, row.deg)
+            end
+        end
+    end
     -- forage harvester standing still in a straight line: it waits for the trailer, not a turn
     if (combine.lastSpeedReal or 0) < FollowCombineTask.TURN_STOPPED_SPEED and not chopper then
-        return prefix .. "arretee"
+        return prefix .. "stopped"
     end
     if samples ~= nil and #samples > 0 then
         local diff = math.abs(heading - samples[1]) % 360
@@ -1603,7 +1679,7 @@ function FollowCombineTask.getTurnStartReason(combine, heading, samples, chopper
             return prefix .. string.format("turned %.0f deg", diff)
         end
     end
-    return nil, flag
+    return nil, flag ~= nil and (flag .. " (harvester in a straight line, steady heading)") or nil
 end
 
 function FollowCombineTask.getLogName(vehicle)
@@ -1617,14 +1693,24 @@ end
 -- The pole itself stays an obstacle for the box check
 FollowCombineTask.ENCLAVE_RADIUS = 10
 FollowCombineTask.BORDER_BITE = 3 -- m: field ground this close beside an off-field point of the line = the border bitten
+-- the forage harvester's pipe over the grass strip beside the field (corner, first row along a wall): the line to its
+-- place may run over that strip (no crop there, obstacles checked, not another field). The probe looks beside and
+-- along the line (a tractor on the strip facing the field finds no field ground beside the line), whether the
+-- harvester stands or drives (the whole first row is unloaded from the strip)
+FollowCombineTask.STANDING_BORDER_BITE = 12 -- m
+FollowCombineTask.CROP_TIP_LENGTH = 12 -- m of crop (cover summed over the 4 m slices) the line may cross in great difficulty
 
 -- off-field point of the chase line with field ground within BORDER_BITE m across the line: the line only bites the
 -- border . Returns the distance to the field ground,
 -- nil when there is none
-function FollowCombineTask.getBorderBite(x, z, nx, nz)
-    for d = 1, FollowCombineTask.BORDER_BITE do
+function FollowCombineTask.getBorderBite(x, z, nx, nz, maxBite, dx, dz)
+    for d = 1, maxBite or FollowCombineTask.BORDER_BITE do
         for _, side in ipairs({-1, 1}) do
             if AutoDrive.checkIsOnField(x + nx * d * side, 0, z + nz * d * side) then
+                return d
+            end
+            -- along the line too: the line from the grass strip into the field
+            if dx ~= nil and AutoDrive.checkIsOnField(x + dx * d * side, 0, z + dz * d * side) then
                 return d
             end
         end
@@ -1648,6 +1734,33 @@ function FollowCombineTask.isFieldEnclave(x, z)
         end
     end
     return true
+end
+
+FollowCombineTask.LINE_VEHICLE_MARGIN = 2.5 -- m beside the train width: the centre of another vehicle this close to the line blocks it
+FollowCombineTask.LINE_VEHICLE_AHEAD = 3 -- m past the end of the checked line
+FollowCombineTask.VEHICLE_WAIT_MAX = 60000 -- ms waited for a vehicle on the line before the chase is given up as before
+function FollowCombineTask.getVehicleOnLine(vehicle, combine, a, dirX, dirZ, checkLength, halfWidth)
+    if AutoDrive.getAllVehicles == nil then
+        return nil
+    end
+    local myRoot = vehicle.getRootVehicle ~= nil and vehicle:getRootVehicle() or vehicle
+    local combineRoot = combine ~= nil and combine.getRootVehicle ~= nil and combine:getRootVehicle() or combine
+    local margin = halfWidth + FollowCombineTask.LINE_VEHICLE_MARGIN
+    for _, v in pairs(AutoDrive.getAllVehicles()) do
+        if v ~= nil and v.components ~= nil and v.components[1] ~= nil and v ~= vehicle and v ~= combine then
+            local root = v.getRootVehicle ~= nil and v:getRootVehicle() or v
+            if root ~= myRoot and root ~= combineRoot then
+                local x, _, z = getWorldTranslation(v.components[1].node)
+                local rx, rz = x - a.x, z - a.z
+                local along = rx * dirX + rz * dirZ
+                local across = math.abs(rx * (-dirZ) + rz * dirX)
+                if along > -1 and along < checkLength + FollowCombineTask.LINE_VEHICLE_AHEAD and across < margin then
+                    return v
+                end
+            end
+        end
+    end
+    return nil
 end
 
 function FollowCombineTask.isChaseLineClear(vehicle, combine, chasePos, chaseSide)
@@ -1693,6 +1806,12 @@ function FollowCombineTask.isChaseLineClear(vehicle, combine, chasePos, chaseSid
     if pathFinder:boxHitsBlockedZone(midX, midZ, angleRad, checkLength / 2, halfWidth) then
         return false, "blocked zone"
     end
+    -- another vehicle on the line (not the harvester, not the own train, e.g. a full unloader standing in the strip
+    -- while it plans its exit): the line is not free; followChasePoint waits for it instead of giving the chase up
+    local other = FollowCombineTask.getVehicleOnLine(vehicle, combine, a, dirX, dirZ, checkLength, halfWidth)
+    if other ~= nil then
+        return false, "vehicle " .. tostring(other.getName ~= nil and other:getName() or "?")
+    end
 
     local cx, _, cz = getWorldTranslation(combine.components[1].node)
     local combineField = PathFinderModule.getFieldAtPosition(cx, cz)
@@ -1710,6 +1829,11 @@ function FollowCombineTask.isChaseLineClear(vehicle, combine, chasePos, chaseSid
         return field ~= nil and field ~= combineField
     end
     local unloadMode = vehicle.ad.modes ~= nil and vehicle.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+    -- standing forage harvester (it waits for this unloader): wider bite over the grass beside the field, and in great
+    -- difficulty (no route twice from the same place) a tip of crop may be cut
+    local chopper = combine.ad ~= nil and combine.ad.isChopper == true
+    local standing = chopper and math.abs(combine.lastSpeedReal or 0) < 0.0003
+    local cropTip = standing and unloadMode ~= nil and unloadMode.cropTipUntil ~= nil and (g_time or 0) < unloadMode.cropTipUntil
     local sideX, sideZ = -dirZ * (halfWidth - FollowCombineTask.LINE_WIDTH_MARGIN), dirX * (halfWidth - FollowCombineTask.LINE_WIDTH_MARGIN)
     local slices = math.max(1, math.ceil(checkLength / 4))
     local cropSlices, cropName = {}, nil
@@ -1727,6 +1851,14 @@ function FollowCombineTask.isChaseLineClear(vehicle, combine, chasePos, chaseSid
                 -- ground within BORDER_BITE m beside the point; the obstacles were checked above). An unloader stood
                 -- 40 m behind the standing harvester, aligned, and gave the chase up for an axis 1-2 m over the border
                 local bite = FollowCombineTask.getBorderBite(px, pz, -dirZ, dirX)
+                if bite == nil and chopper then
+                    -- grass strip beside the field of the forage harvester (standing or driving): field ground
+                    -- within STANDING_BORDER_BITE m beside or along the line, no standing crop at the point
+                    local wide = FollowCombineTask.getBorderBite(px, pz, -dirZ, dirX, FollowCombineTask.STANDING_BORDER_BITE, dirX, dirZ)
+                    if wide ~= nil and PathFinderModule.readCropAt ~= nil and PathFinderModule.readCropAt(px, pz) == 0 then
+                        bite = wide
+                    end
+                end
                 if bite == nil then
                     return false, "off the field"
                 end
@@ -1774,6 +1906,23 @@ function FollowCombineTask.isChaseLineClear(vehicle, combine, chasePos, chaseSid
         --: a narrow band of crop across
         -- the line (one 4 m slice, clear after it up to the place) is crossed
         local band = #cropSlices == 1 and cropSlices[1].k < slices - 1
+        -- great difficulty near the standing harvester: a tip of crop of CROP_TIP_LENGTH m at most, in consecutive
+        -- slices, may be crossed
+        local cropLength = 0
+        for _, c in ipairs(cropSlices) do
+            cropLength = cropLength + c.ratio * 4
+        end
+        if not tip and cropTip and cropLength <= FollowCombineTask.CROP_TIP_LENGTH then
+            local consecutive = true
+            for i = 2, #cropSlices do
+                if cropSlices[i].k ~= cropSlices[i - 1].k + 1 then
+                    consecutive = false
+                end
+            end
+            if consecutive then
+                return true
+            end
+        end
         if not tip and band then
             return true
         end

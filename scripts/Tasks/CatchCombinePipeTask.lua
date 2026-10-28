@@ -29,6 +29,11 @@ CatchCombinePipeTask.OPEN_REVERSE_DISTANCE = 15 -- m (10 was too short)
 CatchCombinePipeTask.OPEN_REVERSE_FAILS = 2 -- failed plans from the same place before backing off
 CatchCombinePipeTask.OPEN_REVERSE_RADIUS = 15 -- m around a place already backed off from: no new back-off there
 CatchCombinePipeTask.OPEN_REVERSE_PAUSE = 120000 -- ms before a back-off is allowed again at the same place
+-- no route twice near the standing harvester (headland corner): the chase takes over and may cut a tip of crop on its
+-- straight line for CROP_TIP_TIME
+CatchCombinePipeTask.CROP_TIP_DISTANCE = 40  -- m from the standing harvester
+CatchCombinePipeTask.CROP_TIP_ANGLE = 100    -- deg off its heading at most (not the wrong way round)
+CatchCombinePipeTask.CROP_TIP_TIME = 60000   -- ms
 -- forage harvester: no route, nothing moved since the last try (same start, harvester still): wait longer each time
 CatchCombinePipeTask.RETRY_DELAY_MIN = 1000 -- ms
 CatchCombinePipeTask.RETRY_DELAY_MAX = 10000 -- ms
@@ -257,12 +262,19 @@ function CatchCombinePipeTask:update(dt)
                 -- harvester): a short route that cannot turn the train toward the harvester heading is useless, the
                 -- wrong-way ladder runs instead (band turn toward its heading, back off, more room in the next route)
                 if self:isUselessShortRoute(self.wayPoints) then
-                    self.vehicle.ad.pathFinderModule:reset()
+                    local pfm = self.vehicle.ad.pathFinderModule
+                    local wasPartial = pfm.partialPath == true
+                    pfm:reset()
                     self.preplanning = false
                     if self:tryWrongWayTurn(self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombineHeading()) then
                         return
                     end
                     self:updateRetryDelay()
+                    -- a route cut short by the face-to-face rule and refused twice the same way: that rule is lifted for
+                    -- the next plan
+                    if wasPartial and self.lastFailure ~= nil and self.retryDelay > CatchCombinePipeTask.RETRY_DELAY_MIN and not pfm.partialFacingLifted then
+                        pfm.partialFacingLifted = true
+                    end
                     self.state = CatchCombinePipeTask.STATE_DELAY_PATHPLANNING
                     return
                 end
@@ -1079,9 +1091,14 @@ function CatchCombinePipeTask:tryWrongWayTurn(angle)
         self.state = CatchCombinePipeTask.STATE_BAND_TURN
         return true
     end
-    if mode ~= nil and mode.track ~= nil and #mode.track >= 3 and mode.getTrackIndexBehind ~= nil then
+    -- once per place, as the open back-off (else it backs off again and again at the same place)
+    local lastOpen = self.vehicle.ad.openReverseDone
+    local openAllowed = lastOpen == nil or (g_time or 0) - lastOpen.t >= CatchCombinePipeTask.OPEN_REVERSE_PAUSE
+        or MathUtil.vector2Length(vx - lastOpen.x, vz - lastOpen.z) >= CatchCombinePipeTask.OPEN_REVERSE_RADIUS
+    if openAllowed and mode ~= nil and mode.track ~= nil and #mode.track >= 3 and mode.getTrackIndexBehind ~= nil then
         local index, walked = mode:getTrackIndexBehind(CatchCombinePipeTask.OPEN_REVERSE_DISTANCE)
         if index ~= nil and walked ~= nil and walked >= CombineUnloaderMode.TRACK_STOP_DISTANCE + 2 and mode:startTrackReverse(self.combine, nil, index) then
+            self.vehicle.ad.openReverseDone = {x = vx, z = vz, t = g_time or 0}
             if self.state == CatchCombinePipeTask.STATE_PATHPLANNING or self.preplanning then
                 self.vehicle.ad.pathFinderModule:reset()
                 self.preplanning = false
@@ -1218,6 +1235,30 @@ function CatchCombinePipeTask:updateVehicleBlocked(dt, standing)
     return false
 end
 
+-- no route twice from the same place near the standing harvester (its place off the field at a corner, no grid there,
+-- no edge to follow): the chase takes over and its straight line may cut a tip of crop for a while, instead of
+-- backing off along the track again and again
+function CatchCombinePipeTask:tryCropTipHandover(f)
+    if not self:isCombineStanding() or f.cropTipDone then
+        return false
+    end
+    local distance = AutoDrive.getDistanceBetween(self.vehicle, self.combine)
+    local angle = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombineHeading()
+    if distance > CatchCombinePipeTask.CROP_TIP_DISTANCE or angle >= CatchCombinePipeTask.CROP_TIP_ANGLE then
+        return false
+    end
+    f.cropTipDone = true
+    local mode = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]
+    mode.cropTipUntil = (g_time or 0) + CatchCombinePipeTask.CROP_TIP_TIME
+    self:noteHandover()
+    if self.state == CatchCombinePipeTask.STATE_PATHPLANNING or self.preplanning then
+        self.vehicle.ad.pathFinderModule:reset()
+        self.preplanning = false
+    end
+    self.state = CatchCombinePipeTask.STATE_FINISHED
+    return true
+end
+
 function CatchCombinePipeTask:tryOpenReverse()
     if not AutoDrive.isChopperUnloading(self.vehicle) then
         return false
@@ -1239,6 +1280,9 @@ function CatchCombinePipeTask:tryOpenReverse()
     f.count = f.count + 1
     if f.count < CatchCombinePipeTask.OPEN_REVERSE_FAILS or f.done then
         return false
+    end
+    if self:tryCropTipHandover(f) then
+        return true
     end
     if track == nil or #track < 3 then
         return false
