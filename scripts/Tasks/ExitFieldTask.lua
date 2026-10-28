@@ -9,6 +9,15 @@ ExitFieldTask.STATE_TRACK_REVERSE = 5 -- forage harvester: backing off along its
 ExitFieldTask.STATE_PARK_BACK = 6 -- forage harvester: backing off a few meters along its track before driving to its spot
 ExitFieldTask.STATE_BAND_TURN = 7 -- forage harvester: U-turn in the strip, the field exit is behind
 ExitFieldTask.WAIT_OTHER_TIME = 120000 -- ms, parked aside: waits for the next unloader to be in place at the harvester
+-- full, parked aside and the next unloader in place: follows the harvester's own track (cut ground) at a distance and looks for an exit on the way,
+-- instead of waiting at its spot until a passage opens right there
+ExitFieldTask.STATE_FOLLOW_STRIP = 8
+ExitFieldTask.FOLLOW_BEHIND = 60             -- m of harvester track kept between the train and the harvester
+ExitFieldTask.FOLLOW_ATTACH = 20             -- m: the track must pass this close ahead of the tractor to be followed
+ExitFieldTask.FOLLOW_OTHER_GAP = 30          -- m kept behind another unloader standing on the track ahead
+ExitFieldTask.FOLLOW_STEP = 3                -- m between the waypoints taken from the track
+ExitFieldTask.FOLLOW_EXIT_CHECK = 10000      -- ms between two looks for a crop free straight line to a network point
+ExitFieldTask.FOLLOW_EXIT_FULL_RETRY = 60000 -- ms between two full route attempts while following
 
 ExitFieldTask.STRATEGY_START = 0
 ExitFieldTask.STRATEGY_BEHIND_START = 1
@@ -35,12 +44,18 @@ function ExitFieldTask:update(dt)
         if self.vehicle.ad.pathFinderModule:hasFinished() then
             self.wayPoints = self.vehicle.ad.pathFinderModule:getPath()
             if self.wayPoints == nil or #self.wayPoints == 0 then
+                -- the grid may find nothing toward the exit while a route along the cut strip exists: that route is
+                -- taken, as the second unloader does on its way to the first
+                if self:tryBandExit() then
+                    return
+                end
                 -- no clean path to this network point: try the next one right away
                 if not self:startPathPlanning() then
                     return
                 end
             else
                 self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
+                self.vehicle.ad.exitStuckFull = nil
                 -- partial route (guided departure, part of the way): not out of the field at its end
                 self.routeIsPartial = self.vehicle.ad.pathFinderModule.partialPath == true
                 self.state = ExitFieldTask.STATE_DRIVING
@@ -69,6 +84,9 @@ function ExitFieldTask:update(dt)
         end
         self.vehicle.ad.specialDrivingModule:stopVehicle()
         self.vehicle.ad.specialDrivingModule:update(dt)
+        return
+    elseif self.state == ExitFieldTask.STATE_FOLLOW_STRIP then
+        self:updateFollowStrip(dt)
         return
     elseif self.state == ExitFieldTask.STATE_BAND_TURN then
         if ADBandTurn.update(self.vehicle, dt) ~= "running" then
@@ -128,18 +146,237 @@ function ExitFieldTask:update(dt)
     end
 end
 
+-- the grid found no route to the current exit point: the route along the cut strip (band flood of that search),
+-- then the approach points to the network point as the grid route would have had them
+function ExitFieldTask:tryBandExit()
+    local pf = self.vehicle.ad.pathFinderModule
+    local candidate = self.candidates ~= nil and self.candidates[self.candidateIndex] or nil
+    if candidate == nil or pf == nil or pf.getBandPath == nil or self.directExit then
+        return false
+    end
+    local path = pf:getBandPath()
+    if path == nil or #path < 2 then
+        return false
+    end
+    if pf.appendWayPoints ~= nil then
+        for _, p in ipairs(pf.appendWayPoints) do
+            path[#path + 1] = p
+        end
+    end
+    self.wayPoints = path
+    self.vehicle.ad.drivePathModule:setWayPoints(path)
+    self.vehicle.ad.exitStuckFull = nil
+    self.routeIsPartial = false
+    self.routeStart = g_time
+    self.state = ExitFieldTask.STATE_DRIVING
+    return true
+end
+
 function ExitFieldTask:abort()
     ADBandTurn.abort(self.vehicle)
+    self.vehicle.ad.exitStuckFull = nil
 end
 
 function ExitFieldTask:finished()
+    self.vehicle.ad.exitStuckFull = nil
     self.vehicle.ad.taskModule:setCurrentTaskFinished()
+end
+
+-- ---------------------------------------------------------------- full and stuck in the field
+
+-- published on the vehicle while it is full with no clean way out: the field park count leaves it out (a third
+-- unloader may come in), and the other stuck one compares the crop it would have to cross
+function ExitFieldTask:publishStuck()
+    local crop = self:getLeastCropCrossing()
+    self.vehicle.ad.exitStuckFull = {t = g_time or 0, crop = crop}
+end
+
+-- metres of crop on the straight line to the nearest network points, the smallest
+function ExitFieldTask:getLeastCropCrossing()
+    local candidates = self.candidates
+    if candidates == nil or #candidates == 0 then
+        candidates = self:buildCandidates()
+    end
+    local vx, _, vz = getWorldTranslation(self.vehicle.components[1].node)
+    local halfWidth = self.vehicle.ad.pathFinderModule:getTrainWidth() / 2
+    local least = nil
+    for _, c in ipairs(candidates) do
+        local crop = ExitFieldTask.getCropCrossing(vx, vz, c.wp.x, c.wp.z, halfWidth)
+        if least == nil or crop < least then
+            least = crop
+        end
+    end
+    return least or math.huge
+end
+
+-- a straight, crop free line from here to one of the network points: worth a full route attempt
+function ExitFieldTask:isStraightExitOpen()
+    local candidates = self:buildCandidates()
+    local vx, _, vz = getWorldTranslation(self.vehicle.components[1].node)
+    local halfWidth = self.vehicle.ad.pathFinderModule:getTrainWidth() / 2
+    for _, c in ipairs(candidates) do
+        if ExitFieldTask.getCropCrossing(vx, vz, c.wp.x, c.wp.z, halfWidth) < 0.5 then
+            return true, c
+        end
+    end
+    return false
+end
+
+-- the other stuck full unloader with less crop ahead of it leaves first; returns that vehicle, or nil when this one
+-- goes
+function ExitFieldTask:getStuckWithLessCrop()
+    local mine = self.vehicle.ad.exitStuckFull ~= nil and self.vehicle.ad.exitStuckFull.crop or math.huge
+    local others = ExitFieldTask.getOtherUnloaders(self.vehicle)
+    for _, other in ipairs(others) do
+        local st = other.ad.exitStuckFull
+        if st ~= nil then
+            local theirs = st.crop or math.huge
+            if theirs < mine - 0.5 or (math.abs(theirs - mine) <= 0.5 and (other.id or 0) < (self.vehicle.id or 0)) then
+                return other, theirs, mine
+            end
+        end
+    end
+    return nil
+end
+
+-- the harvester's own track (CombineUtil.recordChopperTrail, 1 m points), and the harvester
+function ExitFieldTask:getHarvesterTrail()
+    local harvester = self.vehicle.ad.lastHarvester
+    local trail = harvester ~= nil and harvester.ad ~= nil and harvester.ad.chopperTrail or nil
+    if trail == nil or #trail < 10 then
+        return nil
+    end
+    return trail, harvester
+end
+
+-- waypoints along the harvester's track, from its point nearest ahead of the tractor up to FOLLOW_BEHIND m before
+-- its newest point, cut FOLLOW_OTHER_GAP m before another unloader standing on it. nil and the reason when nothing
+-- can be followed from here
+function ExitFieldTask:buildFollowPath()
+    local trail = self:getHarvesterTrail()
+    if trail == nil then
+        return nil, "no harvester track"
+    end
+    local vx, vy, vz = getWorldTranslation(self.vehicle.components[1].node)
+    local start, best = nil, math.huge
+    for i, p in ipairs(trail) do
+        local d = MathUtil.vector2Length(p.x - vx, p.z - vz)
+        if d < best then
+            local _, _, ahead = AutoDrive.worldToLocal(self.vehicle, p.x, vy, p.z)
+            if ahead > 1 then
+                start, best = i, d
+            end
+        end
+    end
+    if start == nil or best > ExitFieldTask.FOLLOW_ATTACH then
+        return nil, string.format("harvester track %.0f m ahead", best)
+    end
+    local last, behind = #trail, 0
+    while last > start and behind < ExitFieldTask.FOLLOW_BEHIND do
+        behind = behind + MathUtil.vector2Length(trail[last].x - trail[last - 1].x, trail[last].z - trail[last - 1].z)
+        last = last - 1
+    end
+    if last - start < 3 then
+        return nil, string.format("already %.0f m from the harvester", ExitFieldTask.FOLLOW_BEHIND)
+    end
+    local others = ExitFieldTask.getOtherUnloaders(self.vehicle)
+    local positions = {}
+    for _, other in ipairs(others) do
+        if other.components ~= nil and other.components[1] ~= nil then
+            local ox, _, oz = getWorldTranslation(other.components[1].node)
+            table.insert(positions, {x = ox, z = oz, vehicle = other})
+        end
+    end
+    -- the stretch, cut FOLLOW_OTHER_GAP before another unloader standing on the track (on the stretch or just after it)
+    local points, dist, lastP = {}, {}, nil
+    local acc = 0
+    for i = start, #trail do
+        local p = trail[i]
+        if lastP ~= nil then
+            acc = acc + MathUtil.vector2Length(p.x - lastP.x, p.z - lastP.z)
+        end
+        for _, o in ipairs(positions) do
+            if MathUtil.vector2Length(o.x - p.x, o.z - p.z) < 6 then
+                local cut = acc - ExitFieldTask.FOLLOW_OTHER_GAP
+                local kept = {}
+                for k, q in ipairs(points) do
+                    if dist[k] <= cut then
+                        table.insert(kept, q)
+                    end
+                end
+                if #kept < 2 then
+                    return nil, string.format("%s %.0f m ahead on the track", tostring(o.vehicle:getName()), acc)
+                end
+                return kept
+            end
+        end
+        if i <= last and (lastP == nil or acc - (dist[#dist] or 0) >= ExitFieldTask.FOLLOW_STEP or i == last) then
+            table.insert(points, {x = p.x, y = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, p.x, 1, p.z), z = p.z})
+            table.insert(dist, acc)
+        end
+        lastP = p
+    end
+    return points
+end
+
+function ExitFieldTask:startFollowStrip()
+    local path = self:buildFollowPath()
+    if path == nil then
+        return false
+    end
+    self.vehicle.ad.drivePathModule:setWayPoints(path)
+    self.followTime = 0
+    self.followCheck = 0
+    self.state = ExitFieldTask.STATE_FOLLOW_STRIP
+    return true
+end
+
+function ExitFieldTask:updateFollowStrip(dt)
+    self.followTime = (self.followTime or 0) + dt
+    self.followCheck = (self.followCheck or 0) + dt
+    if ExitFieldTask.isOtherApproaching(self.vehicle) then
+        -- an empty unloader comes in behind: aside again so that it can pass, the follow resumes after
+        self.parkTried = false
+        self.candidates = nil
+        self.retryDelay = 1000
+        self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
+        return
+    end
+    if self.followCheck >= ExitFieldTask.FOLLOW_EXIT_CHECK then
+        self.followCheck = 0
+        local open = self:isStraightExitOpen()
+        if open or self.followTime >= ExitFieldTask.FOLLOW_EXIT_FULL_RETRY then
+            self.followTime = 0
+            self.candidates = nil
+            self.retryDelay = 1000
+            self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
+            return
+        end
+    end
+    local wayPoints = self.vehicle.ad.drivePathModule:getWayPoints()
+    if self.vehicle.ad.drivePathModule:isTargetReached() or wayPoints == nil or #wayPoints == 0 then
+        local path = self:buildFollowPath()
+        if path ~= nil then
+            self.vehicle.ad.drivePathModule:setWayPoints(path)
+        else
+            self.vehicle.ad.specialDrivingModule:stopVehicle()
+            self.vehicle.ad.specialDrivingModule:update(dt)
+        end
+        return
+    end
+    self.vehicle.ad.drivePathModule:update(dt)
 end
 
 ExitFieldTask.CANDIDATE_MAX_DISTANCE = 200   -- m, network points considered to leave the field
 ExitFieldTask.CANDIDATE_SPACING = 15         -- m between two tried points
 ExitFieldTask.CANDIDATE_COUNT = 6
-ExitFieldTask.FIELD_POINT_MAX_DISTANCE = 500 -- m, field entrance point tried first
+ExitFieldTask.FIELD_POINT_MAX_DISTANCE = 2000 -- m, field entrance point tried first
+-- the field exit is normally the entrance (the field's own network point): it is tried ENTRANCE_TRIES times,
+-- RETRY_DELAY apart, before any other network point is considered (then the nearest clean one wins, never through
+-- crop, never off the field: the restrictions stay); in a direct exit through the crop it is still preferred unless
+-- it costs much more crop
+ExitFieldTask.ENTRANCE_TRIES = 1
+ExitFieldTask.ENTRANCE_CROP_BONUS = 15 -- m of crop forgiven to the entrance when sorting the direct exit points
 ExitFieldTask.BEHIND_PENALTY = 60            -- m added to points behind the vehicle
 
 -- network points that lead to the destination, easiest first: the closest ones in front of the vehicle,
@@ -163,7 +400,7 @@ function ExitFieldTask:buildCandidates()
         local fieldWp, nextWp = fieldRoute[1], fieldRoute[2]
         local distance = MathUtil.vector2Length(fieldWp.x - vx, fieldWp.z - vz)
         if distance >= minDistance and distance <= ExitFieldTask.FIELD_POINT_MAX_DISTANCE then
-            table.insert(candidates, {wp = fieldWp, vector = {x = nextWp.x - fieldWp.x, z = nextWp.z - fieldWp.z}, score = 0, distance = distance})
+            table.insert(candidates, {wp = fieldWp, vector = {x = nextWp.x - fieldWp.x, z = nextWp.z - fieldWp.z}, score = 0, distance = distance, entrance = true})
         end
     end
 
@@ -221,15 +458,27 @@ function ExitFieldTask:startPathPlanning()
     end
     self.candidateIndex = self.candidateIndex + 1
     local candidate = self.candidates[self.candidateIndex]
+    -- the entrance gave no route (or an unloader waits on it): it is tried again before any other point; another
+    -- exit comes after ENTRANCE_TRIES failures in a row
+    if not self.directExit and self.candidateIndex == 2 and self.candidates[1] ~= nil and self.candidates[1].entrance then
+        self.entranceTries = (self.entranceTries or 0) + 1
+        if self.entranceTries < ExitFieldTask.ENTRANCE_TRIES then
+            self.candidates = nil
+            self.retryDelay = ExitFieldTask.RETRY_DELAY
+            self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
+            return false
+        end
+    end
     if candidate == nil and not self.directExit and AutoDrive.isChopperUnloading(self.vehicle) then
         -- forage harvester only (opening a field: a narrow cut strip, no turning, no passing)
         -- fallback: no forward route found and the field exit is behind, U-turn in the strip first
         if self:startBandTurn() then
             return false
         end
-        local others = ExitFieldTask.countOtherUnloaders(self.vehicle)
+        local others, stuck = ExitFieldTask.countOtherUnloaders(self.vehicle)
         if others > 0 then
             -- other unloaders: never through the crop. Move aside once so the next one can pass, then retry
+            self:publishStuck()
             if not self.parkTried then
                 self.parkTried = true
                 local path, alreadyClear, backIndex = self.vehicle.ad.pathFinderModule:findParkAside(self.vehicle.ad.lastHarvester)
@@ -252,12 +501,30 @@ function ExitFieldTask:startPathPlanning()
                     return false
                 end
             end
+            -- parked aside and the next one in place: follow the harvester's track and look for an exit on the way
+            if self.parkedAside ~= nil and not ExitFieldTask.isOtherApproaching(self.vehicle) and self:startFollowStrip() then
+                self.candidates = nil
+                return false
+            end
             self.candidates = nil
             self.retryDelay = ExitFieldTask.RETRY_DELAY
             self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
             return false
         end
-        -- alone (the others left to unload): direct exit, the point crossing the least crop first
+        if stuck > 0 then
+            -- every other unloader is full and stuck too, no empty one to come: the one with the
+            -- least crop ahead leaves through the crop, the other waits for it to be gone
+            self:publishStuck()
+            local first = self:getStuckWithLessCrop()
+            if first ~= nil then
+                self.candidates = nil
+                self.retryDelay = ExitFieldTask.RETRY_DELAY
+                self.state = ExitFieldTask.STATE_DELAY_PATHPLANNING
+                return false
+            end
+        end
+        -- alone (the others left to unload) or first of the stuck ones: direct exit, the point crossing the least
+        -- crop first
         self.directExit = true
         self.candidates = self:buildCandidates()
         local vx, _, vz = getWorldTranslation(self.vehicle.components[1].node)
@@ -266,8 +533,11 @@ function ExitFieldTask:startPathPlanning()
             c.crop = ExitFieldTask.getCropCrossing(vx, vz, c.wp.x, c.wp.z, halfWidth)
         end
         table.sort(self.candidates, function(a, b)
-            if math.abs(a.crop - b.crop) > 0.5 then
-                return a.crop < b.crop
+            -- the entrance keeps the first place unless another point crosses much less crop
+            local ca = a.crop - (a.entrance and ExitFieldTask.ENTRANCE_CROP_BONUS or 0)
+            local cb = b.crop - (b.entrance and ExitFieldTask.ENTRANCE_CROP_BONUS or 0)
+            if math.abs(ca - cb) > 0.5 then
+                return ca < cb
             end
             return a.distance < b.distance
         end)
@@ -359,8 +629,8 @@ function ExitFieldTask.isOtherApproaching(vehicle)
 end
 
 -- other unloaders working for the same destination (idle or busy), this one left out
-function ExitFieldTask.countOtherUnloaders(vehicle)
-    local count = 0
+function ExitFieldTask.getOtherUnloaders(vehicle)
+    local others = {}
     local marker = vehicle.ad.stateModule:getFirstMarker()
     local seen = {}
     -- every AutoDrive unloader working this field counts, also one briefly unregistered (restarted, going to park)
@@ -370,11 +640,24 @@ function ExitFieldTask.countOtherUnloaders(vehicle)
             if other ~= vehicle and not seen[other] and other.ad ~= nil and other.ad.stateModule ~= nil and other.ad.stateModule:getFirstMarker() == marker
                 and other.ad.stateModule:isActive() and other.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD then
                 seen[other] = true
-                count = count + 1
+                table.insert(others, other)
             end
         end
     end
-    return count
+    return others
+end
+
+-- the others that can still come and unload (not full and stuck themselves), and the stuck full ones apart
+function ExitFieldTask.countOtherUnloaders(vehicle)
+    local free, stuck = 0, 0
+    for _, other in ipairs(ExitFieldTask.getOtherUnloaders(vehicle)) do
+        if other.ad.exitStuckFull ~= nil then
+            stuck = stuck + 1
+        else
+            free = free + 1
+        end
+    end
+    return free, stuck
 end
 
 function ExitFieldTask:selectNextStrategy()
@@ -408,6 +691,8 @@ function ExitFieldTask:getI18nInfo()
         return "$l10n_AD_task_plan_field_exit;" .. string.format(" (%d s)", self:getStateSeconds())
     elseif self.state == ExitFieldTask.STATE_PARKING then
         return "$l10n_AD_task_full_parked_aside;"
+    elseif self.state == ExitFieldTask.STATE_FOLLOW_STRIP then
+        return "$l10n_AD_task_full_follow_strip;"
     elseif self.state == ExitFieldTask.STATE_TRACK_REVERSE or self.state == ExitFieldTask.STATE_PARK_BACK then
         return "$l10n_AD_task_full_reverse_tracks;"
     elseif self.state == ExitFieldTask.STATE_BAND_TURN then

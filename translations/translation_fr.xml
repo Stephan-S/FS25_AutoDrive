@@ -439,6 +439,7 @@
 		<text name="AD_task_plan_field_exit" text="Calcule la sortie du champ" />
 		<text name="AD_task_no_exit_retry" text="Pas de sortie trouvée, nouvel essai dans" />
 		<text name="AD_task_full_parked_aside" text="Pleine, rangée pour laisser passer la benne suivante" />
+		<text name="AD_task_full_follow_strip" text="Pleine, suit la bande coupée jusqu'à une sortie" />
 		<text name="AD_task_full_reverse_tracks" text="Pleine, recule dans ses traces pour laisser passer" />
 		<text name="AD_task_band_turn_exit" text="Demi-tour dans la bande vers la sortie" />
 		<text name="AD_task_planning_way" text="Calcul du trajet" />

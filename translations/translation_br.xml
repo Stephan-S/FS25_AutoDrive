@@ -439,6 +439,7 @@
 		<text name="AD_task_plan_field_exit" text="Planning the way out of the field" />
 		<text name="AD_task_no_exit_retry" text="No way out found, next try in" />
 		<text name="AD_task_full_parked_aside" text="Full, parked aside to let the next trailer pass" />
+		<text name="AD_task_full_follow_strip" text="Full, following the cut strip until an exit opens" />
 		<text name="AD_task_full_reverse_tracks" text="Full, backing up along its tracks to let the next one pass" />
 		<text name="AD_task_band_turn_exit" text="U-turn in the strip toward the exit" />
 		<text name="AD_task_planning_way" text="Planning the way" />

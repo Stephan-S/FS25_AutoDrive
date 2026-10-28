@@ -128,11 +128,28 @@ function ADHarvestManager:update(dt)
             -- forage harvester: its driver (Courseplay) stops for a moment now and then. The unloaders keep their place,
             -- the queue and the attached unloader, and wait; only a long stop releases them as before
             harvester.ad.driverStoppedSince = harvester.ad.driverStoppedSince or g_time
-            if g_time - harvester.ad.driverStoppedSince < ADHarvestManager.CHOPPER_DRIVER_STOP_TIME then
+            -- Courseplay off for CHOPPER_JOB_DONE_TIME = job done, the unloaders leave to unload and park. Only a
+            -- harvester Courseplay has been seen working on can finish its job (not one just parked by AutoDrive or the
+            -- player); before that, the unloaders keep waiting as before
+            if not harvester.ad.jobDone and harvester.ad.cpSeenActive and g_time - harvester.ad.driverStoppedSince >= ADHarvestManager.CHOPPER_JOB_DONE_TIME
+                and not AutoDrive:getIsCPActive(vehicle) and not AutoDrive:getIsEntered(vehicle:getRootVehicle()) then
+                self:onChopperJobDone(harvester, vehicle)
+            end
+            if g_time - harvester.ad.driverStoppedSince < ADHarvestManager.CHOPPER_DRIVER_STOP_TIME and not harvester.ad.jobDone then
                 driverStopped = false
             end
         elseif harvester.ad ~= nil then
             harvester.ad.driverStoppedSince = nil
+            if AutoDrive:getIsCPActive(vehicle) and not harvester.ad.cpSeenActive then
+                harvester.ad.cpSeenActive = true
+            end
+            if harvester.ad.jobDone and AutoDrive:getIsCPActive(vehicle) then
+                harvester.ad.jobDone = nil
+            end
+        end
+        -- job done and AutoDrive (or the player) drives the harvester away: no unloader is called for it
+        if harvester.ad ~= nil and harvester.ad.jobDone and not AutoDrive:getIsCPActive(vehicle) then
+            driverStopped = true
         end
         if driverStopped
             or (vehicle.ad.onRouteToRefuel or vehicle.ad.onRouteToRepair) -- harvester is going to refuel or park
@@ -142,7 +159,7 @@ function ADHarvestManager:update(dt)
             table.insert(self.idleHarvesters, harvester)
             table.removeValue(self.harvesters, harvester)
 
-            if unloader ~= nil then
+            if unloader ~= nil and not (harvester.ad ~= nil and harvester.ad.jobDone) then
                 -- ADHarvestManager.debugMsg(harvester, "ADHarvestManager:update fireUnloader %s"
                 -- , tostring(unloader and unloader:getName())
                 -- )
@@ -353,6 +370,55 @@ end
 
 -- forage harvester only: the unloader it worked with last, until that one is full and leaves to unload
 ADHarvestManager.CHOPPER_DRIVER_STOP_TIME = 300000 -- ms, forage harvester driver stopped longer: unloaders released
+-- Courseplay off the forage harvester this long = its job is done. Every unloader
+-- of this harvester (attached, follower, waiting in the field or on its way) leaves to unload whatever it carries,
+-- then drives to its AutoDrive park destination; an empty one goes to park at once
+ADHarvestManager.CHOPPER_JOB_DONE_TIME = 20000 -- ms
+
+-- the unloaders of a harvester: attached, followers and the ones waiting for its call (same field target)
+function ADHarvestManager:getUnloadersOf(harvester)
+    local list = {}
+    local target = harvester.ad ~= nil and harvester.ad.stateModule ~= nil and harvester.ad.stateModule:getFirstMarker() or nil
+    local function add(v)
+        if v ~= nil and v.ad ~= nil and v.ad.stateModule ~= nil and v.ad.stateModule:isActive() and v.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD and not table.contains(list, v) then
+            table.insert(list, v)
+        end
+    end
+    for _, v in pairs(self.activeUnloaders) do
+        local mode = v.ad ~= nil and v.ad.modes ~= nil and v.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+        if mode ~= nil and (mode.combine == harvester or (target ~= nil and v.ad.stateModule:getFirstMarker() == target)) then
+            add(v)
+        end
+    end
+    for _, v in pairs(self.idleUnloaders) do
+        if target ~= nil and v.ad ~= nil and v.ad.stateModule ~= nil and v.ad.stateModule:getFirstMarker() == target then
+            add(v)
+        end
+    end
+    -- followers and unloaders on their way to a follower
+    if g_currentMission ~= nil and g_currentMission.vehicleSystem ~= nil then
+        for _, v in pairs(g_currentMission.vehicleSystem.vehicles) do
+            local mode = v.ad ~= nil and v.ad.modes ~= nil and v.ad.modes[AutoDrive.MODE_UNLOAD] or nil
+            if mode ~= nil and v.ad.stateModule ~= nil and v.ad.stateModule:isActive() and v.ad.stateModule:getMode() == AutoDrive.MODE_UNLOAD
+                and (mode.combine == harvester or (target ~= nil and v.ad.stateModule:getFirstMarker() == target)) then
+                add(v)
+            end
+        end
+    end
+    return list
+end
+
+-- the forage harvester's job is done: its unloaders leave to unload, then to park
+function ADHarvestManager:onChopperJobDone(harvester, vehicle)
+    harvester.ad.jobDone = true
+    local list = self:getUnloadersOf(harvester)
+    for _, v in ipairs(list) do
+        local mode = v.ad.modes[AutoDrive.MODE_UNLOAD]
+        if mode.onHarvesterJobDone ~= nil then
+            mode:onHarvesterJobDone(harvester)
+        end
+    end
+end
 
 function ADHarvestManager.releaseStickyUnloader(vehicle, reason)
     for _, list in ipairs({ADHarvestManager.harvesters or {}, ADHarvestManager.idleHarvesters or {}}) do

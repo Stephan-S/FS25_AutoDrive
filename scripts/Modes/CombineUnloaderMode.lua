@@ -13,6 +13,7 @@ CombineUnloaderMode.STATE_ACTIVE_UNLOAD_COMBINE = {}
 CombineUnloaderMode.STATE_FOLLOW_CURRENT_UNLOADER = {}
 CombineUnloaderMode.STATE_EXIT_FIELD = {}
 CombineUnloaderMode.STATE_REVERSE_FROM_BAD_LOCATION = {}
+CombineUnloaderMode.STATE_PARK = {} -- harvester job done, driving to the park destination
 
 CombineUnloaderMode.MAX_COMBINE_FILLLEVEL_CHASING = 101
 CombineUnloaderMode.STATIC_X_OFFSET_FROM_HEADER = 1 -- m beyond the header tip (0 m is impossible)
@@ -56,12 +57,86 @@ function CombineUnloaderMode:start(user)
     end
 
     self:reset()
+    self.vehicle.ad.harvestJobDone = nil -- a new start: the former harvester's end of job is forgotten
 
     self.activeTask = self:getNextTask()
     if self.activeTask ~= nil then
         self.vehicle.ad.taskModule:addTask(self.activeTask)
     end
     CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:start end self.state %s", tostring(self:getStateName()))
+end
+
+-- the harvester's job is done. Whatever this unloader was doing, it leaves to
+-- unload what it carries (even a little), then drives to its park destination; an empty one goes to park at once
+CombineUnloaderMode.JOB_DONE_MIN_LOAD = 50 -- liters: less is "empty"
+
+function CombineUnloaderMode:getParkAfterJobMarker()
+    local parkId = self.vehicle.ad.stateModule.getParkDestinationAtJobFinished ~= nil and self.vehicle.ad.stateModule:getParkDestinationAtJobFinished() or -1
+    local marker = parkId ~= nil and parkId >= 1 and ADGraphManager:getMapMarkerById(parkId) or nil
+    if marker ~= nil and marker.id ~= nil then
+        return marker
+    end
+    return nil
+end
+
+function CombineUnloaderMode:onHarvesterJobDone(harvester)
+    if self.vehicle.ad.harvestJobDone then
+        return
+    end
+    local trailers = (self.trailers ~= nil and #self.trailers > 0) and self.trailers or AutoDrive.getAllUnits(self.vehicle)
+    local level = 0
+    if trailers ~= nil and #trailers > 0 then
+        level = AutoDrive.getAllFillLevels(trailers)
+    end
+    local marker = self:getParkAfterJobMarker()
+    local loaded = level >= CombineUnloaderMode.JOB_DONE_MIN_LOAD
+    -- no park destination and nothing to unload: it stays where it is and waits, as before
+    if marker == nil and not loaded then
+        return
+    end
+    self.vehicle.ad.harvestJobDone = true
+    self.vehicle.ad.unloaderQueueTime = nil
+    self.vehicle.ad.taskModule:abortAllTasks()
+    ADHarvestManager.releaseStickyUnloader(self.vehicle, "harvester job done")
+    ADHarvestManager:unregisterAsUnloader(self.vehicle, true) -- no promotion: every unloader leaves
+    self.combine = nil
+    self.followingUnloader = nil
+    self.targetUnloader = nil
+    local nextTask
+    if loaded then
+        local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+        local start = self.vehicle.ad.stateModule:getFirstMarker()
+        local point = start ~= nil and start.id ~= nil and ADGraphManager:getWayPointById(start.id) or nil
+        local distanceToStart = point ~= nil and MathUtil.vector2Length(x - point.x, z - point.z) or 0
+        if AutoDrive.checkIsOnField(x, y, z) and distanceToStart > 30 then
+            nextTask = ExitFieldTask:new(self.vehicle)
+            self.state = self.STATE_EXIT_FIELD
+        else
+            nextTask = UnloadAtDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getSecondMarker().id)
+            self.state = self.STATE_DRIVE_TO_UNLOAD
+        end
+    else
+        nextTask = self:getParkAfterJobTask()
+    end
+    self.activeTask = nextTask
+    if nextTask ~= nil then
+        self.vehicle.ad.taskModule:addTask(nextTask)
+    end
+end
+
+-- the drive to the park destination (AutoDrive's "P" of the vehicle). Without one: back to the field target and
+-- waiting for a call, as before; nil = the usual way
+function CombineUnloaderMode:getParkAfterJobTask()
+    local marker = self:getParkAfterJobMarker()
+    if marker == nil then
+        self.vehicle.ad.harvestJobDone = nil
+        self.parkAfterJobName = nil
+        return nil
+    end
+    self.state = self.STATE_PARK
+    self.vehicle.ad.onRouteToPark = true
+    self.parkAfterJobName = marker.name
+    return DriveToDestinationTask:new(self.vehicle, marker.id)
 end
 
 -- AutoDrive's "stuck" safety (DrivePathModule.handleBeingStuck, 8 s without getting closer to the
@@ -143,7 +218,7 @@ end
 -- It can back off along it to let the harvester or another unloader pass
 CombineUnloaderMode.TRACK_STEP = 3
 CombineUnloaderMode.TRACK_MAX_POINTS = 80
-CombineUnloaderMode.TRACK_LOOK_BEHIND = 6       -- m between the reversing node and the point it aims at
+CombineUnloaderMode.TRACK_LOOK_BEHIND = 5       -- m between the reversing node and the point it aims at (6 cut the inside of the curves into the crop)
 CombineUnloaderMode.TRACK_STOP_DISTANCE = 2.5   -- m between the tractor and its parking point to stop
 CombineUnloaderMode.TRACK_BLOCKED_TIME = 8000   -- ms without moving while reversing: something behind, stop there
 CombineUnloaderMode.TRACK_TIMEOUT = 150000
@@ -261,6 +336,109 @@ end
 -- after a reverse the newest track points lie AHEAD of the tractor. Distances back along the
 -- track are counted from the point closest to the tractor: returns per index the m behind the tractor, and that index
 CombineUnloaderMode.TRACK_REVERSE_MIN = 15 -- m at least when backing off to get free
+-- backing off along a track that curves along the crop: the trailer must not end in the crop
+CombineUnloaderMode.TRACK_CROP_MARGIN = 0.3        -- m beyond the train half width checked for standing crop along the track
+CombineUnloaderMode.TRACK_CROP_STEP = 1.5          -- m between the crop samples along the track
+CombineUnloaderMode.TRACK_CROP_CHECK_INTERVAL = 400 -- ms between the crop checks under the rear of the train while backing
+CombineUnloaderMode.TRACK_REVERSE_TOTAL_MAX = 25   -- m backed off in a row without getting closer to the harvester: no more
+CombineUnloaderMode.TRACK_REVERSE_PROGRESS = 5     -- m closer to the harvester than at the first back-off: the count restarts
+
+-- standing crop at x, z (map reading, isolated plants ignored), nil when nothing can be read
+function CombineUnloaderMode.cropAt(x, z)
+    if PathFinderModule == nil then
+        return nil
+    end
+    if PathFinderModule.getMapCropAt ~= nil then
+        local ok, crop = pcall(PathFinderModule.getMapCropAt, x, z)
+        if ok then
+            return crop
+        end
+    end
+    if PathFinderModule.readCropAt ~= nil then
+        local ok, crop = pcall(PathFinderModule.readCropAt, x, z)
+        if ok then
+            return crop
+        end
+    end
+    return nil
+end
+
+-- the track between two of its points (newer index first) runs clear of standing crop over the train width:
+-- true, or false and the first point with crop beside it
+function CombineUnloaderMode:isTrackStretchCropFree(fromIndex, toIndex)
+    local track = self.track
+    if track == nil or fromIndex == nil or toIndex == nil or fromIndex <= toIndex then
+        return true
+    end
+    local halfW = self.vehicle.ad.pathFinderModule:getTrainWidth() / 2 + CombineUnloaderMode.TRACK_CROP_MARGIN
+    for i = fromIndex, toIndex + 1, -1 do
+        local a, b = track[i], track[i - 1]
+        local dx, dz = b.x - a.x, b.z - a.z
+        local l = math.sqrt(dx * dx + dz * dz)
+        if l > 0.1 then
+            dx, dz = dx / l, dz / l
+            local nx, nz = -dz, dx
+            local d = 0
+            while d <= l do
+                local px, pz = a.x + dx * d, a.z + dz * d
+                for _, side in ipairs({-1, 0, 1}) do
+                    local crop = CombineUnloaderMode.cropAt(px + nx * halfW * side, pz + nz * halfW * side)
+                    if crop ~= nil and crop ~= 0 then
+                        return false, px + nx * halfW * side, pz + nz * halfW * side
+                    end
+                end
+                d = d + CombineUnloaderMode.TRACK_CROP_STEP
+            end
+        end
+    end
+    return true
+end
+
+-- standing crop under the rear of the train while backing toward tx, tz: the trailer left the track (inside of a curve)
+function CombineUnloaderMode:isTrainRearInCrop(tx, tz)
+    local reverseNode = self.vehicle.ad.specialDrivingModule:getReverseNode()
+    if reverseNode == nil then
+        return false
+    end
+    local rx, _, rz = getWorldTranslation(reverseNode)
+    local dx, dz = tx - rx, tz - rz
+    local l = math.sqrt(dx * dx + dz * dz)
+    if l < 0.1 then
+        return false
+    end
+    dx, dz = dx / l, dz / l
+    local nx, nz = -dz, dx
+    local halfW = self.vehicle.ad.pathFinderModule:getTrainWidth() / 2
+    -- the rear corners of the trailer, 1 m behind the reversing node
+    for _, side in ipairs({-1, 1}) do
+        local px, pz = rx + dx * 1 + nx * halfW * side, rz + dz * 1 + nz * halfW * side
+        local crop = CombineUnloaderMode.cropAt(px, pz)
+        if crop ~= nil and crop ~= 0 then
+            return true, px, pz
+        end
+    end
+    return false
+end
+
+-- m backed off along the track in a row (several back-offs without getting closer to the harvester than at the first
+-- one): more than TRACK_REVERSE_TOTAL_MAX and a new back-off is refused (not the same curve again and again)
+function CombineUnloaderMode:trackReverseAllowed(harvester, distance)
+    local d = nil
+    if harvester ~= nil and harvester.components ~= nil then
+        d = AutoDrive.getDistanceBetween(self.vehicle, harvester)
+    end
+    local run = self.trackReverseRun
+    if run == nil or d == nil or run.ref == nil or d < run.ref - CombineUnloaderMode.TRACK_REVERSE_PROGRESS then
+        run = {ref = d, total = 0}
+        self.trackReverseRun = run
+    end
+    if run.total + distance > CombineUnloaderMode.TRACK_REVERSE_TOTAL_MAX then
+        return false, run.total
+    end
+    run.total = run.total + distance
+    return true, run.total
+end
+
 function CombineUnloaderMode:getTrackBehind()
     local track = self.track
     if track == nil or #track < 2 then
@@ -397,7 +575,15 @@ function CombineUnloaderMode:startTrackReverse(harvester, maxDistance, parkIndex
     if parkAhead > 0 then
         return false
     end
-    self.trackReverse = {park = k, target = j, time = 0, stillTime = 0, minDistance = math.huge, sx = vx, sz = vz}
+    -- the track may hug the crop (recorded 0.5 m from it): backing along it the trailer cuts the inside of each curve
+    -- into the crop. No back-off along a track with crop within the train width
+    if not self:isTrackStretchCropFree(j, k) then
+        return false
+    end
+    if not self:trackReverseAllowed(harvester, info) then
+        return false
+    end
+    self.trackReverse = {park = k, target = j, time = 0, stillTime = 0, minDistance = math.huge, sx = vx, sz = vz, cropCheck = 0}
     self.trackReverseMoved = 0
     return true
 end
@@ -451,6 +637,17 @@ function CombineUnloaderMode:updateTrackReverse(dt)
         tr.target = tr.target - 1
     end
     local t = self.track[tr.target]
+    -- the trailer leaves the track on the inside of a curve: standing crop under its rear ends the back-off
+    tr.cropCheck = (tr.cropCheck or 0) + dt
+    if tr.cropCheck >= CombineUnloaderMode.TRACK_CROP_CHECK_INTERVAL then
+        tr.cropCheck = 0
+        if self:isTrainRearInCrop(t.x, t.z) then
+            self:endTrackReverse()
+            sdm:stopVehicle()
+            sdm:update(dt)
+            return "blocked"
+        end
+    end
     sdm:reverseToTargetLocation(dt, {x = t.x, y = t.y, z = t.z}, 6)
     return "running"
 end
@@ -675,8 +872,22 @@ function CombineUnloaderMode:getNextTask()
     elseif self.state == self.STATE_LEAVE_CROP then
         CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getNextTask - STATE_LEAVE_CROP")
         self:setToWaitForCall()
+    elseif self.state == self.STATE_DRIVE_TO_UNLOAD and self.vehicle.ad.harvestJobDone and self:getParkAfterJobMarker() ~= nil then
+        -- unloaded after the harvester's end of job: to the park destination, not back to the field
+        nextTask = self:getParkAfterJobTask()
+    elseif self.state == self.STATE_PARK then
+        self.vehicle.ad.onRouteToPark = false
+        if self.parkAfterJobName ~= nil then
+            AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.INFO, "$l10n_AD_Driver_of; %s $l10n_AD_has_reached; %s", 5000, self.vehicle.ad.stateModule:getName(), self.parkAfterJobName)
+        end
+        nextTask = StopAndDisableADTask:new(self.vehicle, ADTaskModule.DONT_PROPAGATE)
+    elseif self.state == self.STATE_DRIVE_TO_START and self.vehicle.ad.harvestJobDone and self:getParkAfterJobMarker() ~= nil then
+        nextTask = self:getParkAfterJobTask()
     elseif self.state == self.STATE_DRIVE_TO_UNLOAD then
         CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getNextTask - STATE_DRIVE_TO_UNLOAD")
+        if self.vehicle.ad.harvestJobDone then
+            self.vehicle.ad.harvestJobDone = nil
+        end
         nextTask = DriveToDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getFirstMarker().id)
         if (AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYDELIVER or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders") then
             local nextTarget = ADMultipleTargetsManager:getNextTarget(self.vehicle, true)
