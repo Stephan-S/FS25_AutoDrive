@@ -11,37 +11,37 @@
 		<ScrollingLayout profile="fs25_settingsLayout" id="boxLayout">
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="blinkValue" id="blinkValue">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_blinkValue_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_blinkValue_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_blinkValue"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="useBeaconLights" id="useBeaconLights">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_useBeaconLights_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_useBeaconLights_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_useBeaconLights"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="useWorkLightsLoading" id="useWorkLightsLoading">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_worklightsWhenLoading_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_worklightsWhenLoading_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_worklightsWhenLoading"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="useWorkLightsSilo" id="useWorkLightsSilo">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_worklightsWhenSilo_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_worklightsWhenSilo_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_worklightsWhenSilo"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="useHazardLightReverse" id="useHazardLightReverse">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_hazardLightReverse_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_hazardLightReverse_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_hazardLightReverse"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="remainingDriveTimeInterval" id="remainingDriveTimeInterval">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_remainingDriveTimeInterval_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_remainingDriveTimeInterval_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_remainingDriveTimeInterval"/>
 			</Bitmap>

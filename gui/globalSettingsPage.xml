@@ -11,103 +11,103 @@
 		<ScrollingLayout profile="fs25_settingsLayout" id="boxLayout">
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="mapMarkerDetour" id="mapMarkerDetour">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_mapMarkerDetour_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_mapMarkerDetour_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_mapMarkerDetour"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="autoConnectStart" id="autoConnectStart">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_autoConnect_start_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_autoConnect_start_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_autoConnect_start"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="autoConnectEnd" id="autoConnectEnd">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_autoConnect_end_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_autoConnect_end_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_autoConnect_end"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="driverWages" id="driverWages">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_driverWages_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_driverWages_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_driverWages"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="enableTrafficDetection" id="enableTrafficDetection">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_enableTrafficDetection_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_enableTrafficDetection_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_enableTrafficDetection"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="useFolders" id="useFolders">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_useFolders_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_useFolders_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_useFolders"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="maxTriggerDistance" id="maxTriggerDistance">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_maxTriggerDistance_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_maxTriggerDistance_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_maxTriggerDistance"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="collisionHeigth" id="collisionHeigth">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_collisionHeigth_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_collisionHeigth_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_collisionHeigth"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="pathFinderTime" id="pathFinderTime">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_pathFinderTime_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_pathFinderTime_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_pathFinderTime"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="UMRange" id="UMRange">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_UMRange_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_UMRange_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_UMRange"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="Pathfinder" id="Pathfinder">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_pathfinder_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_pathfinder_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_pathfinder"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="enableRoutesManagerOnDediServer" id="enableRoutesManagerOnDediServer">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_enableRoutesManagerOnDediServer_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_enableRoutesManagerOnDediServer_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_enableRoutesManagerOnDediServer"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="autostartHelpers" id="autostartHelpers">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_autostartHelpers_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_autostartHelpers_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_autostartHelpers"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="RecordDriveDirectionOffset" id="RecordDriveDirectionOffset">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_RecordDriveDirectionOffset_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_RecordDriveDirectionOffset_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_RecordDriveDirectionOffset"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="RecordOppositeDriveDirectionOffset" id="RecordOppositeDriveDirectionOffset">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_RecordOppositeDriveDirectionOffset_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_RecordOppositeDriveDirectionOffset_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_RecordOppositeDriveDirectionOffset"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="fieldPointOffset" id="fieldPointOffset">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_fieldPointOffset_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_fieldPointOffset_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_fieldPointOffset"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="maxFieldPointDistance" id="maxFieldPointDistance">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_maxFieldPointDistance_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_maxFieldPointDistance_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_maxFieldPointDistance"/>
 			</Bitmap>

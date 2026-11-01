@@ -11,25 +11,25 @@
 		<ScrollingLayout profile="fs25_settingsLayout" id="boxLayout">
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="preCallLevel" id="preCallLevel">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_preCallLevel_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_preCallLevel_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_preCallLevel"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="callSecondUnloader" id="callSecondUnloader">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_callSecondUnloader_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_callSecondUnloader_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_callSecondUnloader"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<BinaryOption profile="fs25_settingsBinaryOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="activeUnloading" id="activeUnloading">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_activeUnloading_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_activeUnloading_tooltip" textSize="20px" />
 				</BinaryOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_activeUnloading"/>
 			</Bitmap>
 			<Bitmap profile="fs25_multiTextOptionContainer" onCreate="onCreateAutoDriveSettingRow">
 				<MultiTextOption profile="fs25_settingsMultiTextOption" onClick="onOptionChange" onCreate="onCreateAutoDriveSetting" name="chaseSide" id="chaseSide">
-					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_chaseSide_tooltip"/>
+					<Text profile="fs25_multiTextOptionTooltip" name="ignore" text="$l10n_gui_ad_chaseSide_tooltip" textSize="20px" />
 				</MultiTextOption>
 				<Text profile="fs25_settingsMultiTextOptionTitle" text="$l10n_gui_ad_chaseSide"/>
 			</Bitmap>
