@@ -64,6 +64,7 @@ end
 
 function ADSpecialDrivingModule:stopAndHoldVehicle(dt)
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADSpecialDrivingModule:stopAndHoldVehicle start self.targetLX %s", tostring(self.targetLX))
+    -- Use native AI holding below walking speed to prevent creeping.
     if self.targetLX then
         self:stopAndHoldVehicle_org(dt)
     else
@@ -211,7 +212,7 @@ function ADSpecialDrivingModule:driveReverse(dt, maxSpeed, maxAcceleration, guid
     
 end
 
-function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDynamicCollision, maxAcc, maxSpeed)
+function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDynamicCollision, maxAcc, maxSpeed, preciseApproach)
     local speed = math.min(self.vehicle.ad.stateModule:getFieldSpeedLimit(), maxSpeed)
     local acc = math.max(0.75, maxAcc)
 
@@ -228,6 +229,18 @@ function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDyn
 
     --print("Targetspeed: " .. speed .. " distance: " .. self.distanceToChasePos .. " maxFollowSpeed: " .. maxFollowSpeed)
 
+    if preciseApproach then
+        local remaining = math.max(0, self.distanceToChasePos - 0.75)
+        local closingSpeed = math.sqrt(2 * 0.8 * remaining) * 3.6
+
+        speed = math.min(
+            speed,
+            maxFollowSpeed + closingSpeed,
+            self.vehicle.ad.stateModule:getFieldSpeedLimit(),
+            maxSpeed
+        )
+    end
+
     local lx, lz = AutoDrive.getDriveDirection(self.vehicle, point.x, point.y, point.z)
 
     if checkDynamicCollision and (self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) or self.vehicle.ad.sensors.frontSensor:pollInfo()) then
@@ -238,8 +251,13 @@ function ADSpecialDrivingModule:driveToPoint(dt, point, maxFollowSpeed, checkDyn
 
         self.isBlocked = self.stoppedTimer:timer(self.vehicle.lastSpeedReal < 0.00028, 15000, dt)
         -- Allow active braking if vehicle is not 'following' targetSpeed precise enough
-        if (self.vehicle.lastSpeedReal * 3600) > (speed + ADSpecialDrivingModule.MAX_SPEED_DEVIATION) then
-            self.acceleration = -0.6
+        local brakeTolerance = preciseApproach and 0.75 or ADSpecialDrivingModule.MAX_SPEED_DEVIATION
+        local actualSpeed = self.vehicle.lastSpeedReal * 3600
+
+        if actualSpeed > speed + brakeTolerance then
+            acc = -0.6
+        elseif preciseApproach and actualSpeed >= speed - 0.5 then
+            acc = 0
         end
         --ADDrawingManager:addLineTask(x, y, z, point.x, point.y, point.z, 1, 1, 0, 0)
 

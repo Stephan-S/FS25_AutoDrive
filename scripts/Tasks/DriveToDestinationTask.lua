@@ -8,6 +8,8 @@ function DriveToDestinationTask:new(vehicle, destinationID)
     o.vehicle = vehicle
     o.destinationID = destinationID
     o.trailers = nil
+    o.gsRoadBlockMs = 0
+    o.gsRoadReplanUsed = false
     return o
 end
 
@@ -15,7 +17,7 @@ function DriveToDestinationTask:setUp()
     if self.vehicle.spec_locomotive and self.vehicle.ad and self.vehicle.ad.trainModule then
         self.state = DriveToDestinationTask.STATE_DRIVING
         self.vehicle.ad.trainModule:setPathTo(self.destinationID)
-    elseif ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
+    elseif self.gsForceDeparturePath or ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
         self.state = DriveToDestinationTask.STATE_PATHPLANNING
         self.vehicle.ad.pathFinderModule:reset()
         self.vehicle.ad.pathFinderModule:startPathPlanningToNetwork(self.destinationID)
@@ -47,6 +49,25 @@ function DriveToDestinationTask:update(dt)
             self.vehicle.ad.specialDrivingModule:update(dt)
         end
     else
+        local ad = self.vehicle.ad
+        local sensor = ad.collisionDetectionModule
+        local shortBlocked = sensor ~= nil and sensor.gsShortObstacle == true
+        local blocked = sensor ~= nil
+            and (sensor.trafficVehicle ~= nil or sensor.gsLongObstacle == true or shortBlocked)
+        if blocked and math.abs(self.vehicle.lastSpeedReal or 0) < 0.00012
+            and ad.drivePathModule:isOnRoadNetwork() then
+            self.gsRoadBlockMs = (self.gsRoadBlockMs or 0) + dt
+        else
+            self.gsRoadBlockMs = 0
+        end
+        local roadTimeout = shortBlocked and 15000 or 45000
+        if not self.gsRoadReplanUsed and self.gsRoadBlockMs > roadTimeout then
+            self.gsRoadReplanUsed = true
+            ad.pathFinderModule:reset()
+            ad.pathFinderModule:startPathPlanningToNetwork(self.destinationID)
+            self.state = DriveToDestinationTask.STATE_PATHPLANNING
+            return
+        end
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             self:finished()
         else

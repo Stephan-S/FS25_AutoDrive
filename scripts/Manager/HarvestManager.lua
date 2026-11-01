@@ -101,7 +101,8 @@ function ADHarvestManager:update(dt)
         if vehicle.isTrailedHarvester then
             vehicle = vehicle.trailingVehicle
         end
-        if (vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)) then
+        local trailedCPActive = idleHarvester.isTrailedHarvester and AutoDrive:getIsCPActive(vehicle)
+        if (vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or trailedCPActive or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)) then
             -- ADHarvestManager.debugMsg(idleHarvester, "ADHarvestManager:update add to harvesters")
             table.insert(self.harvesters, idleHarvester)
             table.removeValue(self.idleHarvesters, idleHarvester)
@@ -113,7 +114,8 @@ function ADHarvestManager:update(dt)
             vehicle = vehicle.trailingVehicle
         end
         local unloader = self:getAssignedUnloader(harvester)
-        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
+        local trailedCPActive = harvester.isTrailedHarvester and AutoDrive:getIsCPActive(vehicle)
+        if not ((vehicle.getIsAIActive ~= nil and vehicle:getIsAIActive()) or trailedCPActive or (AutoDrive:getIsEntered(vehicle:getRootVehicle()) and AutoDrive.isPipeOut(vehicle)))
             or (vehicle.ad.onRouteToRefuel or vehicle.ad.onRouteToRepair) -- harvester is going to refuel or park
             or (unloader ~= nil and unloader.ad.stateModule:getFirstMarker() ~= vehicle.ad.stateModule:getFirstMarker()) -- harvester - unloader targets do not match
         then
@@ -240,6 +242,13 @@ function ADHarvestManager.doesHarvesterNeedUnloading(harvester, ignorePipe)
     local ret = false
 
     local pipeOut = AutoDrive.isPipeOut(harvester)
+    local stopped = harvester.ad.noMovementTimer.elapsedTime > 5000
+    local fullTrailedCP = false
+    if stopped and harvester.isTrailedHarvester and harvester.ad.isHarvester
+        and AutoDrive:getIsCPActive(harvester.trailingVehicle) then
+        local level, capacity = AutoDrive.getObjectFillLevels(harvester)
+        fullTrailedCP = capacity > 0 and (level / capacity) >= 0.98
+    end
     ret = (
             (
                 (pipeOut)
@@ -252,7 +261,7 @@ function ADHarvestManager.doesHarvesterNeedUnloading(harvester, ignorePipe)
     -- , tostring(pipeOut)
     -- , tostring(harvester.ad.noMovementTimer.elapsedTime > 5000)
     -- )
-    return ret
+    return ret or fullTrailedCP
 end
 
 function ADHarvestManager.isHarvesterActive(harvester)
@@ -354,7 +363,8 @@ function ADHarvestManager:hasHarvesterAvailableUnloader(harvester)
             end
         end
         for _, unloader in pairs(self.activeUnloaders) do
-            if unloader.ad.modes[AutoDrive.MODE_UNLOAD].combine == rootHarvester then
+            local assignedHarvester = unloader.ad.modes[AutoDrive.MODE_UNLOAD].combine
+            if assignedHarvester ~= nil and assignedHarvester.getRootVehicle ~= nil and assignedHarvester:getRootVehicle() == rootHarvester then
                 return true
             end
         end
