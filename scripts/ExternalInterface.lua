@@ -912,7 +912,7 @@ function AutoDrive:setALFillType(vehicle, fillTypeID) -- used by PullDownList
     if vehicle == nil or fillTypeID == nil then
         return false
     end
-    AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType")
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType fillTypeID %s", tostring(fillTypeID))
     local trailers, trailerCount = AutoDrive.getAllUnits(vehicle)
     if trailers and trailerCount > 0 then
         local rootVehicle = trailers[1].getRootVehicle and trailers[1]:getRootVehicle()
@@ -932,9 +932,11 @@ function AutoDrive:setALFillType(vehicle, fillTypeID) -- used by PullDownList
             -- spec_universalAutoload
             local spec = trailer.spec_universalAutoload
             if spec and AutoDrive:hasAL(trailer) then
-                AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType spec_universalAutoload function not supported!")
                 if trailer.ualSetMaterialTypeIndex then
+                    AutoDrive.debugPrint(vehicle, AutoDrive.DC_EXTERNALINTERFACEINFO, "AutoDrive:setALFillType spec_universalAutoload ualSetMaterialTypeIndex")
                     trailer:ualSetMaterialTypeIndex(fillTypeID)
+                else
+                    AutoDrive.errorMsg(vehicle, "AutoDrive:setALFillType spec_universalAutoload function ualSetMaterialTypeIndex not supported!")
                 end
             end
         end
