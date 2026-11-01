@@ -54,6 +54,26 @@ function FollowCombineTask:setUp()
     AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, true)
 end
 
+function FollowCombineTask:reacquireDistantTrailedHarvester()
+    if self.filled or not self.combine.isTrailedHarvester
+        or not self.combine.ad.isHarvester
+        or (self.distanceToCombine or math.huge) <= 45 then
+        return false
+    end
+    local mode = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]
+    if mode == nil or mode.combine ~= self.combine then
+        return false
+    end
+    if not mode.gsFarChaseReplanUsed then
+        mode.gsFarChaseReplanUsed = true
+        self.vehicle.ad.taskModule:addTask(CatchCombinePipeTask:new(self.vehicle, self.combine))
+        self.vehicle.ad.taskModule:setCurrentTaskFinished(ADTaskModule.DONT_PROPAGATE)
+    else
+        self.state = FollowCombineTask.STATE_WAIT_BEFORE_FINISH
+    end
+    return true
+end
+
 function FollowCombineTask:update(dt)
     if self.combine == nil or g_currentMission.nodeToObject[self.combine.components[1].node] == nil then
         self:finished()
@@ -80,6 +100,7 @@ function FollowCombineTask:update(dt)
     if self.stuckTimer:done()
         -- or AutoDrive.getDistanceBetween(self.vehicle, self.combine) < self.MIN_COMBINE_DISTANCE 
         then
+        if self:reacquireDistantTrailedHarvester() then return end
         -- got stuck or to close to combine -> reverse
         FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update - STATE_DRIVING stuck")
         local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
@@ -96,9 +117,18 @@ function FollowCombineTask:update(dt)
 
         if self.combine.ad.isChopper then
             if self.filled and self.chaseSide ~= nil and self.chaseSide ~= AutoDrive.CHASEPOS_REAR then
-                --skip reversing
-                FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - filled chopper")
-                self.state = FollowCombineTask.STATE_FINISHED -- finish immediate
+                -- ChopperExit V1: clear the chopper working corridor before delivery.
+                -- Existing reverse implementation checks the rearmost trailer sensor
+                -- and already limits reverse distance/time in STATE_REVERSING_FROM_CHOPPER.
+                if self.startedChasing
+                    and not self.vehicle.ad.collisionDetectionModule:checkReverseCollision() then
+                    local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
+                    self.reverseStartLocation = {x = x, y = y, z = z}
+                    self.state = FollowCombineTask.STATE_REVERSING_FROM_CHOPPER
+                else
+                    -- If the trailer's rear is obstructed, do NOT force a reverse.
+                    self.state = FollowCombineTask.STATE_WAIT_BEFORE_FINISH
+                end
                 return
             elseif self.filled and self.chaseSide ~= nil and self.chaseSide == AutoDrive.CHASEPOS_REAR then
                 FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING CHASEPOS_REAR - filled chopper")
@@ -116,6 +146,7 @@ function FollowCombineTask:update(dt)
         local wrongChopperHeading = self.combine.ad.isChopper and (self.angleToCombineHeading > 90 and self.distanceToCombine < 30)
 
         if (self.angleWrongTimer.elapsedTime > 15000) or wrongChopperHeading then
+            if self:reacquireDistantTrailedHarvester() then return end
             -- if stuck with harvester - try reverse
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - stuck -> stuckTimer:%s angleWrongTimer:%s"
             , tostring(self.stuckTimer:done()), tostring(self.angleWrongTimer.elapsedTime > 15000))
@@ -147,7 +178,7 @@ function FollowCombineTask:update(dt)
             return
         end
 
-        if (not self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:isUnloaderOnCorrectSide(self.chaseSide)) and (not AutoDrive.combineIsTurning(self.combine)) then
+        if (not self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:isUnloaderOnCorrectSide(self.chaseSide)) and (not self.gsStableTurn) then
             if self.lastChaseSide ~= CombineUnloaderMode.CHASEPOS_REAR then
                 FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - switching chase side from side to elsewhere - let's wait for passby next")
                 self.state = FollowCombineTask.STATE_WAIT_FOR_PASS_BY
@@ -159,9 +190,9 @@ function FollowCombineTask:update(dt)
         if self.combine.ad.isReverseAttached then
             movingDirection = -self.combine.movingDirection
         end
-        if AutoDrive.combineIsTurning(self.combine) then
+        if self.gsStableTurn then
             -- harvester turns
-            --print("Waiting for turn now - 1- t:" ..  tostring(AutoDrive.combineIsTurning(self.combine)) .. " anglewrongtimer: " .. tostring(self.angleWrongTimer.elapsedTime > 10000))      
+            --print("Waiting for turn now - 1- t:" ..  tostring(self.gsStableTurn) .. " anglewrongtimer: " .. tostring(self.angleWrongTimer.elapsedTime > 10000))
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - combineIsTurning")
             self.state = FollowCombineTask.STATE_WAIT_FOR_TURN
             return
@@ -179,7 +210,7 @@ function FollowCombineTask:update(dt)
             return
         end
 
-        if AutoDrive.combineIsTurning(self.combine) then
+        if self.gsStableTurn then
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_TURN - combineIsTurning")
             if self.combine.ad.isHarvester and (self.distanceToCombine < ((self.vehicle.size.length + self.combine.size.length) / 2 + 10)) then
                 -- harvester
@@ -247,7 +278,7 @@ function FollowCombineTask:update(dt)
 
         -- check if we could continue
         local combineSensors = self.combine.ad.sensors or self.combineRootVehicle.ad.sensors
-        if not AutoDrive.combineIsTurning(self.combine) and 
+        if not self.gsStableTurn and
             (
                 (
                     combineSensors.frontSensorFruit:pollInfo() and 
@@ -429,7 +460,9 @@ function FollowCombineTask:updateStates(dt)
     local x, y, z = getWorldTranslation(self.vehicle.components[1].node)
     local cx, cy, cz = getWorldTranslation(self.combine.components[1].node)
 
-    self.chasePos, self.chaseSide = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getPipeChasePosition()
+    local mode = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]
+    self.gsStableTurn = mode:getStableCPTurn(dt)
+    self.chasePos, self.chaseSide = mode:getPipeChasePosition(nil, self.gsStableTurn)
 
     self.angleToCombineHeading = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombineHeading()
     self.angleToCombine = self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:getAngleToCombine()
@@ -465,6 +498,20 @@ function FollowCombineTask:followChasePoint(dt)
         self.vehicle.ad.specialDrivingModule:stopVehicle()
         self.vehicle.ad.specialDrivingModule:update(dt)
     else
+        -- Near-Chase vehicle collision guard
+        -- Exclude the serviced harvester, not unrelated traffic.
+        local sensor = self.vehicle.ad.sensors and self.vehicle.ad.sensors.frontSensorDynamicLong
+        if sensor ~= nil then
+            local box = sensor:getBoxShape()
+            local corners = {box.topLeft, box.topRight, box.downRight, box.downLeft}
+            corners[1].y = box.y
+            if AutoDrive:checkForVehicleCollision(self.vehicle, corners, {self.combine:getRootVehicle()}) then
+                self.vehicle.ad.specialDrivingModule:stopVehicle(true)
+                self.vehicle.ad.specialDrivingModule:update(dt)
+                return
+            end
+        end
+
         self.startedChasing = true
         local combineSpeed = self.combine.lastSpeedReal * 3600
         local acc = 1
@@ -474,15 +521,73 @@ function FollowCombineTask:followChasePoint(dt)
             acc = 1
             totalSpeedLimit = math.max(combineSpeed + 20, 10)
         end
-        self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.chasePos, combineSpeed, false, acc, totalSpeedLimit)
+        -- StopHold Guard: slow final crawl, stationary only.
+        local root = self.combineRootVehicle or self.combine
+        local targetSpeed = math.max(
+            self.combine.lastSpeedReal or 0,
+            root.lastSpeedReal or 0
+        ) * 3600
+
+        if self.gsApproachCrawl and targetSpeed < 0.5 then
+            totalSpeedLimit = math.min(totalSpeedLimit, 3.5)
+        end
+
+        self.vehicle.ad.specialDrivingModule:driveToPoint(dt, self.chasePos, combineSpeed, false, acc, totalSpeedLimit, true)
     end
 end
 
 function FollowCombineTask:shouldWaitForChasePos(dt)
     local angle = self:getAngleToChasePos()
     self.angleWrongTimer:timer(angle > 50, 3000, dt)
-    local _, _, diffZ = AutoDrive.worldToLocal(self.vehicle, self.chasePos.x, self.chasePos.y, self.chasePos.z)
-    return self.angleWrongTimer:done() or  diffZ <= -1 --or (not self.combine.ad.sensors.frontSensorFruit:pollInfo())
+
+    local diffX, _, diffZ = AutoDrive.worldToLocal(
+        self.vehicle,
+        self.chasePos.x, self.chasePos.y, self.chasePos.z
+    )
+
+    -- StopHold Guard V1
+    -- Brake early only when approaching a stationary harvester.
+    local root = self.combineRootVehicle or self.combine
+    local combineSpeed = math.max(
+        self.combine.lastSpeedReal or 0,
+        root.lastSpeedReal or 0
+    ) * 3600
+    local ownSpeed = (self.vehicle.lastSpeedReal or 0) * 3600
+
+    if combineSpeed >= 0.5 then
+        -- Moving harvester: preserve original chase behavior.
+        self.gsStopHoldBraking = false
+        self.gsApproachCrawl = false
+    else
+        -- Keep the existing AD stop/hold brake active until stopped.
+        if self.gsStopHoldBraking then
+            if ownSpeed > 0.9 then
+                return true
+            end
+
+            self.gsStopHoldBraking = false
+            self.gsApproachCrawl = true
+
+        elseif not self.gsApproachCrawl then
+            local targetAhead = diffZ > 0 and diffZ < 55
+            local aligned = math.abs(diffX) < 3.0
+                and (self.angleToCombineHeading or 180) < 25
+
+            if targetAhead and aligned and ownSpeed > 2 then
+                local v = ownSpeed / 3.6
+                local brakeDistance = 0.8 + v * 0.5
+                    + (v * v) / (2 * 1.3)
+
+                if diffZ <= brakeDistance then
+                    self.gsStopHoldBraking = true
+                    return true
+                end
+            end
+        end
+    end
+
+    -- Original AutoDrive stop conditions remain active.
+    return self.angleWrongTimer:done() or diffZ <= -1
 end
 
 function FollowCombineTask:isCaughtCurrentChaseSide()

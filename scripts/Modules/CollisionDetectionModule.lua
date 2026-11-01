@@ -40,6 +40,7 @@ function ADCollisionDetectionModule:update(dt)
 end
 
 function ADCollisionDetectionModule:detectObstacle()
+    self.gsShortObstacle = false
     if AutoDrive.getSetting("enableTrafficDetection") >= 1 then
         if self.vehicle.ad.sensors.frontSensorDynamicShort:pollInfo() then
             local frontSensorDynamicInBunkerArea = false
@@ -61,6 +62,8 @@ function ADCollisionDetectionModule:detectObstacle()
                 if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_SENSORINFO) then
                     AutoDrive.debugMsg(self.vehicle, "CDM: detectObstacle frontSensorDynamicShort:pollInfo -> return true")
                 end
+                self.gsShortObstacle = true
+                self.gsLongObstacle = false
                 return true
             end
         end
@@ -83,6 +86,7 @@ function ADCollisionDetectionModule:detectObstacle()
             AutoDrive.debugMsg(self.vehicle, "CDM: detectObstacle self.detectedCollision %s", tostring(self.detectedCollision))
         end
     end
+    self.gsLongObstacle = self.detectedCollision
     return self.detectedCollision
 end
 
