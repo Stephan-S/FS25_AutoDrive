@@ -85,7 +85,7 @@ function AutoDriveSync.streamWriteGraph(streamId, wayPoints, mapMarkers, groups)
 
     local wayPointsCount = #wayPoints
     -- writing the amount of bits we are going to use as "MWPC_SEND_NUM_BITS"
-    self.MWPC_SEND_NUM_BITS = math.ceil(math.log(wayPointsCount + 1, 2))
+    self.MWPC_SEND_NUM_BITS = math.ceil(math.log(wayPointsCount + 1)/math.log(2))
     streamWriteUIntN(streamId, self.MWPC_SEND_NUM_BITS, self.MWPC_SNB_SEND_NUM_BITS)
 
     -- writing the amount of waypoints we are going to send
