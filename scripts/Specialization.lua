@@ -320,6 +320,7 @@ function AutoDrive:onPostLoad(savegame)
             camera.storedIsRotatable = camera.isRotatable
         end
     end
+    AutoDrive.setValidSupportedFillType(self)
 end
 
 function AutoDrive:onWriteStream(streamId, connection)
