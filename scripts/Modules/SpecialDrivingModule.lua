@@ -77,13 +77,13 @@ function ADSpecialDrivingModule:stopAndHoldVehicle(dt)
         -- shrinking and lateral grip is lost, which makes trailers jackknife. Normalized to the valid range while
         -- keeping the original ratios between the speed steps.
         if self.vehicle.lastSpeedReal * 3600 > 10 then
-            self.vehicle:updateVehiclePhysics(-speedSign * 1.0, 0, true, dt)
+            self.vehicle:updateVehiclePhysics(-speedSign * 1, 0, true, dt)
         elseif self.vehicle.lastSpeedReal * 3600 > 5 then
-            self.vehicle:updateVehiclePhysics(-speedSign * 0.67, 0, true, dt)
+            self.vehicle:updateVehiclePhysics(-speedSign * 1, 0, true, dt)
         elseif self.vehicle.lastSpeedReal * 3600 > 1 then
-            self.vehicle:updateVehiclePhysics(-speedSign * 0.33, 0, true, dt)
+            self.vehicle:updateVehiclePhysics(-speedSign * 0.75, 0, true, dt)
         elseif self.vehicle.lastSpeedReal * 3600 > 0.2 then
-            self.vehicle:updateVehiclePhysics(-speedSign * 0.2, 0, true, dt)
+            self.vehicle:updateVehiclePhysics(-speedSign * 0.5, 0, true, dt)
         else
             self.vehicle:updateVehiclePhysics(0.0001, 0, true, dt) -- enable handbrake
         end
