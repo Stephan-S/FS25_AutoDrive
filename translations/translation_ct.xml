@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="插入司機名稱：" />
 		<text name="gui_ad_enterGroupNameTitle"						text="創建文件夾" />
 		<text name="gui_ad_enterGroupNameText"							text="插入文件夾名稱：" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="自動加油" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="當燃油油位低時，行駛至加油目的地（接近加油觸發器）。" />
 		<text name="gui_ad_autoRepair"									text="自動維修" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="是 - AutoDrive 根據需要打開和關閉拖車蓋/否 - AutoDrive 不會打開或關閉拖車蓋" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="向前轉彎機動" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="是 - AutoDrive 卸料車輛嘗試規劃一條前進路徑以適應聯合收割機的 90° 轉彎。 / 否 - 卸載車輛將在轉彎前倒車" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="自動裝載：卸載位置" />
 		<text name="gui_ad_ALUnload_tooltip"							text="開關自動裝載(Autoload拖車MOD)，裝載拖車中間卸載，左右邊卸載(位置取決於車輛設置,而不是AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

@@ -8,7 +8,12 @@ function AutoDrive.isUnloadFillLevelReached(object, fillLevel, fillFreeCapacity,
         Logging.error("[AD] AutoDrive.isUnloadFillLevelReached object %s rootVehicle == nil", tostring(object))
         return  false
     end
-    return (fillLevel > 0) and ((fillFreeCapacity / math.max(fillCapacity, 0.0001)) <= 1 - (AutoDrive.getSetting("unloadFillLevel", rootVehicle) * 0.999))
+    if rootVehicle.ad.hasAL then
+        local unloadFillLevelAL = AutoDrive.getSetting("unloadFillLevelAL", rootVehicle)
+        return ((fillLevel > 0) and (fillLevel >= unloadFillLevelAL)) or unloadFillLevelAL == 0
+    else
+        return (fillLevel > 0) and ((fillFreeCapacity / math.max(fillCapacity, 0.0001)) <= 1 - (AutoDrive.getSetting("unloadFillLevel", rootVehicle) * 0.999))
+    end
 end
 
 -- new, all fill levels, fuel fillTypes only from 2nd unit - to be used mainly for transportation
@@ -1207,4 +1212,290 @@ function AutoDrive:setValidSupportedFillTypesForAllVehicles()
     for _, vehicle in pairs(self:getAllVehicles()) do
         AutoDrive.setValidSupportedFillType(vehicle)
     end
+end
+
+function AutoDrive.getNearestProductionSpawner(vehicle)
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getNearestProductionSpawner start")
+    if vehicle == nil then
+        return
+    end
+    local minDistance = math.huge
+    local nearestPlacable
+    local maxDistance = AutoDrive.getMaxTriggerDistance(vehicle)
+    local vx, _, vz = getWorldTranslation(vehicle.components[1].node)
+    for _, placeable in pairs(g_currentMission.placeableSystem.placeables) do
+        local productionPoint = placeable.spec_productionPoint and placeable.spec_productionPoint.productionPoint
+        if productionPoint then
+            local palletSpawner = productionPoint.palletSpawner
+            if palletSpawner then
+                local spawnPlaces = palletSpawner.spawnPlaces
+                if spawnPlaces then
+                    for _, spawnPlace in pairs(spawnPlaces) do
+                        if spawnPlace.startNode then
+                            local px1, _, pz1 = getWorldTranslation(spawnPlace.startNode)
+                            local px2 = spawnPlace.startX + spawnPlace.dirX * spawnPlace.width
+                            local pz2 = spawnPlace.startZ + spawnPlace.dirZ * spawnPlace.width
+                            local d1 = MathUtil.vector2Length(px1 - vx, pz1 - vz)
+                            local d2 = MathUtil.vector2Length(px2 - vx, pz2 - vz)
+                            if d1 < minDistance then
+                                minDistance = d1
+                                nearestPlacable = placeable
+                            end
+                            if d2 < minDistance then
+                                minDistance = d2
+                                nearestPlacable = placeable
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if minDistance <= maxDistance then
+        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getNearestProductionSpawner found placeable at minDistance %s", tostring(minDistance))
+        return nearestPlacable
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getNearestProductionSpawner end no placeable found at maxDistance %s", tostring(maxDistance))
+end
+
+function AutoDrive.getProductionSpawnerFillTypes(vehicle, placeable)
+    local actualFarmID = vehicle and vehicle.ad and vehicle.ad.stateModule and vehicle.ad.stateModule:getActualFarmId()
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getProductionSpawnerFillTypes start actualFarmID %s", tostring(actualFarmID))
+    if vehicle == nil or placeable == nil then
+        return
+    end 
+    if not g_currentMission.accessHandler:canFarmAccess(actualFarmID, placeable) then
+        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getProductionSpawnerFillTypes no access to placeable")
+        return
+    end
+    local productionSpawnerFillTypes = {}
+    local productionPoint = placeable.spec_productionPoint and placeable.spec_productionPoint.productionPoint
+    if productionPoint then
+        local palletSpawner = productionPoint.palletSpawner
+        if palletSpawner then
+            for fillTypeId, _ in pairs(palletSpawner.fillTypeToSpawnPlaces) do
+                if not table.contains(productionSpawnerFillTypes, fillTypeId) and palletSpawner.fillTypeIdToPallet[fillTypeId] then
+                    table.insert(productionSpawnerFillTypes, fillTypeId)
+                end
+            end
+            local productions = productionPoint.productions
+            if productions then
+                for _, production in pairs(productions) do
+                    for _, output in pairs(production.outputs) do
+                        if not table.contains(productionSpawnerFillTypes, output.type) and palletSpawner.fillTypeIdToPallet[output.type] then
+                            table.insert(productionSpawnerFillTypes, output.type)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getProductionSpawnerFillTypes end #productionSpawnerFillTypes %d", #productionSpawnerFillTypes)
+    return productionSpawnerFillTypes
+end
+
+function AutoDrive.productionSpawnerSpawn(vehicle, placeable, fillTypeIndex, amount)
+    local actualFarmID = vehicle and vehicle.ad and vehicle.ad.stateModule and vehicle.ad.stateModule:getActualFarmId()
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.productionSpawnerSpawn start actualFarmID %s fillTypeIndex %s amount %s"
+    , tostring(actualFarmID)
+    , tostring(fillTypeIndex)
+    , tostring(amount)
+    )
+    if vehicle == nil or placeable == nil or fillTypeIndex == nil or fillTypeIndex == 0 or amount == nil or amount == 0 then
+        return
+    end 
+    if not g_currentMission.accessHandler:canFarmAccess(actualFarmID, placeable) then
+        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.productionSpawnerSpawn no access to placeable")
+        return
+    end
+    local productionPoint = placeable.spec_productionPoint and placeable.spec_productionPoint.productionPoint
+    if productionPoint then
+        local palletSpawner = productionPoint.palletSpawner
+        if palletSpawner then
+            if productionPoint.storage and productionPoint.storage:getFillLevel(fillTypeIndex) > 0 then
+                local pallet = palletSpawner.fillTypeIdToPallet[fillTypeIndex]
+                if pallet then
+                    local maxAmount = math.floor(productionPoint.storage:getFillLevel(fillTypeIndex) / pallet.capacity)
+                    local requestAmount = math.min(maxAmount, amount)
+                    if requestAmount > 0 then
+                        for i = 1, requestAmount, 1 do
+                            AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.productionSpawnerSpawn spawnPallet")
+                            palletSpawner:spawnPallet(actualFarmID, fillTypeIndex, productionPoint.palletSpawnRequestCallback, productionPoint)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.productionSpawnerSpawn end")
+end
+
+function AutoDrive.getNearestObjectStorage(vehicle)
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getNearestObjectStorage start")
+    if vehicle == nil then
+        return
+    end
+    local minDistance = math.huge
+    local nearestPlacable
+    local maxDistance = AutoDrive.getMaxTriggerDistance(vehicle)
+    local vx, _, vz = getWorldTranslation(vehicle.components[1].node)
+    for _, placeable in pairs(g_currentMission.placeableSystem.placeables) do
+        if placeable.spec_objectStorage and placeable.spec_objectStorage.objectSpawn and placeable.spec_objectStorage.objectSpawn.area then
+            for _, spawnArea in pairs(placeable.spec_objectStorage.objectSpawn.area) do
+                if spawnArea.startNode and spawnArea.endNode then
+                    local px1, _, pz1 = getWorldTranslation(spawnArea.startNode)
+                    local px2, _, pz2 = getWorldTranslation(spawnArea.endNode)
+                    local d1 = MathUtil.vector2Length(px1 - vx, pz1 - vz)
+                    local d2 = MathUtil.vector2Length(px2 - vx, pz2 - vz)
+                    if d1 < minDistance then
+                        minDistance = d1
+                        nearestPlacable = placeable
+                    end
+                    if d2 < minDistance then
+                        minDistance = d2
+                        nearestPlacable = placeable
+                    end
+                end
+            end
+        end
+    end
+    if minDistance <= maxDistance then
+        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getNearestObjectStorage found placeable at minDistance %s", tostring(minDistance))
+        return nearestPlacable
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getNearestObjectStorage end no placeable found at maxDistance %s", tostring(maxDistance))
+end
+
+function AutoDrive.getObjectStorageFillTypes(vehicle, placeable)
+    local actualFarmID = vehicle and vehicle.ad and vehicle.ad.stateModule and vehicle.ad.stateModule:getActualFarmId()
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getObjectStorageFillTypes start actualFarmID %s", tostring(actualFarmID))
+    if vehicle == nil or placeable == nil or actualFarmID == nil or actualFarmID == FarmManager.SPECTATOR_FARM_ID then
+        return
+    end
+    local objectStorageFillTypes = {}
+    local specObjectStorage = placeable.spec_objectStorage
+    if specObjectStorage then
+        specObjectStorage:updateObjectStorageObjectInfos()
+        if specObjectStorage.objectInfosUpdateTimer == 0 then
+            local objectInfos = specObjectStorage:getObjectStorageObjectInfos()
+            if objectInfos then
+                AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getObjectStorageFillTypes #objectInfos %s", tostring(#objectInfos))
+                for objectInfoIndex, objectInfo in pairs(objectInfos) do
+                    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getObjectStorageFillTypes numObjects %s", tostring(specObjectStorage.objectInfos[objectInfoIndex].numObjects))
+                    for _, object in pairs(objectInfo.objects ) do
+                        local farmId
+                        local fillType
+                        -- bales
+                        if object.baleAttributes then
+                            farmId = object.baleAttributes.farmId
+                            fillType = object.baleAttributes.fillType
+                            AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getObjectStorageFillTypes bale farmId %s fillType %s"
+                            , tostring(farmId)
+                            , tostring(fillType)
+                            )
+                        end
+                        -- pallets
+                        if object.palletAttributes then
+                            farmId = object.palletAttributes.ownerFarmId
+                            fillType = object.palletAttributes.fillType
+                            AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getObjectStorageFillTypes pallet farmID %s fillType %s"
+                            , tostring(farmId)
+                            , tostring(fillType)
+                            )
+                        end
+                        if farmId and farmId > 0 and actualFarmID == farmId and fillType ~= FillType.UNKNOWN then
+                            if not table.contains(objectStorageFillTypes, fillType) then
+                                table.insert(objectStorageFillTypes, fillType)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.getObjectStorageFillTypes end #objectStorageFillTypes %s", tostring(objectStorageFillTypes))
+    return objectStorageFillTypes
+end
+
+function AutoDrive.objectStorageSpawn(vehicle, placeable, fillTypeIndex, amount)
+    local actualFarmID = vehicle and vehicle.ad and vehicle.ad.stateModule and vehicle.ad.stateModule:getActualFarmId()
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn start actualFarmID %s fillTypeIndex %s amount %s"
+    , tostring(actualFarmID)
+    , tostring(fillTypeIndex)
+    , tostring(amount)
+    )
+    if vehicle == nil or placeable == nil or fillTypeIndex == nil or fillTypeIndex == 0 or amount == nil or amount == 0 or actualFarmID == nil or actualFarmID == FarmManager.SPECTATOR_FARM_ID then
+        return
+    end
+    local foundMatchingObjects = false
+    local matchingObjects = {}
+    local specObjectStorage = placeable.spec_objectStorage
+    if specObjectStorage then
+        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn #specObjectStorage.storedObjects %s", tostring(#specObjectStorage.storedObjects))
+        specObjectStorage:updateObjectStorageObjectInfos()
+        if not specObjectStorage.objectSpawn.isActive then
+            if specObjectStorage.objectInfosUpdateTimer == 0 then
+                local objectInfos = specObjectStorage:getObjectStorageObjectInfos()
+                if objectInfos then
+                    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn #objectInfos %s", tostring(#objectInfos))
+                    for objectInfoIndex, objectInfo in pairs(objectInfos) do
+                        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn numObjects %s", tostring(specObjectStorage.objectInfos[objectInfoIndex].numObjects))
+                        for _, object in pairs(objectInfo.objects ) do
+                            local farmId
+                            local fillType
+                            -- bales
+                            if object.baleAttributes then
+                                farmId = object.baleAttributes.farmId
+                                fillType = object.baleAttributes.fillType
+                                AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn bale farmId %s fillType %s"
+                                , tostring(farmId)
+                                , tostring(fillType)
+                                )
+                            end
+                            -- pallets
+                            if object.palletAttributes then
+                                farmId = object.palletAttributes.ownerFarmId
+                                fillType = object.palletAttributes.fillType
+                                AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn pallet farmID %s fillType %s"
+                                , tostring(farmId)
+                                , tostring(fillType)
+                                )
+                            end
+                            if farmId and farmId > 0 and actualFarmID == farmId and fillType == fillTypeIndex then
+                                AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn match found fillType %s"
+                                , tostring(fillType)
+                                )
+                                table.insert(matchingObjects, object)
+                                foundMatchingObjects = true
+                            end
+                        end
+                        if foundMatchingObjects then
+                            break
+                        end
+                    end
+                    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn foundMatchingObjects %s"
+                    , tostring(foundMatchingObjects)
+                    )
+                    if foundMatchingObjects then
+                        local toSpawn = math.min(amount, #matchingObjects)
+                        AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn toSpawn %s #matchingObjects %s"
+                        , tostring(toSpawn)
+                        , tostring(#matchingObjects)
+                        )
+                        local objectInfo = {}
+                        local objects = {}
+                        for i = 1, toSpawn, 1 do
+                            table.insert(objects, matchingObjects[i])
+                        end
+                        objectInfo.objects = objects
+                        objectInfo.numObjects = #objects
+                        table.insert(specObjectStorage.objectInfos, objectInfo)
+                        placeable:removeAbstractObjectsFromStorage(#specObjectStorage.objectInfos, toSpawn, nil)
+                        specObjectStorage:setObjectStorageObjectInfosDirty()
+                    end
+                end
+            end
+        end
+    end
+    AutoDrive.debugPrint(vehicle, AutoDrive.DC_TRAILERINFO, "AutoDrive.objectStorageSpawn end")
 end

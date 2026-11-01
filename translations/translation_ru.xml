@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Введите имя водителя:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Создание папки" />
 		<text name="gui_ad_enterGroupNameText"							text="Введите название папки:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Автодозаправка топливом" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Двигаться к месту заправки (ближайший триггер заправки), если уровень топлива низкий." />
 		<text name="gui_ad_autoRepair"									text="Автоматический ремонт" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Да - AutoDrive открывает и закрывает тенты по мере необходимости / Нет - тенты прицепа не открываются или закрываются с помощью AutoDrive." />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Планирование поворота" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Да - Разгрузчики AutoDrive пытаются планировать путь вперед чтобы адаптироваться к повороту комбайна на 90°. / Нет - Разгрузчики сдадут назад перед поворотом." />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Автозагрузка: положение разгрузки" />
 		<text name="gui_ad_ALUnload_tooltip"							text="ВЫКЛ-без авторазгрузки, центр-разгрузить на платформу, влево / вправо от техники (Положение зависит от настроек автомобиля, а не AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

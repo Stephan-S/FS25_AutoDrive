@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Vytovořit jméno řidiče:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Vytvořit adresář" />
 		<text name="gui_ad_enterGroupNameText"							text="Vytvořit název adresáře:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Automatické dotankování" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Při nízké hladině paliva jeď k benzince (pokud je v blízkosti benzinky)." />
 		<text name="gui_ad_autoRepair"									text="Automatické opravy" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Ano - AutoDrive podle potřeby otevírá a zavírá kryty přívěsu / Ne - kryty přívěsu nebude AutoDrive otevírat ani zavírat" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Manévr otáčení dopředu" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Ano – Odvozce AutoDrive se snaží naplánovat cestu vpřed, aby se přizpůsobila 90° otočením sklízecí mlátičky. / Ne - Odvozce před otočením zacouvají" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Automatické nakládání: Poloha vykládání" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Vypnuto bez automatického vykládání, vykládání uprostřed na nakládací plošině, poloha vykládání vozidla vlevo / vpravo (Poloha závisí na nastavení vozidla, ne AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

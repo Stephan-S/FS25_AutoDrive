@@ -1021,6 +1021,32 @@ AutoDrive.settings.autoTrailerCover = {
     isVehicleSpecific = true
 }
 
+AutoDrive.settings.ALspawnObjects = {
+    values = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 150, 200, 300, 400, 500},
+    texts = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 150, 200, 300, 400, 500},
+    default = 2,
+    current = 2,
+    text = "gui_ad_ALspawnObjects",
+    tooltip = "gui_ad_ALspawnObjects_tooltip",
+    translate = false,
+    isVehicleSpecific = true,
+    isCopyPaste = true
+}
+
+AutoDrive.settings.unloadFillLevelAL = {
+    values = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 150, 200, 300, 400, 500},
+    texts = {"UAL 0", "UAL 1", "UAL 2", "UAL 3", "UAL 4", "UAL 5", "UAL 6", "UAL 7", "UAL 8", "UAL 9", "UAL 10", "UAL 15", "UAL 20", "UAL 25", "UAL 30", "UAL 35", "UAL 40", "UAL 45", "UAL 50", "UAL 60", "UAL 70", "UAL 80", "UAL 90", "UAL 100", "UAL 150", "UAL 200", "UAL 300", "UAL 400", "UAL 500"},
+    default = 2,
+    current = 2,
+    -- text = "gui_ad_ALunloadFillLevel",
+    -- tooltip = "gui_ad_ALunloadFillLevel_tooltip",
+    text = "",
+    tooltip = "",
+    translate = false,
+    isVehicleSpecific = true,
+    isCopyPaste = true
+}
+
 AutoDrive.settings.ALUnload = {
     values = {0, 1, 2, 3, 4},
     texts = {"gui_ad_AL_off", "gui_ad_AL_center", "gui_ad_AL_left", "gui_ad_AL_behind", "gui_ad_AL_right"},
@@ -1031,6 +1057,7 @@ AutoDrive.settings.ALUnload = {
     translate = true,
     isVehicleSpecific = true
 }
+
 AutoDrive.settings.ALUnloadWaitTime = {
     values = {0, 1000, 3000, 5000, 10000, 15000, 20000, 25000, 30000, 60000, 120000, 300000, 600000},
     texts = {"0", "1s", "3s", "5s", "10s", "15s", "20s", "25s", "30s", "1min", "2min", "5min", "10min"},

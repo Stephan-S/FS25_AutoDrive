@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Írja be a szállító nevét:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Mappa létrehozása" />
 		<text name="gui_ad_enterGroupNameText"							text="Írja be a mappa nevét:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Automatikus tankolás" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Ha alacsony az üzemanyagszint, menjen az üzemanyagtöltési célig (közel az üzemanyag kiadóhoz)." />
 		<text name="gui_ad_autoRepair"									text="Automatikus javítás" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Igen - az AutoDrive szükség esetén nyissa meg és zárja be a pótkocsi fedelét / Nem - az AutoDrive nem nyitja vagy zárja le a pótkocsi fedelét" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Forwards turning manoeuvre" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Autoload: Kirakodási pozíció" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Ki - nincs automatikus kirakodás, középső kirakodás a rakodóplatformon, a jármű bal / jobb oldali kirakodási helyzete (a pozíció a jármű beállításától függ, nem AD-tól!)" />
 		<text name="gui_ad_Text_all"									text="All" />

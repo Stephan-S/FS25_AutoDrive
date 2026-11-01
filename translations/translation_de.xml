@@ -137,7 +137,7 @@
 		<text name="gui_ad_parkInField"								text="Parken im Feld" />
 		<text name="gui_ad_parkInField_tooltip"						text="Nach Drescher abladen im Feld parken - falls nicht in Frucht stehend." />
 		<text name="gui_ad_unloadFillLevel"							text="Abladen ab Level" />
-		<text name="gui_ad_unloadFillLevel_tooltip"					text="Nach Drescher abladen - direkt abfahren und nicht auf nächsten Drescher warten ab dieser Füllung." />
+		<text name="gui_ad_unloadFillLevel_tooltip"					text="n% - Ab diesen % Füllstand / UAL n Objekten bei UniversalAutoload fährt das Fahrzeug abladen. 0% / UAL 0 - Es wird weiter gefahren auch wenn der Füllstand nicht erreicht wurde, bei UniversalAutoload wird 1x versucht zu laden." />
 		<text name="gui_ad_findDriver"									text="Abfahrer finden" />
 		<text name="gui_ad_findDriver_tooltip"							text="Suche nach nahestem Abfahrer (Zieleinstellung ignorieren)" />
 		<text name="gui_ad_gui_scale"									text="GUI-Skalierung des AutoDrive-HUDs" />
@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Fahrernamen eingeben:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Ordner erstellen" />
 		<text name="gui_ad_enterGroupNameText"							text="Ordnernamen eingeben:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatische Funktionen" />
 		<text name="gui_ad_autoRefuel"									text="Automatisch Auftanken" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Bei einem niedrigen Tanklevel wird automatisch ein Ziel in Tankstellennähe angefahren." />
 		<text name="gui_ad_autoRepair"									text="Automatische Reparatur" />
@@ -247,14 +248,17 @@
 		<text name="gui_ad_syncMultiTargets"							text="Synchronisiere 'Mehrere Ziele'" />
 		<text name="gui_ad_syncMultiTargets_tooltip"					text="Wenn mehrere Fahrer die selben Ziele anfahren, wird die Zielauswahl synchronisiert." />
 		<text name="gui_ad_enableParkAtJobFinished"					text="Am Ende parken" />
-		<text name="gui_ad_enableParkAtJobFinished_tooltip"			text="Nur in Modi Abholen und Abliefern, Abladen: Wenn Aufgabe beendet, wird die gespeicherte Parkposition des aktuell gewählten Fahrzeug / Anhänger / Anbaugerät angefahren. Auf Dedi-Servern nur für Fahrzeug-Parkplatz!" />
+		<text name="gui_ad_enableParkAtJobFinished_tooltip"			text="Wenn Aufgabe beendet, wird die gespeicherte Parkposition des aktuell gewählten Fahrzeug / Anhänger / Anbaugerät angefahren." />
 		<text name="gui_ad_autoTipSide"								text="Automatische Abladeseite" />
 		<text name="gui_ad_autoTipSide_tooltip"						text="Ja - AutoDrive wählt Abladeseite automatisch / Nein - die gewählte Abladeseite wird verwendet." />
 		<text name="gui_ad_autoTrailerCover"							text="Automatische Abdeckungen" />
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Ja - AutoDrive öffnet und schließt Abdeckungen von Anhängern wenn notwendig / Nein - die Abdeckungen werden von AutoDrive nicht geöffnet oder geschlossen." />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Vorwärts Wendemanöver" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Ja - Abfahrer planen eine Vorwärtswende, wenn Drescher wendet. / Nein - Abfahrer setzen kurz zurück." />
-		<text name="gui_ad_ALUnload"									text="Autoload: Abladeposition" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Auslagern Objekte" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Anzahl der Objekte die auf einmal aus dem Lager geholt werden sollen. Achtung: abhängig von der Größe des Auslagerplatzes, der Größe der einzelnen Objekte, Anzahl der übereinander ausgelagerten Objekte etc.! 0 - Nichts auslagern, nur laden was schon da ist! Wenn Ladegut Alle im HUD gewählt, wird nichts ausgelagert! Mehrfachauswahl im HUD möglich." />
+		<text name="gui_ad_ALUnload"									text="UniversalAutoload: Abladeposition" />
 		<text name="gui_ad_ALUnload_tooltip"							text="aus-kein Abladen, mittig-auf Ladefläche abladen, links-, rechts-auf Standard-Entladeposition (Positionen sind im Fahrzeug festgelegt, nicht in AD!)" />
 		<text name="gui_ad_Text_all"									text="Alle" />
 		<text name="gui_ad_AL_off"										text="abladen aus" />
@@ -262,7 +266,7 @@
 		<text name="gui_ad_AL_left"									text="abladen links" />
 		<text name="gui_ad_AL_behind"									text="abladen hinten" />
 		<text name="gui_ad_AL_right"									text="abladen rechts" />
-		<text name="gui_ad_ALUnloadWaitTime"							text="Autoload: Wartezeit Be- und Abladen" />
+		<text name="gui_ad_ALUnloadWaitTime"							text="UniversalAutoload: Wartezeit Be- und Abladen" />
 		<text name="gui_ad_ALUnloadWaitTime_tooltip"					text="Nach Be- und Abladen warten bevor weitergefahren wird - meist sinnvoll bei Beladen an Produktionen oder Abladen mittig: 0-kein Warten, sonst Wartezeit wie ausgewählt." />
 		<text name="gui_ad_scanConfirmationTextTitle"					text="AutoDrive - Streckengenerierung" />
 		<text name="gui_ad_scanConfirmationText"						text="Soll AutoDrive aus den Verkehrs- und Helferdaten der Karte ein Wegenetz erzeugen?" />

@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Inserir nome do driver:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Criar pasta" />
 		<text name="gui_ad_enterGroupNameText"							text="Inserir nome da pasta:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Reabastecimento Automático" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Dirija até o destino de reabastecimento (próximo ao gatilho de reabastecimento) quando o nível de combustível estiver baixo." />
 		<text name="gui_ad_autoRepair"									text="Automatic Repairing" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Sim - o AutoDrive abre e fecha as coberturas dos reboques conforme necessário / Não - as coberturas dos reboques não serão abertas ou fechadas pela AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Forwards turning manoeuvre" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="AutoLoad: Unload Position" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Off-no automatic unload, center-unload on loading platform, left / right vehicle unload position (Position depend on vehicle setup, not AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

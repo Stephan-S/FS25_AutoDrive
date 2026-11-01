@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Geef bestuurder een naam:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Maak folder" />
 		<text name="gui_ad_enterGroupNameText"							text="Geef folder een naam:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Automatisch tanken" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Naar tank bestemming rijden (dichtbij tank trigger) als de tank bijna leeg is." />
 		<text name="gui_ad_autoRepair"									text="Automatisch repareren" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Ja - AutoDrive opent en sluit de aanhanger afdekking wanneer nodig / Nee - aanhangwagen afdekking wordt niet geopend of gesloten door AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Vooruit draaiende manoeuvre" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Ja - AutoDrive lossers proberen een pad naar voren te plannen om zich aan te passen aan de 90° draaiingen van de oogstmachine. / Nee - ontladers zullen omkeren voor ze draaien" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Autoload: Los positie" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Uit-niet automatisch lossen, midden-centraal lossen op de laadplaats, links-/ rechts-/ lospositie van het voertuig (De positie hangt af van de instelling van het voertuig, niet van AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

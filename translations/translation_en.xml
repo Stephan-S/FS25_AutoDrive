@@ -137,7 +137,7 @@
 		<text name="gui_ad_parkInField"								text="Park in field" />
 		<text name="gui_ad_parkInField_tooltip"						text="After unloading a combine - if not parked in fruit" />
 		<text name="gui_ad_unloadFillLevel"							text="Unload fill level" />
-		<text name="gui_ad_unloadFillLevel_tooltip"					text="After unloading combine. Directly go to deliver at this fill level." />
+		<text name="gui_ad_unloadFillLevel_tooltip"					text="n% - With this % filllevel / UAL n objects for UniversalAutoload go to deliver. 0% / UAL 0 - try to load and continue even if nothing was loaded!" />
 		<text name="gui_ad_findDriver"									text="Find Driver" />
 		<text name="gui_ad_findDriver_tooltip"							text="Search for close by drivers (Ignore destination)" />
 		<text name="gui_ad_gui_scale"									text="Gui scale for AutoDrive HUD" />
@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Insert driver name:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Create Folder" />
 		<text name="gui_ad_enterGroupNameText"							text="Insert folder name:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Automatic Refueling" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Drive to refuel destination (close to refuel trigger) when fuel level is low." />
 		<text name="gui_ad_autoRepair"									text="Automatic Repairing" />
@@ -247,14 +248,17 @@
 		<text name="gui_ad_syncMultiTargets"							text="Sync multiple targets" />
 		<text name="gui_ad_syncMultiTargets_tooltip"					text="Multiple drivers using the same folder for multiple targets will synchronize next targets" />
 		<text name="gui_ad_enableParkAtJobFinished"					text="Park at Job finished" />
-		<text name="gui_ad_enableParkAtJobFinished_tooltip"			text="Only available in Modes Pickup and Deliver, Deliver: If Job is finished, stored parking position of vehicle / attachment will be driven to. On Dedi-Server only available for vehicle parking place!" />
+		<text name="gui_ad_enableParkAtJobFinished_tooltip"			text="If Job is finished, stored parking position of vehicle / attachment will be driven to." />
 		<text name="gui_ad_autoTipSide"								text="Automatic Tip Side" />
 		<text name="gui_ad_autoTipSide_tooltip"						text="Yes - AutoDrive select tip side automatically / No - the already selected tip side will be used" />
 		<text name="gui_ad_autoTrailerCover"							text="Automatic Trailer Covers" />
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Yes - AutoDrive open and close trailer covers as needed / No - trailer covers will not be opened or closed by AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Forwards turning maneuver" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
-		<text name="gui_ad_ALUnload"									text="Autoload: Unload Position" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
+		<text name="gui_ad_ALUnload"									text="UniversalAutoload: Unload Position" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Off-no automatic unload, center-unload on loading platform, left / right vehicle unload position (Position depend on vehicle setup, not AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />
 		<text name="gui_ad_AL_off"										text="Unload Off" />
@@ -262,7 +266,7 @@
 		<text name="gui_ad_AL_left"									text="Unload left" />
 		<text name="gui_ad_AL_behind"									text="Unload behind" />
 		<text name="gui_ad_AL_right"									text="Unload right" />
-		<text name="gui_ad_ALUnloadWaitTime"							text="Autoload: wait time un-/load" />
+		<text name="gui_ad_ALUnloadWaitTime"							text="UniversalAutoload: wait time un-/load" />
 		<text name="gui_ad_ALUnloadWaitTime_tooltip"					text="Wait time after un-/loading, before continue to drive - useful for loading at productions or unload center: 0-no wait, wait selected time" />
 		<text name="gui_ad_scanConfirmationTextTitle"					text="AutoDrive - Network Generation" />
 		<text name="gui_ad_scanConfirmationText"						text="Should AutoDrive generate a route network from the traffic and helper data on the map?" />

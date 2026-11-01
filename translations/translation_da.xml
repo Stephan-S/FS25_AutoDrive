@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Indsæt kører navn:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Lav Mappe" />
 		<text name="gui_ad_enterGroupNameText"							text="Indsæt mappe navn:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Automatisk Tankning" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Kør til brændstofdestinationen (tæt på tanken), når brændstofniveauet er lavt." />
 		<text name="gui_ad_autoRepair"									text="Automatisk Reparering" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Ja - AutoDrive åbner og lukker pressening efter behov / Nej - pressening åbnes eller lukkes ikke af AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Manøvre fremad" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Ja - AutoDrive aflæssere forsøger at planlægge en vej fremad for at tilpasse sig 90° drejninger af mejetærskeren. / Nej - Aflæssere vil bakke før sving" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="AutoLoad: Aflæsposition" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Fra-ingen automatisk aflæsning, midter-aflæsning på læsseplatform, venstre/bag/højre køretøjs aflæsningsposition (position afhænger af køretøjets opsætning, ikke AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

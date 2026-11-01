@@ -1,4 +1,5 @@
 LoadAtDestinationTask = ADInheritsFrom(AbstractTask)
+LoadAtDestinationTask.debug = false
 
 LoadAtDestinationTask.STATE_PATHPLANNING = 1
 LoadAtDestinationTask.STATE_DRIVING = 2
@@ -10,7 +11,7 @@ function LoadAtDestinationTask:new(vehicle, destinationID)
     o.vehicle = vehicle
     o.destinationID = destinationID
     o.trailers = nil
-    o.waitForALLoadTimer = AutoDriveTON:new()
+    o.waitForUALLoadTimer = AutoDriveTON:new()
     o.activatedUALLoading = false
     o.isReverseTriggerReached = false
     return o
@@ -40,9 +41,10 @@ function LoadAtDestinationTask:setUp()
     self.fillFreeCapacity = 0
     self.lastFillLevel = 0
     self.filledToUnload = false
+    self.UALAttempts = 0
     self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
     self.isReverseTriggerReached = false
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:setUp end self.state %s", tostring(self.state))
+    LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:setUp end self.state %s", tostring(self.state))
 end
 
 function LoadAtDestinationTask:update(dt)
@@ -50,7 +52,6 @@ function LoadAtDestinationTask:update(dt)
         if self.vehicle.ad.pathFinderModule:hasFinished() then
             self.wayPoints = self.vehicle.ad.pathFinderModule:getPath()
             if self.wayPoints == nil or #self.wayPoints == 0 then
-                Logging.error("[AutoDrive] Could not calculate path - shutting down")
                 self.vehicle.ad.taskModule:abortAllTasks()
                 self.vehicle:stopAutoDrive()
                 AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_cannot_find_path;", 5000, self.vehicle.ad.stateModule:getName())
@@ -66,14 +67,14 @@ function LoadAtDestinationTask:update(dt)
         end
     else
         -- STATE_DRIVING
-        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update self.state %s", tostring(self.state))
+        LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update self.state %s", tostring(self.state))
         if self.vehicle.ad.drivePathModule:isTargetReached() then
             --Check if we have actually loaded / tried to load
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update isTargetReached")
+            LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update isTargetReached")
             AutoDrive.setTrailerCoverOpen(self.vehicle, self.trailers, true)
 
             if (self.vehicle.ad.stateModule:getCanRestartHelper() and self.vehicle.ad.stateModule:getMode() == AutoDrive.MODE_PICKUPANDDELIVER) then
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update stopAutoDrive")
+                LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update stopAutoDrive")
                 -- pass over to CP
                 self.vehicle:stopAutoDrive()
             else
@@ -83,9 +84,13 @@ function LoadAtDestinationTask:update(dt)
 
                 if self.vehicle.ad.hasAL then
                     -- UAL special handling - loading only possible if vehicle not moving -> self.lastSpeedReal < 0.0005
-                    -- assume no influence on aPalletAutoLoader
                     if not self.activatedUALLoading then
                         if self.vehicle.lastSpeedReal < 0.0005 then
+                            local objectsAvailable = AutoDrive.objectsToLoadAvailable(self.vehicle, self.trailers)
+                            if not objectsAvailable then
+                                self.UALAttempts = self.UALAttempts + 1
+                                self:spawnObjects(self.UALAttempts)
+                            end
                             -- start loading
                             self.activatedUALLoading = true
                             self.ualIterations = 0
@@ -93,14 +98,14 @@ function LoadAtDestinationTask:update(dt)
                             self.lastFillLevel = self.fillLevel
                             self.numberOfSelectedFillTypes = #self.vehicle.ad.stateModule:getSelectedFillTypes()
                             AutoDrive.activateALTrailers(self.vehicle, self.trailers)
+                            self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
                         end
-                        self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
                     end
                 else
                     if ((AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_ONLYPICKUP or AutoDrive.getSetting("rotateTargets", self.vehicle) == AutoDrive.RT_PICKUPANDDELIVER) and AutoDrive.getSetting("useFolders"))
                         or (AutoDrive.getSetting("unloadFillLevel", self.vehicle) == 0)
                     then
-                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update -> self:finished")
+                        LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update -> self:finished")
                         self:finished()
                         return
                     end
@@ -111,44 +116,59 @@ function LoadAtDestinationTask:update(dt)
                     self.vehicle.ad.trailerModule:update(dt)
                 else
                     -- try to load somehow while standing at destination
-                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger")
+                    LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update not isActiveAtTrigger")
                     self.loadRetryTimer:timer(true, self.retryTime, dt)
                     if self.loadRetryTimer:done() then
                         -- performance: avoid to initiate loading while standing at destination to often
                         self.loadRetryTimer:timer(false)      -- clear timer
-                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update try loading somehow")
+                        LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update try loading somehow")
 
                         self.fillLevel, _, self.filledToUnload, self.fillFreeCapacity = AutoDrive.getAllFillLevels(self.trailers)
                         if self.activatedUALLoading == true then
-                            -- AL loading activated
-                            if self.numberOfSelectedFillTypes > 1 then
-                                -- multiple selected
-                                if self.lastFillLevel ~= self.fillLevel and self.fillFreeCapacity > 0 and not self.filledToUnload then
-                                    -- objects loaded and not full - set retryTime to AL wait time, min LOAD_RETRY_TIME to try load more objects of the selected fillType
-                                    self.lastFillLevel = self.fillLevel
-                                    self.retryTime = math.max(LoadAtDestinationTask.LOAD_RETRY_TIME, AutoDrive.getSetting("ALUnloadWaitTime", self.vehicle))
-                                else
-                                    -- no objects loaded - continue with next fillType or end
-                                    local objectsAvailable = AutoDrive.objectsToLoadAvailable(self.vehicle, self.trailers)
-                                    if objectsAvailable and (self.ualIterations < self.numberOfSelectedFillTypes) then
-                                        self.ualIterations = self.ualIterations + 1
-                                        self.vehicle.ad.stateModule:nextSelectedFillType()
-                                        self.retryTime = LoadAtDestinationTask.LOAD_RETRY_TIME
-                                    elseif self.filledToUnload or (AutoDrive.getSetting("unloadFillLevel", self.vehicle) == 0) then
-                                        self:finished()
-                                        return
-                                    end
-                                end
-                            elseif self.filledToUnload or (AutoDrive.getSetting("unloadFillLevel", self.vehicle) == 0) then
+                            -- UAL loading activated
+                            if self.filledToUnload then
+                                -- fill level reached or continue
                                 self:finished()
                                 return
                             end
+
+                            if self.numberOfSelectedFillTypes > 1 then
+                                -- multiple selected
+                                local objectsAvailable = AutoDrive.objectsToLoadAvailable(self.vehicle, self.trailers)
+                                if not objectsAvailable then
+                                    local supportedFillTypeIDs = nil
+                                    local objectStorage = AutoDrive.getNearestObjectStorage(self.vehicle)
+                                    if objectStorage then
+                                        supportedFillTypeIDs = AutoDrive.getObjectStorageFillTypes(self.vehicle, objectStorage)
+                                    else
+                                        local productionSpawner = AutoDrive.getNearestProductionSpawner(self.vehicle)
+                                        if productionSpawner then
+                                            supportedFillTypeIDs = AutoDrive.getProductionSpawnerFillTypes(self.vehicle, productionSpawner)
+                                        end
+                                    end
+
+                                    if supportedFillTypeIDs and #supportedFillTypeIDs > 0 then
+                                        local count = 0
+                                        repeat
+                                            -- find and select next avaiable fillType in ObjectStorage
+                                            self.vehicle.ad.stateModule:nextSelectedFillType()
+                                            count = count + 1
+                                        until table.contains(supportedFillTypeIDs, self.vehicle.ad.stateModule:getFillType())
+                                            or (count > self.numberOfSelectedFillTypes)
+                                        self.ualIterations = self.ualIterations + 1
+                                    end
+                                end
+                            end
+                            -- request spawn objects
+                            self.UALAttempts = self.UALAttempts + 1
+                            self:spawnObjects(self.UALAttempts)
+                            self.retryTime = math.max(LoadAtDestinationTask.LOAD_RETRY_TIME, AutoDrive.getSetting("ALUnloadWaitTime", self.vehicle))
                         else
                             self.vehicle.ad.trailerModule:update(dt)
                             if not self.vehicle.ad.trailerModule:isActiveAtTrigger() then
                                 -- check fill levels only if not still filling something
                                 if self.filledToUnload or (AutoDrive.getSetting("unloadFillLevel", self.vehicle) == 0) then
-                                    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update leftCapacity <= -> self:finished")
+                                    LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update leftCapacity <= -> self:finished")
                                     self:finished()
                                     return
                                 end
@@ -158,14 +178,14 @@ function LoadAtDestinationTask:update(dt)
                 end
             end
         else
-            AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update NOT isTargetReached")
+            LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update NOT isTargetReached")
 
             if not (self.vehicle.ad.stateModule:getCanRestartHelper() and self.vehicle.ad.stateModule:getMode() == AutoDrive.MODE_PICKUPANDDELIVER) then
                 -- need to try loading if CP is not active
                 self.vehicle.ad.trailerModule:update(dt)
             end
             if self.vehicle.ad.trailerModule:isActiveAtTrigger() then
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update 2 isActiveAtTrigger -> specialDrivingModule:stopVehicle")
+                LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update 2 isActiveAtTrigger -> specialDrivingModule:stopVehicle")
                 self.isReverseTriggerReached = self.vehicle.ad.drivePathModule:getIsReversing()
                 self.vehicle.ad.specialDrivingModule:stopVehicle()
                 self.vehicle.ad.specialDrivingModule:update(dt)
@@ -173,20 +193,43 @@ function LoadAtDestinationTask:update(dt)
                 if self.isReverseTriggerReached then
                     self.fillLevel, _, self.filledToUnload, self.fillFreeCapacity = AutoDrive.getAllFillLevels(self.trailers)
                     if self.filledToUnload then
-                        AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger isReverseTriggerReached -> finished")
+                        LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update not isActiveAtTrigger isReverseTriggerReached -> finished")
                         self:finished()
                         return
                     end
                 end
-                AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:update not isActiveAtTrigger -> drivePathModule:update")
+                LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:update not isActiveAtTrigger -> drivePathModule:update")
                 self.vehicle.ad.drivePathModule:update(dt)
             end
         end
     end
 end
 
+function LoadAtDestinationTask:spawnObjects(attempts)
+    local numObjectsToSpawn = AutoDrive.getSetting("ALspawnObjects", self.vehicle)
+    LoadAtDestinationTask.debugMsg(self.vehicle, "spawnObjects start attempts %s numObjectsToSpawn %s", tostring(attempts), tostring(numObjectsToSpawn))
+    if numObjectsToSpawn > 0 then
+        local productionSpawner = nil
+        local objectStorage = AutoDrive.getNearestObjectStorage(self.vehicle)
+        if objectStorage == nil then
+            productionSpawner = AutoDrive.getNearestProductionSpawner(self.vehicle)
+        end
+        local fillTypeIndex = self.vehicle.ad.stateModule:getFillType()
+        if (objectStorage or productionSpawner) and fillTypeIndex ~= FillType.UNKNOWN then
+            if objectStorage then
+                LoadAtDestinationTask.debugMsg(self.vehicle, "objectStorageSpawn spawnObjects fillTypeIndex %s", tostring(fillTypeIndex))
+                AutoDrive.objectStorageSpawn(self.vehicle, objectStorage, fillTypeIndex, numObjectsToSpawn)
+            elseif productionSpawner then
+                LoadAtDestinationTask.debugMsg(self.vehicle, "productionSpawnerSpawn spawnObjects fillTypeIndex %s", tostring(fillTypeIndex))
+                AutoDrive.productionSpawnerSpawn(self.vehicle, productionSpawner, fillTypeIndex, numObjectsToSpawn)
+            end
+        end
+    end
+    LoadAtDestinationTask.debugMsg(self.vehicle, "spawnObjects end attempts %d", attempts)
+end
+
 function LoadAtDestinationTask:continue()
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:continue -> trailerModule:stopLoading")
+    LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:continue -> trailerModule:stopLoading")
     self.vehicle.ad.trailerModule:stopLoading()
     AutoDrive.deactivateALTrailers(self.vehicle, self.trailers)
     AutoDrive.resetFoldState(self.vehicle)
@@ -200,7 +243,7 @@ function LoadAtDestinationTask:abort()
 end
 
 function LoadAtDestinationTask:finished()
-    AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_VEHICLEINFO, "LoadAtDestinationTask:finished -> specialDrivingModule:releaseVehicle / setCurrentTaskFinished")
+    LoadAtDestinationTask.debugMsg(self.vehicle, "LoadAtDestinationTask:finished -> specialDrivingModule:releaseVehicle / setCurrentTaskFinished")
     self.vehicle.ad.specialDrivingModule:releaseVehicle()
     AutoDrive.deactivateALTrailers(self.vehicle, self.trailers)
     AutoDrive.resetFoldState(self.vehicle)
@@ -214,5 +257,13 @@ function LoadAtDestinationTask:getI18nInfo()
         return "$l10n_AD_task_pathfinding;" .. string.format(" %d / %d - %d / %d", actualState, maxStates, steps, max_pathfinder_steps)
     else
         return "$l10n_AD_task_drive_to_load_point;"
+    end
+end
+
+function LoadAtDestinationTask.debugMsg(vehicle, debugText, ...)
+    if LoadAtDestinationTask.debug == true then
+        AutoDrive.debugMsg(vehicle, debugText, ...)
+    else
+        AutoDrive.debugPrint(vehicle, AutoDrive.DC_VEHICLEINFO, debugText, ...)
     end
 end

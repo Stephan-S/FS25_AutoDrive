@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Introduce el nombre del conductor:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Crear carpeta" />
 		<text name="gui_ad_enterGroupNameText"							text="Introduce el nombre de la carpeta:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Repostar automáticamente" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Conduce hasta el destino de repostaje (cerca del desencadenante de repostaje) cuando el nivel de combustible sea bajo." />
 		<text name="gui_ad_autoRepair"									text="Reparación Automática" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Sí: AutoDrive abrirá y cerrará las lonas según necesite/No: las lonas no se abrirán ni cerrarán automáticamente" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Maniobra de giro hacia adelante" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sí: Los descargadores de AutoDrive intentan planificar un camino hacia adelante para adaptarse al giro de 90° de la cosechadora./No - Los descargadores se revertirán antes del giro" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Autocarga: Posición de descarga" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Apagado: La posición de descarga depende de la configuración del vehículo, no de AutoDrive)" />
 		<text name="gui_ad_Text_all"									text="All" />

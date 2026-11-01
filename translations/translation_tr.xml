@@ -1,30 +1,30 @@
 <?xml version='1.0' encoding='utf-8'?>
 <l10n>
 	<translationContributors>HSayar, Cyber-Syntax</translationContributors>
-    <texts>
-        <text name="UNKNOWN"											text="Bilinmeyen" />
-        <text name="input_ADToggleHud"									text="AD: HUD Göster/Gizle" />
-        <text name="input_ADToggleHudExtension"						text="AD: HUD bilgilerini göster" />
-        <text name="input_ADToggleMouse"								text="AD: Fareyi Aç/Kapat" />
-        <text name="input_ADEnDisable"									text="AD: Etkinleştir/Devre Dışı Bırak" />
-        <text name="input_ADSilomode"									text="AD: Mod değiştir" />
-        <text name="input_ADPreviousMode"								text="AD: Önceki mod" />
-        <text name="input_ADRecord"									text="AD: Kaydet" />
-        <text name="input_ADRecord_Dual"								text="AD: Çift yönlü rota kaydet" />
-        <text name="input_ADRecord_SubPrio"							text="AD: İkincil rota kaydet" />
-        <text name="input_ADRecord_SubPrioDual"						text="AD: Çift yönlü ikincil rota kaydet" />
-        <text name="input_ADRecord_TwoWay"								text="AD: Aynı anda tek yönlü 2 normal rota kaydet" />
-        <text name="input_ADRecord_Dual_TwoWay"						text="AD: Aynı anda çift yönlü 2 rota kaydet" />
-        <text name="input_ADRecord_SubPrio_TwoWay"						text="AD: Aynı anda tek yönlü 2 ikincil rota kaydet" />
-        <text name="input_ADRecord_SubPrioDual_TwoWay"					text="AD: Aynı anda çift yönlü 2 ikincil rota kaydet" />
-        <text name="input_ADSelectTarget"								text="AD: Sonraki Hedefi Seç" />
-        <text name="input_ADSelectPreviousTarget"						text="AD: Önceki Hedefi Seç" />
-        <text name="input_AD_Speed_up"									text="AD: Hızı Artır" />
-        <text name="input_AD_Speed_down"								text="AD: Hızı Azalt" />
-        <text name="input_AD_routes_manager"							text="AD: Rota yöneticisini aç" />
-        <text name="input_AD_open_notification_history"				text="AD: Bildirim geçmişini aç" />
-        <text name="input_AD_open_colorSettings"						text="AD: Renk Atamaları" />
-        <text name="input_AD_continue"									text="AD: Devam et" />
+	<texts>
+		<text name="UNKNOWN"											text="Bilinmeyen" />
+		<text name="input_ADToggleHud"									text="AD: HUD Göster/Gizle" />
+		<text name="input_ADToggleHudExtension"						text="AD: HUD bilgilerini göster" />
+		<text name="input_ADToggleMouse"								text="AD: Fareyi Aç/Kapat" />
+		<text name="input_ADEnDisable"									text="AD: Etkinleştir/Devre Dışı Bırak" />
+		<text name="input_ADSilomode"									text="AD: Mod değiştir" />
+		<text name="input_ADPreviousMode"								text="AD: Önceki mod" />
+		<text name="input_ADRecord"									text="AD: Kaydet" />
+		<text name="input_ADRecord_Dual"								text="AD: Çift yönlü rota kaydet" />
+		<text name="input_ADRecord_SubPrio"							text="AD: İkincil rota kaydet" />
+		<text name="input_ADRecord_SubPrioDual"						text="AD: Çift yönlü ikincil rota kaydet" />
+		<text name="input_ADRecord_TwoWay"								text="AD: Aynı anda tek yönlü 2 normal rota kaydet" />
+		<text name="input_ADRecord_Dual_TwoWay"						text="AD: Aynı anda çift yönlü 2 rota kaydet" />
+		<text name="input_ADRecord_SubPrio_TwoWay"						text="AD: Aynı anda tek yönlü 2 ikincil rota kaydet" />
+		<text name="input_ADRecord_SubPrioDual_TwoWay"					text="AD: Aynı anda çift yönlü 2 ikincil rota kaydet" />
+		<text name="input_ADSelectTarget"								text="AD: Sonraki Hedefi Seç" />
+		<text name="input_ADSelectPreviousTarget"						text="AD: Önceki Hedefi Seç" />
+		<text name="input_AD_Speed_up"									text="AD: Hızı Artır" />
+		<text name="input_AD_Speed_down"								text="AD: Hızı Azalt" />
+		<text name="input_AD_routes_manager"							text="AD: Rota yöneticisini aç" />
+		<text name="input_AD_open_notification_history"				text="AD: Bildirim geçmişini aç" />
+		<text name="input_AD_open_colorSettings"						text="AD: Renk Atamaları" />
+		<text name="input_AD_continue"									text="AD: Devam et" />
 		<text name="input_ADSelectTargetUnload"						text="AD: Sonraki Boşaltmayı Seçin" />
 		<text name="input_ADSelectPreviousTargetUnload"				text="AD: Önceki Boşaltmayı Seçin" />
 		<text name="input_ADActivateDebug"								text="AD: Düzenleme Modu" />
@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Sürücü adını girin:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Klasör oluşturun" />
 		<text name="gui_ad_enterGroupNameText"							text="Klasör adını girin:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Otomatik Yakıt Doldurma" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Yakıt seviyesi düşükken yakıt ikmali hedefine (yakıt tetiğine yakın) gidin." />
 		<text name="gui_ad_autoRepair"									text="Automatic Repairing" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Evet - AutoDrive gerektiğinde römork kapaklarını açıp kapat / Hayır - römork kapakları AutoDrive tarafından açılmayacak veya kapanmayacak" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Forwards turning manoeuvre" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Yes - AutoDrive unloaders try to plan a path forwards to adapt to 90° turns of the combine. / No - Unloaders will reverse before turn" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="AutoLoad: Unload Position" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Off-no automatic unload, center-unload on loading platform, left / right vehicle unload position (Position depend on vehicle setup, not AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />
@@ -300,111 +304,111 @@
 		<text name="gui_ad_userSettingsPage_title"						text="Kullanıcı Ayarları - AutoDrive" />
 		<text name="gui_ad_vehicleSettingsPage_title"					text="Araç Ayarları - AutoDrive" />
 		<text name="gui_ad_combineUnloadSettingsPage_title"			text="Biçerdöver boşaltma ayarları - AutoDrive" />
-        <text name="gui_ad_debugSettingsPage_title"					text="Hata Ayıklama Ayarları - AutoDrive" />
-        <text name="gui_ad_eFeaturesSettingsPage_title"				text="Deneysel Özellik Ayarları - AutoDrive" />
-        <text name="gui_ad_environmentSettingsPage_title"				text="İşlevsel Olmayan Ayarlar - AutoDrive" />
-        <text name="gui_ad_restoreButtonText"							text="Sıfırla" />
-        <text name="gui_ad_settingsClosingDialog_title"				text="Tüm değişiklikler kaybolacak" />
-        <text name="gui_ad_settingsClosingDialog_text"					text="Ayarları kaydetmeden kapatmak istediğinize emin misiniz?" />
-        <text name="gui_ad_setDefaultButtonText"						text="Varsayılan olarak ayarla" />
-        <text name="gui_ad_routesManagerTitle"							text="Rota Yöneticisi" />
-        <text name="gui_ad_routesManagerTextTitle"						text="Rota adı girin:" />
-        <text name="gui_ad_button_export"								text="Kaydet" />
-        <text name="gui_ad_button_import"								text="Yükle" />
-        <text name="gui_ad_routeExportWarn_text"						text="Mevcut rotanın üzerine yazmak istediğinize emin misiniz?" />
-        <text name="gui_ad_routeExportWarn_title"						text="Rotanın üzerine yaz" />
-        <text name="gui_ad_routeDeleteWarn_text"						text="'%s' rotasını silmek istediğinize emin misiniz?" />
-        <text name="gui_ad_routeDeleteWarn_title"						text="Rota Silme" />
-        <text name="gui_ad_debugChannelVehicle"						text="Araçlar" />
-        <text name="gui_ad_debugChannelCombine"						text="Biçerdöverler" />
-        <text name="gui_ad_debugChannelTrailer"						text="Römorklar" />
-        <text name="gui_ad_debugChannelDev"							text="Geliştirme" />
-        <text name="gui_ad_debugChannelPath"							text="Rota Bulma" />
-        <text name="gui_ad_debugChannelSensor"							text="Sensörler" />
-        <text name="gui_ad_debugChannelNetwork"						text="Ağ" />
-        <text name="gui_ad_debugChannelExternalInterface"				text="Harici Arayüz" />
-        <text name="gui_ad_debugChannelRender"							text="İşleme" />
-        <text name="gui_ad_debugChannelRoadNetwork"					text="Yol ağı" />
-        <text name="gui_ad_debugChannelBGA"							text="BGA Modu" />
-        <text name="gui_ad_debugChannelTrains"							text="Trenler" />
-        <text name="gui_ad_debugChannelAll"							text="Her şey" />
-        <text name="gui_ad_notificationHistoryTitle"					text="Bildirimler" />
-        <text name="gui_ad_colorSettingsTitle"							text="Renk Atamaları" />
-        <!-- Please keep the numbers in the translation texts - they are used to sort / group the entries in the list -->
-        <text name="ad_color_singleConnection"							text="01 tek yönlü bağlantı çizgisi" />
-        <text name="ad_color_dualConnection"							text="02 çift yönlü bağlantı çizgisi" />
-        <text name="ad_color_reverseConnection"						text="03 ters bağlantı çizgisi" />
-        <text name="ad_color_default"									text="04 tek ve ters bağlantı üzerindeki ara nokta" />
-        <text name="ad_color_subPrioSingleConnection"					text="05 ikincil tek yönlü bağlantı çizgisi" />
-        <text name="ad_color_subPrioDualConnection"					text="06 ikincil çift yönlü bağlantı çizgisi" />
-        <text name="ad_color_subPrioNode"								text="07 ikincil ara nokta" />
-        <text name="ad_color_hoveredNode"								text="08 üzerine gelinen ara nokta" />
-        <text name="ad_color_previousNode"								text="09 önceki bağlanan ara nokta" />
-        <text name="ad_color_nextNode"									text="10 sonraki bağlanan ara nokta" />
-        <text name="ad_color_selectedNode"								text="11 seçilen ara nokta" />
-        <text name="ad_color_currentConnection"						text="12 sonraki rota çizgisi" />
-        <text name="ad_color_closestLine"								text="13 araçtan en yakın ara noktaya giden çizgi" />
-        <text name="ad_color_editorHeightLine"							text="14 yüzey noktasından aracın üstündeki noktaya çizgi" />
-        <text name="ad_color_previewSingleConnection"					text="15 kavis önizlemesi TAMAM, tek yönlü bağlantı" />
-        <text name="ad_color_previewDualConnection"					text="16 kavis önizlemesi TAMAM, çift yönlü bağlantı" />
-        <text name="ad_color_previewSubPrioSingleConnection"			text="17 kavis önizlemesi TAMAM, ikincil tek yönlü bağlantı" />
-        <text name="ad_color_previewSubPrioDualConnection"				text="18 kavis önizlemesi TAMAM, ikincil çift yönlü bağlantı" />
-        <text name="ad_color_previewOk"								text="19 kavis önizlemesi TAMAM, çarpışma yok" />
-        <text name="ad_color_previewNotOk"								text="20 kavis önizlemesi HATA, çarpışma var" />
-        <text name="ad_color_textInputBackground"						text="21 Metin, hedef vb. girdiler için arkaplan" />
-        <text name="ad_color_hudTextDefault"							text="22 HUD: metin rengi, normal öğeler" />
-        <text name="ad_color_hudTextHover"								text="23 HUD: metin rengi, normal öğeler üzerine gelinirken" />
-        <text name="ad_color_hudTextSpecial"							text="24 HUD: metin rengi, aktif öğeler ve klasörler" />
-        <text name="ad_color_hudTextHoverSpecial"						text="25 HUD: metin rengi, aktif ögelerin ve klasörlerin üzerine gelindiğinde" />
-        <text name="ad_color_header"									text="26 HUD: başlık rengi" />
-        <text name="ad_color_background"								text="27 HUD: arkaplan rengi" />
-        <text name="ad_color_markerText"								text="28 hedef metni rengi" />
-        <text name="ad_color_rightOfWayCenter"							text="29 Geçiş üstünlüğü Merkez ara noktası" />
-        <text name="button_delete_all"									text="Tümünü Sil" />
-        <text name="button_reset_selected"								text="Seçileni sıfırla" />
-        <text name="AD_task_pathfinding"								text="Planlanan yol" />
-        <text name="AD_task_catch_up_with_combine"						text="Biçerdövere yetişiyor" />
-        <text name="AD_task_clearcrop"									text="Ekin temizleniyor" />
-        <text name="AD_task_drive_to_destination"						text="Hedefe sürülüyor" />
-        <text name="AD_task_drive_to_vehicle"							text="Hedef araca sürülüyor" />
-        <text name="AD_task_drive_to_combine_pipe"						text="Biçerdöver borusuna sürülüyor" />
-        <text name="AD_task_unloading_combine"							text="Biçerdöver boşaltılıyor" />
-        <text name="AD_task_reversing_from_combine"					text="Biçerdöverden geri çıkılıyor" />
-        <text name="AD_task_waiting_for_space"							text="Manevra alanı bekleniyor" />
-        <text name="AD_task_wait_for_combine_turn"						text="Biçerdöverin dönüşü bekleniyor" />
-        <text name="AD_task_drive_to_load_point"						text="Yükleme noktasına sürülüyor" />
-        <text name="AD_task_drive_to_refuel_point"						text="Yakıt istasyonuna sürülüyor" />
-        <text name="AD_task_drive_to_repair_point"						text="Tamir istasyonuna sürülüyor" />
-        <text name="AD_task_stop_and_disable"							text="Durduruluyor" />
-        <text name="AD_task_drive_to_unload_point"						text="Boşaltma noktasına sürülüyor" />
-        <text name="AD_task_wait_for_call"								text="Çağrı bekleniyor" />
-        <text name="AD_task_chasing_combine"							text="Biçerdöver takip ediliyor" />
-        <text name="AD_task_wait_for_combine_pass_by"					text="Biçerdöverin geçmesine izin veriliyor" />
-        <text name="AD_task_catching_chase_side"						text="Tarafa geçiliyor" />
-        <text name="AD_task_chase_side"								text="Taraf" />
-        <text name="AD_task_chase_side_left"							text="sol" />
-        <text name="AD_task_chase_side_rear"							text="arka" />
-        <text name="AD_task_chase_side_right"							text="sağ" />
-        <text name="AD_task_waiting_for_room"							text="Boş Alan bekleniyor" />
-        <text name="AD_task_exiting_field"								text="Tarladan çıkılıyor" />
-        <text name="AD_task_reversing_from_collision"					text="Temiz alan aranıyor" />
-        <text name="AD_task_drive_to_park"								text="Park yerine sürülüyor" />
-        <text name="AD_task_unload_area_in_fruit"						text="Boşaltma alanı engellendi" />
-        <text name="gui_CPAD_off"										text="kapalı" />
-        <text name="gui_CPAD_simple"									text="basit" />
-        <text name="gui_CPAD_full"										text="tam" />
-        <text name="gui_ad_combineCPADHudMouse"						text="CP/AD Düğmelerini birleştir" />
-        <text name="gui_ad_combineCPADHudMouse_tooltip"				text="kapalı: varsayılan / basit: CP: ikincil fare eylemi > fare aç + kapa, AD: HUD deşitir > her iki HUD aç + kapa / tam: basit gibidir ancak HUD'lar tek adımda değişir / Gereksinim: CP ayarlarından sağ tıklama HUD'u kapatın" />
-        <text name="gui_ad_editorTip_1"								text="Basit sol tıklama:" />
-        <text name="gui_ad_editorTip_2"								text="Sadece fare: 1. noktayı seç" />
-        <text name="gui_ad_editorTip_3"								text="LCTRL = Nokta oluştur" />
-        <text name="gui_ad_editorTip_4"								text="LALT = Noktayı sil" />
-        <text name="gui_ad_editorTip_5"								text="LSHIFT = Noktayı yan yol olarak değiştir" />
-        <text name="gui_ad_editorTip_6"								text="İkinci noktaya tıklama:" />
-        <text name="gui_ad_editorTip_7"								text="Bağlantıyı değiştir" />
-        <text name="gui_ad_editorTip_8"								text="RSHIFT = Yan yol, ters yönlü yol oluştur" />
-        <text name="gui_ad_editorTip_9"								text="1. nokta kavşak, ikincisi komşusudur:" />
-        <text name="gui_ad_editorTip_10"								text="LCTRL: Segment türünü değiştir (normal/çift yönlü)" />
-        <text name="gui_ad_editorTip_11"								text="LSHIFT = Yan yolu değiştir" />
-    </texts>
+		<text name="gui_ad_debugSettingsPage_title"					text="Hata Ayıklama Ayarları - AutoDrive" />
+		<text name="gui_ad_eFeaturesSettingsPage_title"				text="Deneysel Özellik Ayarları - AutoDrive" />
+		<text name="gui_ad_environmentSettingsPage_title"				text="İşlevsel Olmayan Ayarlar - AutoDrive" />
+		<text name="gui_ad_restoreButtonText"							text="Sıfırla" />
+		<text name="gui_ad_settingsClosingDialog_title"				text="Tüm değişiklikler kaybolacak" />
+		<text name="gui_ad_settingsClosingDialog_text"					text="Ayarları kaydetmeden kapatmak istediğinize emin misiniz?" />
+		<text name="gui_ad_setDefaultButtonText"						text="Varsayılan olarak ayarla" />
+		<text name="gui_ad_routesManagerTitle"							text="Rota Yöneticisi" />
+		<text name="gui_ad_routesManagerTextTitle"						text="Rota adı girin:" />
+		<text name="gui_ad_button_export"								text="Kaydet" />
+		<text name="gui_ad_button_import"								text="Yükle" />
+		<text name="gui_ad_routeExportWarn_text"						text="Mevcut rotanın üzerine yazmak istediğinize emin misiniz?" />
+		<text name="gui_ad_routeExportWarn_title"						text="Rotanın üzerine yaz" />
+		<text name="gui_ad_routeDeleteWarn_text"						text="'%s' rotasını silmek istediğinize emin misiniz?" />
+		<text name="gui_ad_routeDeleteWarn_title"						text="Rota Silme" />
+		<text name="gui_ad_debugChannelVehicle"						text="Araçlar" />
+		<text name="gui_ad_debugChannelCombine"						text="Biçerdöverler" />
+		<text name="gui_ad_debugChannelTrailer"						text="Römorklar" />
+		<text name="gui_ad_debugChannelDev"							text="Geliştirme" />
+		<text name="gui_ad_debugChannelPath"							text="Rota Bulma" />
+		<text name="gui_ad_debugChannelSensor"							text="Sensörler" />
+		<text name="gui_ad_debugChannelNetwork"						text="Ağ" />
+		<text name="gui_ad_debugChannelExternalInterface"				text="Harici Arayüz" />
+		<text name="gui_ad_debugChannelRender"							text="İşleme" />
+		<text name="gui_ad_debugChannelRoadNetwork"					text="Yol ağı" />
+		<text name="gui_ad_debugChannelBGA"							text="BGA Modu" />
+		<text name="gui_ad_debugChannelTrains"							text="Trenler" />
+		<text name="gui_ad_debugChannelAll"							text="Her şey" />
+		<text name="gui_ad_notificationHistoryTitle"					text="Bildirimler" />
+		<text name="gui_ad_colorSettingsTitle"							text="Renk Atamaları" />
+		<!-- Please keep the numbers in the translation texts - they are used to sort / group the entries in the list -->
+		<text name="ad_color_singleConnection"							text="01 tek yönlü bağlantı çizgisi" />
+		<text name="ad_color_dualConnection"							text="02 çift yönlü bağlantı çizgisi" />
+		<text name="ad_color_reverseConnection"						text="03 ters bağlantı çizgisi" />
+		<text name="ad_color_default"									text="04 tek ve ters bağlantı üzerindeki ara nokta" />
+		<text name="ad_color_subPrioSingleConnection"					text="05 ikincil tek yönlü bağlantı çizgisi" />
+		<text name="ad_color_subPrioDualConnection"					text="06 ikincil çift yönlü bağlantı çizgisi" />
+		<text name="ad_color_subPrioNode"								text="07 ikincil ara nokta" />
+		<text name="ad_color_hoveredNode"								text="08 üzerine gelinen ara nokta" />
+		<text name="ad_color_previousNode"								text="09 önceki bağlanan ara nokta" />
+		<text name="ad_color_nextNode"									text="10 sonraki bağlanan ara nokta" />
+		<text name="ad_color_selectedNode"								text="11 seçilen ara nokta" />
+		<text name="ad_color_currentConnection"						text="12 sonraki rota çizgisi" />
+		<text name="ad_color_closestLine"								text="13 araçtan en yakın ara noktaya giden çizgi" />
+		<text name="ad_color_editorHeightLine"							text="14 yüzey noktasından aracın üstündeki noktaya çizgi" />
+		<text name="ad_color_previewSingleConnection"					text="15 kavis önizlemesi TAMAM, tek yönlü bağlantı" />
+		<text name="ad_color_previewDualConnection"					text="16 kavis önizlemesi TAMAM, çift yönlü bağlantı" />
+		<text name="ad_color_previewSubPrioSingleConnection"			text="17 kavis önizlemesi TAMAM, ikincil tek yönlü bağlantı" />
+		<text name="ad_color_previewSubPrioDualConnection"				text="18 kavis önizlemesi TAMAM, ikincil çift yönlü bağlantı" />
+		<text name="ad_color_previewOk"								text="19 kavis önizlemesi TAMAM, çarpışma yok" />
+		<text name="ad_color_previewNotOk"								text="20 kavis önizlemesi HATA, çarpışma var" />
+		<text name="ad_color_textInputBackground"						text="21 Metin, hedef vb. girdiler için arkaplan" />
+		<text name="ad_color_hudTextDefault"							text="22 HUD: metin rengi, normal öğeler" />
+		<text name="ad_color_hudTextHover"								text="23 HUD: metin rengi, normal öğeler üzerine gelinirken" />
+		<text name="ad_color_hudTextSpecial"							text="24 HUD: metin rengi, aktif öğeler ve klasörler" />
+		<text name="ad_color_hudTextHoverSpecial"						text="25 HUD: metin rengi, aktif ögelerin ve klasörlerin üzerine gelindiğinde" />
+		<text name="ad_color_header"									text="26 HUD: başlık rengi" />
+		<text name="ad_color_background"								text="27 HUD: arkaplan rengi" />
+		<text name="ad_color_markerText"								text="28 hedef metni rengi" />
+		<text name="ad_color_rightOfWayCenter"							text="29 Geçiş üstünlüğü Merkez ara noktası" />
+		<text name="button_delete_all"									text="Tümünü Sil" />
+		<text name="button_reset_selected"								text="Seçileni sıfırla" />
+		<text name="AD_task_pathfinding"								text="Planlanan yol" />
+		<text name="AD_task_catch_up_with_combine"						text="Biçerdövere yetişiyor" />
+		<text name="AD_task_clearcrop"									text="Ekin temizleniyor" />
+		<text name="AD_task_drive_to_destination"						text="Hedefe sürülüyor" />
+		<text name="AD_task_drive_to_vehicle"							text="Hedef araca sürülüyor" />
+		<text name="AD_task_drive_to_combine_pipe"						text="Biçerdöver borusuna sürülüyor" />
+		<text name="AD_task_unloading_combine"							text="Biçerdöver boşaltılıyor" />
+		<text name="AD_task_reversing_from_combine"					text="Biçerdöverden geri çıkılıyor" />
+		<text name="AD_task_waiting_for_space"							text="Manevra alanı bekleniyor" />
+		<text name="AD_task_wait_for_combine_turn"						text="Biçerdöverin dönüşü bekleniyor" />
+		<text name="AD_task_drive_to_load_point"						text="Yükleme noktasına sürülüyor" />
+		<text name="AD_task_drive_to_refuel_point"						text="Yakıt istasyonuna sürülüyor" />
+		<text name="AD_task_drive_to_repair_point"						text="Tamir istasyonuna sürülüyor" />
+		<text name="AD_task_stop_and_disable"							text="Durduruluyor" />
+		<text name="AD_task_drive_to_unload_point"						text="Boşaltma noktasına sürülüyor" />
+		<text name="AD_task_wait_for_call"								text="Çağrı bekleniyor" />
+		<text name="AD_task_chasing_combine"							text="Biçerdöver takip ediliyor" />
+		<text name="AD_task_wait_for_combine_pass_by"					text="Biçerdöverin geçmesine izin veriliyor" />
+		<text name="AD_task_catching_chase_side"						text="Tarafa geçiliyor" />
+		<text name="AD_task_chase_side"								text="Taraf" />
+		<text name="AD_task_chase_side_left"							text="sol" />
+		<text name="AD_task_chase_side_rear"							text="arka" />
+		<text name="AD_task_chase_side_right"							text="sağ" />
+		<text name="AD_task_waiting_for_room"							text="Boş Alan bekleniyor" />
+		<text name="AD_task_exiting_field"								text="Tarladan çıkılıyor" />
+		<text name="AD_task_reversing_from_collision"					text="Temiz alan aranıyor" />
+		<text name="AD_task_drive_to_park"								text="Park yerine sürülüyor" />
+		<text name="AD_task_unload_area_in_fruit"						text="Boşaltma alanı engellendi" />
+		<text name="gui_CPAD_off"										text="kapalı" />
+		<text name="gui_CPAD_simple"									text="basit" />
+		<text name="gui_CPAD_full"										text="tam" />
+		<text name="gui_ad_combineCPADHudMouse"						text="CP/AD Düğmelerini birleştir" />
+		<text name="gui_ad_combineCPADHudMouse_tooltip"				text="kapalı: varsayılan / basit: CP: ikincil fare eylemi > fare aç + kapa, AD: HUD deşitir > her iki HUD aç + kapa / tam: basit gibidir ancak HUD'lar tek adımda değişir / Gereksinim: CP ayarlarından sağ tıklama HUD'u kapatın" />
+		<text name="gui_ad_editorTip_1"								text="Basit sol tıklama:" />
+		<text name="gui_ad_editorTip_2"								text="Sadece fare: 1. noktayı seç" />
+		<text name="gui_ad_editorTip_3"								text="LCTRL = Nokta oluştur" />
+		<text name="gui_ad_editorTip_4"								text="LALT = Noktayı sil" />
+		<text name="gui_ad_editorTip_5"								text="LSHIFT = Noktayı yan yol olarak değiştir" />
+		<text name="gui_ad_editorTip_6"								text="İkinci noktaya tıklama:" />
+		<text name="gui_ad_editorTip_7"								text="Bağlantıyı değiştir" />
+		<text name="gui_ad_editorTip_8"								text="RSHIFT = Yan yol, ters yönlü yol oluştur" />
+		<text name="gui_ad_editorTip_9"								text="1. nokta kavşak, ikincisi komşusudur:" />
+		<text name="gui_ad_editorTip_10"								text="LCTRL: Segment türünü değiştir (normal/çift yönlü)" />
+		<text name="gui_ad_editorTip_11"								text="LSHIFT = Yan yolu değiştir" />
+	</texts>
 </l10n>

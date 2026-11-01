@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Inserir nome do motorista:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Criar Pasta" />
 		<text name="gui_ad_enterGroupNameText"							text="Inserir nome da pasta:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Reabastecer automaticamente" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Dirija até o posto de combustível (próximo a bomba) quando o nível de combustível estiver baixo." />
 		<text name="gui_ad_autoRepair"									text="Reparo Automático" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Sim - o AutoDrive abrem e fecham as coberturas das carretas quando necessário / Não - as coberturas das carretas não serão abertas ou fechadas pelo AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Manobra de giro para frente" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sim - motoristas tentam planejar um caminho à frente para se adaptar às manobras de 90° da colheitadeira. / Não - Motoristas irão manobrar antes de virar" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Carga automática: Posição de descarga" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Sem descarga automática, descarga central na plataforma de carga, posição de descarga esquerda/direita do veículo (Posição depende da configuração do veículo, não AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

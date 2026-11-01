@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Podaj nazwę kierowcy:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Dodaj folder" />
 		<text name="gui_ad_enterGroupNameText"							text="Podaj nazwę folderu:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Automatyczne tankowanie" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Jedź do miejsca tankowania (blisko triggera z paliwem), kiedy poziom paliwa jest niski." />
 		<text name="gui_ad_autoRepair"									text="Automatyczne naprawianie" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Tak - AutoDrive zdejmuje i zakłada plandekę w razie potrzeby / Nie - plandeka nie będzie zdejmowana lub zakładana przez AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Manewr wyprzedzający" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Tak - rozładowujący spróbują zaplanować ścieżkę i dostosować jazdę do kombajnu skręcającego o 90°. / Nie - Rozładowujący będą cofać przed skrętem" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Auto Ładowanie: Pozycja rozładowywania" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Włącz/wyłącz automatyczne rozładowywanie, rozładowywanie na środku platformy, z lewej / z prawej strony pozycji rozładowczej pojazdu (pozycja zależy od konfiguracji pojazdu nie od AD!)" />
 		<text name="gui_ad_Text_all"									text="All" />

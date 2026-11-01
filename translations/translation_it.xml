@@ -208,6 +208,7 @@
 		<text name="gui_ad_enterDriverNameText"						text="Inserisci nome autista:" />
 		<text name="gui_ad_enterGroupNameTitle"						text="Crea Cartella" />
 		<text name="gui_ad_enterGroupNameText"							text="Inserisci nome cartella:" />
+		<text name="gui_ad_automaticFunctions"							text="Automatic Functions" />
 		<text name="gui_ad_autoRefuel"									text="Rifornimento Automatico" />
 		<text name="gui_ad_autoRefuel_tooltip"							text="Si dirige verso la destinazione di rifornimento (vicino al punto di rifornimento) quando il livello del carburante è basso." />
 		<text name="gui_ad_autoRepair"									text="Riparazione automatica" />
@@ -254,6 +255,9 @@
 		<text name="gui_ad_autoTrailerCover_tooltip"					text="Sì - AutoDrive apre e chiude le coperture del rimorchio secondo necessità / No - le coperture del rimorchio non verranno aperte o chiuse da AutoDrive" />
 		<text name="gui_ad_useForwardTurningManoeuvre"					text="Manovra di svolta in avanti" />
 		<text name="gui_ad_useForwardTurningManoeuvre_tooltip"			text="Sì - gli scaricatori AutoDrive cercano di pianificare un percorso in avanti per adattarsi alla svolta a 90° della mietitrebbia. / No - Gli scaricatori si invertiranno prima del turno" />
+		<text name="gui_ad_AL_subTitle"								text="Universal Autoload" />
+		<text name="gui_ad_ALspawnObjects"								text="UniversalAutoload: Spawn Objects" />
+		<text name="gui_ad_ALspawnObjects_tooltip"						text="UniversalAutoload: Request this amount of objects from storage. Attn: depend on spawn area, size of objects, number of stack levels etc.! 0 - do NOT request, just load available objects! If FillType All is selected in HUD, nothing will be spawned! Multi-Select via HUD possible." />
 		<text name="gui_ad_ALUnload"									text="Autoload: Posizione di scarico" />
 		<text name="gui_ad_ALUnload_tooltip"							text="Spento - nessuno scarico automatic, Centrale - scarico sulla piattaforma di carico, Sinistra/Destra/Dietro - questa posizione dipende dalla configurazione del veicolo, non da AD!" />
 		<text name="gui_ad_Text_all"									text="All" />
