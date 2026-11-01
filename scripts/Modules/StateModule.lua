@@ -1075,7 +1075,6 @@ function ADStateModule:getLoadByFillLevel()
     return self.loadByFillLevel
 end
 
-
 function ADStateModule:selectPreferredFillTypeFromFillLevels(fillLevels)
     if #self.selectedFillTypes == 0 then
         return
@@ -1124,7 +1123,7 @@ function ADStateModule:nextSelectedFillType()
                 else
                     if self.selectedFillTypes[1] ~= nil and g_fillTypeManager:getFillTypeByIndex(self.selectedFillTypes[1]) ~= nil then
                         -- select the first selectedFillType
-                        self:setFillType(self.selectedFillTypes[1])
+                        self.fillType = self.selectedFillTypes[1]
                         AutoDrive:setALFillType(self.vehicle, self.selectedFillTypes[1])
                     end
                 end
