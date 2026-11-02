@@ -211,7 +211,8 @@ function AutoDrive.combineIsTurning(combine)
     end
     local aiIsTurning = false
     local rootVehicle = nil
-    if combine.getRootVehicle ~= nil then
+    -- Das KI-Wendesignal des Root-Vehicles fuer Zuckerrohrernter ignorieren.
+    if not combine.ad.isSugarcaneHarvester and combine.getRootVehicle ~= nil then
         rootVehicle = combine:getRootVehicle()
         if rootVehicle ~= nil then
             aiIsTurning = rootVehicle.getAIFieldWorkerIsTurning ~= nil and rootVehicle:getAIFieldWorkerIsTurning()

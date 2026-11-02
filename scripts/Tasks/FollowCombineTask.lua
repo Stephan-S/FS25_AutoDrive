@@ -94,6 +94,19 @@ function FollowCombineTask:update(dt)
     if self.state == FollowCombineTask.STATE_CHASING then
         self.chaseTimer:timer(true, 4000, dt)
 
+        -- Beim leeren Zuckerrohrtank weiterfolgen, solange der eigene Anhaenger nicht voll ist.
+        if self.combine.ad.isSugarcaneHarvester and self.combineFillPercent <= 0.1 then
+            local trailerFull = self.filled
+            if self.lastSugarcaneEmptyTrailerFull ~= trailerFull then
+                local action = trailerFull and "trailer-full logic applies" or "continue following"
+                Logging.info("[AD] FollowCombineTask: sugarcane tank empty (%.1f%%), trailerFull=%s; %s",
+                    self.combineFillPercent, tostring(trailerFull), action)
+                self.lastSugarcaneEmptyTrailerFull = trailerFull
+            end
+        else
+            self.lastSugarcaneEmptyTrailerFull = nil
+        end
+
         if self.combine.ad.isChopper then
             if self.filled and self.chaseSide ~= nil and self.chaseSide ~= AutoDrive.CHASEPOS_REAR then
                 --skip reversing
@@ -107,7 +120,9 @@ function FollowCombineTask:update(dt)
                 self.state = FollowCombineTask.STATE_REVERSING -- reverse to get room from harvester
                 return
             end
-        elseif self.filled or (self.combine.ad.isHarvester and self.combineFillPercent <= 0.1 and (not self.activeUnloading)) then
+        -- Ein leerer Zuckerrohrtank ist kein Grund, die Verfolgung zu beenden.
+        elseif self.filled or (self.combine.ad.isHarvester and self.combineFillPercent <= 0.1 and (not self.activeUnloading)
+            and not self.combine.ad.isSugarcaneHarvester) then
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - filled harvester")
             self.state = FollowCombineTask.STATE_WAIT_BEFORE_FINISH -- unload after some time to let harvester drive away
             return
@@ -163,6 +178,9 @@ function FollowCombineTask:update(dt)
             -- harvester turns
             --print("Waiting for turn now - 1- t:" ..  tostring(AutoDrive.combineIsTurning(self.combine)) .. " anglewrongtimer: " .. tostring(self.angleWrongTimer.elapsedTime > 10000))      
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - combineIsTurning")
+
+
+
             self.state = FollowCombineTask.STATE_WAIT_FOR_TURN
             return
         elseif ((self.combine.lastSpeedReal *  movingDirection) <= -0.00005) then
@@ -185,7 +203,9 @@ function FollowCombineTask:update(dt)
                 -- harvester
                 -- if combine drive reverse to turn -> reverse to keep distance
                 self:reverse(dt)
-            elseif self.combine.ad.isChopper and AutoDrive:getIsCPActive(self.combine) then
+            -- Zuckerrohrernter bei der Wende wie einen Haecksler behandeln.
+            -- TODO: ist hier "or self.combine.ad.isSugarcaneHarvester" nötig oder sollten die beiden neuen Ernter als "self.combine.ad.isChopper" gelten? 
+            elseif self.combine.ad.isChopper and (AutoDrive:getIsCPActive(self.combine) or self.combine.ad.isSugarcaneHarvester) then
                 -- CP chopper turn
                 if self.combine.ad.isAutoAimingChopper then
                     local movingDirection = self.combine.movingDirection
