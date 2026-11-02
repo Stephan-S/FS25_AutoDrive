@@ -278,11 +278,12 @@ function AutoDrive:onPostLoad(savegame)
         end
     end
 
+    -- sugarcane harvester need special consideration
     local hasPipeSpec = self.spec_pipe ~= nil
     local hasEnterableSpec = self.spec_enterable ~= nil
     local hasCombineSpec = self.spec_combine ~= nil
-    -- Umbau für typeName=pdlc_beansAndAlpacasPack.combineCutterFruitPreparerUnloadingBelt
-    local isSugarcaneType = self.typeName ~= nil and string.find(self.typeName, "combineCutterFruitPreparer", 1, true) ~= nil
+    local isSugarcaneType = self.typeName ~= nil
+        and string.find(self.typeName, "combineCutterFruitPreparer", 1, true) ~= nil
     local vehicleFillCapacity
 
     if hasPipeSpec and hasEnterableSpec and hasCombineSpec and isSugarcaneType then
@@ -291,7 +292,6 @@ function AutoDrive:onPostLoad(savegame)
         self.ad.isSugarcaneHarvester = true
     end
 
-    -- Diagnosewerte zeigen, welche Bedingung die Erkennung erfuellt oder verhindert.
     if hasCombineSpec or isSugarcaneType then
         Logging.info("[AD] Sugarcane detection for '%s': typeName=%s, spec_pipe=%s, spec_enterable=%s, spec_combine=%s, fillCapacity=%s, result=%s",
             tostring(self:getName()), tostring(self.typeName), tostring(hasPipeSpec), tostring(hasEnterableSpec), tostring(hasCombineSpec), tostring(vehicleFillCapacity), tostring(self.ad.isSugarcaneHarvester))
@@ -1972,3 +1972,4 @@ function AutoDrive:collisionTestCallback(transformId, x, y, z, distance)
         end
     end
 end
+

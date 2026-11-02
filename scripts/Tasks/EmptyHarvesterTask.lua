@@ -144,7 +144,6 @@ function EmptyHarvesterTask:update(dt)
         else
             --Is the current trailer filled or is the combine empty?
             local _, _, filledToUnload = AutoDrive.getAllFillLevels(self.trailers)
-            -- Der kleine Erntertank darf den Abfahrer nicht vorzeitig vom Zuckerrohrernter loesen.
             if self.combine.ad.isSugarcaneHarvester and not filledToUnload then
                 return
             end

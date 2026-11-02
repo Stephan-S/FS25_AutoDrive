@@ -336,7 +336,7 @@ function CombineUnloaderMode:assignToHarvester(harvester)
             local cfillLevel, cfillCapacity, _, cleftCapacity = AutoDrive.getObjectFillLevels(self.combine)
             local cFillRatio = cfillCapacity > 0 and cfillLevel / cfillCapacity or 0
 
-            if (self.combine.ad.isHarvester) 
+            if (self.combine.ad.isHarvester)
                 and (self.combine.ad.noMovementTimer.elapsedTime > 500 or cleftCapacity < 0.1 or cFillRatio > 0.945)
             then
                 -- default unloading - no movement
@@ -619,7 +619,7 @@ end
 
 function CombineUnloaderMode:getDynamicSideChaseOffsetZ_fromDischargeNode(planningPhase)
     local targetX, targetY, targetZ = getWorldTranslation(self.targetFillNode)
-    
+
     local _, _, vehicleZOffsetToTarget = AutoDrive.worldToLocal(self.vehicle, targetX, targetY, targetZ)
     local offset = -vehicleZOffsetToTarget
     if planningPhase then
@@ -715,7 +715,6 @@ function CombineUnloaderMode:getRearChaseOffsetZ(planningPhase)
     return rearChaseOffset
 end
 
--- Beim Zuckerrohrernter richtet sich die Abfahrerseite nach der Frucht, nicht nach dem Rohr.
 function CombineUnloaderMode:getSugarcaneChasePosition(combineSensors, swathDetection)
     local leftFruitSensor = combineSensors.leftSensorFruit
     local leftFrontFruitSensor = combineSensors.leftFrontSensorFruit
@@ -748,12 +747,9 @@ function CombineUnloaderMode:getSugarcaneChasePosition(combineSensors, swathDete
     leftBlocked = leftBlocked or leftFrontBlocked
     rightBlocked = rightBlocked or rightFrontBlocked
 
-    -- Seiten- und Frontsensoren zusammenfassen, damit beide Seiten vergleichbar sind.
     local leftFruitAmount = leftFruitSensor.fruitAmount + leftFrontFruitSensor.fruitAmount
     local rightFruitAmount = rightFruitSensor.fruitAmount + rightFrontFruitSensor.fruitAmount
     local sideIndex
-    -- Bei Frucht auf beiden Seiten die Seite mit weniger Frucht waehlen.
-    -- Bei Gleichstand auf der aktuellen oder der weniger blockierten Seite bleiben.
     if leftFruitAmount < rightFruitAmount then
         sideIndex = AutoDrive.CHASEPOS_LEFT
     elseif rightFruitAmount < leftFruitAmount then
@@ -771,9 +767,9 @@ function CombineUnloaderMode:getSugarcaneChasePosition(combineSensors, swathDete
 
     self.targetFillUnit, self.targetFillNode, self.targetAutoAimTargetNode = AutoDrive.getNextFreeDischargeableUnit(self.vehicle)
     local headerExtra = math.max((AutoDrive.getFrontToolWidth(self.combine) - self.combine.size.width) / 2, 0)
-    local sideOffsetX = self.combine.size.width / 2 + self.vehicle.size.width / 2 + headerExtra + AutoDrive.getSetting("pipeOffset", self.vehicle)
-    -- Den Zielpunkt leicht nach vorne verschieben, ohne den dynamischen Abstand zu verlieren.
-    local sideOffsetZ = self:getSideChaseOffsetZ(AutoDrive.dynamicChaseDistance or self.combine.ad.isHarvester) + 1
+    local sideOffsetX = self.combine.size.width / 2 + self.vehicle.size.width / 2 + headerExtra
+        + AutoDrive.getSetting("pipeOffset", self.vehicle)
+    local sideOffsetZ = self:getSideChaseOffsetZ(AutoDrive.dynamicChaseDistance)
     local chaseNode = AutoDrive.createWayPointRelativeToVehicle(self.combine, sideIndex * sideOffsetX, sideOffsetZ)
 
     self.chasePosIndex = sideIndex
@@ -786,11 +782,10 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
 
     -- in case of rotated attached combine use the trailing vehicle sensors
     local combineSensors = self.combine.ad.sensors or self.combineRootVehicle.ad.sensors
+
     local swathDetection =  AutoDrive.getSetting("detectSwath", self.vehicle) or false
-    
     local isSugarcaneHarvester = self.combine.ad.isSugarcaneHarvester == true
-    -- Diagnose bei jedem Aufruf ausgeben, um die Erkennung im Spielprotokoll zu pruefen.
-    -- CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getPipeChasePosition isSugarcaneHarvester=%s", tostring(isSugarcaneHarvester))
+    CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getPipeChasePosition isSugarcaneHarvester=%s", tostring(isSugarcaneHarvester))
 
     if isSugarcaneHarvester then
         return self:getSugarcaneChasePosition(combineSensors, swathDetection)
@@ -905,13 +900,13 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
         if
             (
                 (
-                    (self.pipeSide == AutoDrive.CHASEPOS_LEFT and not leftBlocked) 
+                    (self.pipeSide == AutoDrive.CHASEPOS_LEFT and not leftBlocked)
                     or (self.pipeSide == AutoDrive.CHASEPOS_RIGHT and not rightBlocked)
-                ) 
+                )
                 and
                 (
                     (
-                        self:isUnloaderOnCorrectSide(self.pipeSide) 
+                        self:isUnloaderOnCorrectSide(self.pipeSide)
                         -- and math.abs(angleToSideChaseSide) < math.abs(angleToRearChaseSide)
                     )
                     or (planningPhase == true)

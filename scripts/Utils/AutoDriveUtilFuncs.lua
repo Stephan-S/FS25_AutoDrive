@@ -211,8 +211,7 @@ function AutoDrive.combineIsTurning(combine)
     end
     local aiIsTurning = false
     local rootVehicle = nil
-    -- Das KI-Wendesignal des Root-Vehicles fuer Zuckerrohrernter ignorieren.
-    if not combine.ad.isSugarcaneHarvester and combine.getRootVehicle ~= nil then
+    if combine.getRootVehicle ~= nil then
         rootVehicle = combine:getRootVehicle()
         if rootVehicle ~= nil then
             aiIsTurning = rootVehicle.getAIFieldWorkerIsTurning ~= nil and rootVehicle:getAIFieldWorkerIsTurning()
@@ -1020,12 +1019,12 @@ end
 function AutoDrive.getPlayer()
     if g_currentMission and g_currentMission.playerSystem and g_currentMission.playerSystem.getLocalPlayer then
         return g_currentMission.playerSystem:getLocalPlayer()
-    end 
+    end
     return nil
 end
 
 function AutoDrive.getPriceMultiplier()
-    return (g_currentMission and g_currentMission.economyManager and g_currentMission.economyManager.getPriceMultiplier 
+    return (g_currentMission and g_currentMission.economyManager and g_currentMission.economyManager.getPriceMultiplier
     and g_currentMission.economyManager:getPriceMultiplier()) or 1
 end
 

@@ -18,7 +18,6 @@ function ADFruitSensor:setTrackFruitAmount(enabled)
     if self.trackFruitAmount ~= enabled then
         self.trackFruitAmount = enabled
         self.fruitAmount = 0
-        -- Die erste Abfrage soll sofort mit der neuen Messoption aktualisiert werden.
         self.executionDelay = 0
     end
 end
@@ -41,7 +40,6 @@ function ADFruitSensor:onUpdate(dt)
         foundFruit = AutoDrive.checkForFruitTypeInArea(corners, self.fruitType)
     end
 
-    -- Die Fruchtmenge wird nur fuer den Seitenvergleich beim Zuckerrohrernter gespeichert.
     self.fruitAmount = self.trackFruitAmount and (fruitAmount or 0) or 0
 
     if self.swathDetection == true then
@@ -66,7 +64,6 @@ end
 function AutoDrive.checkForUnknownFruitInArea(corners, trackFruitAmount)
     local highestFruitAmount = 0
     local highestFruitTypeIndex
-    -- Fuer den Seitenvergleich alle Fruchtarten pruefen und die groesste Menge erfassen.
     for _, fruitType in pairs(g_fruitTypeManager:getFruitTypes()) do
         if not (fruitType == g_fruitTypeManager:getFruitTypeByName("MEADOW")) then
             local fruitTypeIndex = fruitType.index
