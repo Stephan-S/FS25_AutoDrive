@@ -132,10 +132,8 @@ function ADUnloadManager:isDestinationInBunkerSilo(vehicle, bunkerSilo)
     if destination and destination > 0 then
         local wp = network[destination]
         if wp then
-            -- connected bunker silos (ADTriggerManager.connectBunkerSilos) only have the inner area, so take all edges from it
-            local inner = bunkerSilo.bunkerSiloArea.inner
-            destinationInBunkerSilo = MathUtil.isPointInParallelogram(wp.x, wp.z, inner.sx, inner.sz,
-                inner.wx - inner.sx, inner.wz - inner.sz, inner.hx - inner.sx, inner.hz - inner.sz)
+            destinationInBunkerSilo = MathUtil.isPointInParallelogram(wp.x, wp.z, bunkerSilo.bunkerSiloArea.inner.sx, bunkerSilo.bunkerSiloArea.inner.sz,
+                bunkerSilo.bunkerSiloArea.inner.dwx, bunkerSilo.bunkerSiloArea.inner.dwz, bunkerSilo.bunkerSiloArea.inner.dhx, bunkerSilo.bunkerSiloArea.inner.dhz)
         end
     end
     return destinationInBunkerSilo
