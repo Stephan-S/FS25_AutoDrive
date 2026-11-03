@@ -336,7 +336,7 @@ function CombineUnloaderMode:assignToHarvester(harvester)
             local cfillLevel, cfillCapacity, _, cleftCapacity = AutoDrive.getObjectFillLevels(self.combine)
             local cFillRatio = cfillCapacity > 0 and cfillLevel / cfillCapacity or 0
 
-            if (self.combine.ad.isHarvester)
+            if (self.combine.ad.isHarvester or self.combine.ad.isSugarcaneHarvester)
                 and (self.combine.ad.noMovementTimer.elapsedTime > 500 or cleftCapacity < 0.1 or cFillRatio > 0.945)
             then
                 -- default unloading - no movement
@@ -782,12 +782,9 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
 
     -- in case of rotated attached combine use the trailing vehicle sensors
     local combineSensors = self.combine.ad.sensors or self.combineRootVehicle.ad.sensors
-
-    local swathDetection =  AutoDrive.getSetting("detectSwath", self.vehicle) or false
-    local isSugarcaneHarvester = self.combine.ad.isSugarcaneHarvester == true
-    CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getPipeChasePosition isSugarcaneHarvester=%s", tostring(isSugarcaneHarvester))
-
-    if isSugarcaneHarvester then
+    local swathDetection = AutoDrive.getSetting("detectSwath", self.vehicle) or false
+   
+    if self.combine.ad.isSugarcaneHarvester then
         return self:getSugarcaneChasePosition(combineSensors, swathDetection)
     end
 
