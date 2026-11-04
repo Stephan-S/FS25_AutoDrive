@@ -532,6 +532,12 @@ function ADTriggerManager.addBunkerSiloAreaV(bunkerSilo)
         bunkerSilo.bunkerSiloArea.inner.vx = vx
         bunkerSilo.bunkerSiloArea.inner.vy = vy
         bunkerSilo.bunkerSiloArea.inner.vz = vz
+        bunkerSilo.bunkerSiloArea.inner.dwx = wx - sx
+        bunkerSilo.bunkerSiloArea.inner.dwy = wy - sy
+        bunkerSilo.bunkerSiloArea.inner.dwz = wz - sz
+        bunkerSilo.bunkerSiloArea.inner.dhx = hx - sx
+        bunkerSilo.bunkerSiloArea.inner.dhy = hy - sy
+        bunkerSilo.bunkerSiloArea.inner.dhz = hz - sz
         return true
     else
         return false
