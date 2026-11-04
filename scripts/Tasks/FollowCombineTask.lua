@@ -94,18 +94,6 @@ function FollowCombineTask:update(dt)
     if self.state == FollowCombineTask.STATE_CHASING then
         self.chaseTimer:timer(true, 4000, dt)
 
-        if self.combine.ad.isSugarcaneHarvester and self.combineFillPercent <= 0.1 then
-            local trailerFull = self.filled
-            if self.lastSugarcaneEmptyTrailerFull ~= trailerFull then
-                local action = trailerFull and "trailer-full logic applies" or "continue following"
-                Logging.info("[AD] FollowCombineTask: sugarcane tank empty (%.1f%%), trailerFull=%s; %s",
-                    self.combineFillPercent, tostring(trailerFull), action)
-                self.lastSugarcaneEmptyTrailerFull = trailerFull
-            end
-        else
-            self.lastSugarcaneEmptyTrailerFull = nil
-        end
-
         if self.combine.ad.isChopper then
             if self.filled and self.chaseSide ~= nil and self.chaseSide ~= AutoDrive.CHASEPOS_REAR then
                 --skip reversing

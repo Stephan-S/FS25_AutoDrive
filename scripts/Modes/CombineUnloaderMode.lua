@@ -851,7 +851,7 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
             local sideOffsetZ = self:getDynamicSideChaseOffsetZ_fromDischargeNode(planningPhase)
             chaseNode = self:getPipeChaseWayPoint(0, sideOffsetZ)
             sideIndex = self.pipeSide
-        elseif AutoDrive:getIsCPActive(self.combine) and AutoDrive.isCombineTurning(self.combine) then
+        elseif AutoDrive:getIsCPActive(self.combine) and AutoDrive.combineIsTurning(self.combine) then
             chaseNode = rearChasePos
             sideIndex = AutoDrive.CHASEPOS_REAR
         elseif chaseSideSetting ~= AutoDrive.CHASEPOS_AUTO then

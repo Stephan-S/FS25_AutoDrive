@@ -235,7 +235,7 @@ local function isTurningConfirmed(combine, signal, isTurningReported)
         sample.confirmed = headingChange >= CP_TURN_HEADING_ANGLE_THRESHOLD
 
         AutoDrive.debugPrint(combine, AutoDrive.DC_COMBINEINFO,
-            "AutoDrive.isCombineTurning %s reported turn; heading change %.1f degrees, confirmed=%s",
+            "AutoDrive.combineIsTurning %s reported turn; heading change %.1f degrees, confirmed=%s",
             signal, headingChange, tostring(sample.confirmed))
     end
 
