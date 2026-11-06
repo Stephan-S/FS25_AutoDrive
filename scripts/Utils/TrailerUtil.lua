@@ -103,8 +103,13 @@ end
 
 -- new
 -- fillUnits managed by the Consumable specialization: bale net, twine and wrap foil of balers and bale wrappers
+-- limited to balers / bale wrappers on purpose: forage harvesters and wagons also have Consumable units (silage additive),
+-- which AD can not refill itself and which must not count as cargo
 function AutoDrive.isConsumableFillUnit(object, fillUnitIndex)
-    local spec = object ~= nil and object.spec_consumable or nil
+    if object == nil or (object.spec_baler == nil and object.spec_baleWrapper == nil) then
+        return false
+    end
+    local spec = object.spec_consumable
     if spec ~= nil and spec.types ~= nil and fillUnitIndex ~= nil and fillUnitIndex > 0 then
         for _, consumableType in ipairs(spec.types) do
             if consumableType.fillUnitIndex == fillUnitIndex then
