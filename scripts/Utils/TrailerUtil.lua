@@ -102,8 +102,22 @@ function AutoDrive.getFreeCapacity(object)
 end
 
 -- new
+-- fillUnits managed by the Consumable specialization: bale net, twine and wrap foil of balers and bale wrappers
+function AutoDrive.isConsumableFillUnit(object, fillUnitIndex)
+    local spec = object ~= nil and object.spec_consumable or nil
+    if spec ~= nil and spec.types ~= nil and fillUnitIndex ~= nil and fillUnitIndex > 0 then
+        for _, consumableType in ipairs(spec.types) do
+            if consumableType.fillUnitIndex == fillUnitIndex then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- new
 -- consider only dischargable fillUnits
--- consider units which should be filled but will be consumed by unit itself, i.e. sprayer, sowingMachine
+-- consider units which should be filled but will be consumed by unit itself, i.e. sprayer, sowingMachine, baler, baleWrapper
 -- avoid fill levels which AD could not refill itself, i.e. additive for forage wagon / chopper, grease
 function AutoDrive.getObjectFillLevels(object)
     if object == nil then
@@ -135,7 +149,10 @@ function AutoDrive.getObjectFillLevels(object)
         for fillUnitIndex, fillUnit in pairs(object:getFillUnits()) do
 
             local spec_dischargeable = object.spec_dischargeable
-            if spec_dischargeable and spec_dischargeable.dischargeNodes and #spec_dischargeable.dischargeNodes > 0 then
+            if AutoDrive.isConsumableFillUnit(object, fillUnitIndex) then
+                -- bale net, twine, wrap foil: AD loads them from pallets, so they count as cargo to finish loading
+                updateFillLevels(fillUnitIndex)
+            elseif spec_dischargeable and spec_dischargeable.dischargeNodes and #spec_dischargeable.dischargeNodes > 0 then
                 for _, dischargeNode in ipairs(spec_dischargeable.dischargeNodes) do
                     if dischargeNode.fillUnitIndex and dischargeNode.fillUnitIndex > 0 and dischargeNode.fillUnitIndex == fillUnitIndex then
                         -- the fillUnit can be discharged
@@ -1036,7 +1053,7 @@ function AutoDrive.isBaleUnloading(trailer)
     end
 end
 
--- return list of fillTypes which are supported to be unloaded, additional sowing, sprayer, saltSpreader
+-- return list of fillTypes which are supported to be unloaded, additional sowing, sprayer, saltSpreader, baler / bale wrapper consumables
 function AutoDrive.getValidSupportedFillTypes(vehicle, excludedVehicles)
     if vehicle == nil then
         return {}
@@ -1089,6 +1106,10 @@ function AutoDrive.getValidSupportedFillTypes(vehicle, excludedVehicles)
                         if trailer.spec_treePlanter.fillUnitIndex == fillUnitIndex then
                             getsupportedFillTypes(trailer, fillUnitIndex)
                         end
+                    end
+                    if AutoDrive.isConsumableFillUnit(trailer, fillUnitIndex) then
+                        -- bale net, twine, wrap foil of balers and bale wrappers
+                        getsupportedFillTypes(trailer, fillUnitIndex)
                     end
                     if fillUnit and fillUnit.exactFillRootNode then
                         if trailer.getFillUnitSupportedFillTypes and trailer.getFillUnitCapacity and trailer:getFillUnitCapacity(fillUnitIndex) > 0 then
