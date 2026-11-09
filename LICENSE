@@ -1,21 +1,19 @@
-MIT License
+End-User License Agreement (EULA)
 
-Copyright (c) 2024 Stephan Schlosser
+Copyright (c) 2026 Stephan Schlosser. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Permitted Use (Non-Commercial Only)
+The user is granted a non-exclusive, non-transferable, and revocable right to use and execute this software solely 
+in its provided form for non-commercial, personal purposes. Any commercial use, including but not limited to using
+the software for business operations, generating revenue, or within a corporate environment, is strictly prohibited.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. Restrictions on Use (No Copying, No Modification)
+It is expressly prohibited, without the prior written consent of the copyright holder, to:
+• Copy, duplicate, or reproduce the source code or any part of the software.
+• Modify, alter, adapt, or create derivative works based upon the software or its code.
+• Redistribute, rent, lease, sell, or sublicense the software or any part thereof to third parties.
+• Reverse engineer, decompile, or disassemble the software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Disclaimer of Warranty
+The software is provided "as is", without warranty of any kind, express or implied. In no event shall the author 
+be liable for any damages arising from the use of the software.
