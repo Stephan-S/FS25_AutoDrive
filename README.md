@@ -2,7 +2,6 @@
 FS25 version of the AutoDrive mod
 
 ## ⚠️ Important License Notice
-This software is **not open source**. Use is permitted strictly for **personal, non-commercial purposes** only.
 Please review the full terms in the [LICENSE](LICENSE) file.
 
 ### Latest Release: 3.0.1.4
