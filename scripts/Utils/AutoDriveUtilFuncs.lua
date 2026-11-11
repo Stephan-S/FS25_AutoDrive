@@ -203,8 +203,52 @@ function AutoDrive.getRequiredRefuels(vehicle, ignoreFillLevel)
     return ret
 end
 
+local CP_TURN_HEADING_SAMPLE_INTERVAL = 500
+local CP_TURN_HEADING_ANGLE_THRESHOLD = 1
+
+local function isTurningConfirmed(combine, signal, isTurningReported)
+    if combine.ad.turnHeadingSamples == nil then
+        combine.ad.turnHeadingSamples = {}
+    end
+
+    if not isTurningReported then
+        combine.ad.turnHeadingSamples[signal] = nil
+        return false
+    end
+
+    local directionX, _, directionZ = AutoDrive.localDirectionToWorld(combine, 0, 0, 1, combine.ad.ADRootNode)
+    local now = g_time
+    local sample = combine.ad.turnHeadingSamples[signal]
+    if sample == nil then
+        combine.ad.turnHeadingSamples[signal] = {x = directionX, z = directionZ, time = now, confirmed = false}
+        return false
+    end
+
+    if now - sample.time >= CP_TURN_HEADING_SAMPLE_INTERVAL then
+        local headingChange = math.abs(AutoDrive.angleBetween(
+            {x = sample.x, z = sample.z},
+            {x = directionX, z = directionZ}
+        ))
+        sample.x = directionX
+        sample.z = directionZ
+        sample.time = now
+        sample.confirmed = headingChange >= CP_TURN_HEADING_ANGLE_THRESHOLD
+
+        AutoDrive.debugPrint(combine, AutoDrive.DC_COMBINEINFO,
+            "AutoDrive.combineIsTurning %s reported turn; heading change %.1f degrees, confirmed=%s",
+            signal, headingChange, tostring(sample.confirmed))
+    end
+
+    return sample.confirmed
+end
+
 function AutoDrive.combineIsTurning(combine)
     local cpIsTurning = AutoDrive:getIsCPTurning(combine)
+
+    if combine.ad.isSugarcaneHarvester then
+        cpIsTurning = isTurningConfirmed(combine, "CP", cpIsTurning)
+    end
+
     if cpIsTurning then
         -- CP turn maneuver might get noMovementTimer expired, so return here already
         return true
@@ -215,6 +259,10 @@ function AutoDrive.combineIsTurning(combine)
         rootVehicle = combine:getRootVehicle()
         if rootVehicle ~= nil then
             aiIsTurning = rootVehicle.getAIFieldWorkerIsTurning ~= nil and rootVehicle:getAIFieldWorkerIsTurning()
+
+            if combine.ad.isSugarcaneHarvester then
+                aiIsTurning = isTurningConfirmed(combine, "AI", aiIsTurning)
+            end
         end
     end
     local combineIsTurning = cpIsTurning or aiIsTurning
@@ -1019,12 +1067,12 @@ end
 function AutoDrive.getPlayer()
     if g_currentMission and g_currentMission.playerSystem and g_currentMission.playerSystem.getLocalPlayer then
         return g_currentMission.playerSystem:getLocalPlayer()
-    end 
+    end
     return nil
 end
 
 function AutoDrive.getPriceMultiplier()
-    return (g_currentMission and g_currentMission.economyManager and g_currentMission.economyManager.getPriceMultiplier 
+    return (g_currentMission and g_currentMission.economyManager and g_currentMission.economyManager.getPriceMultiplier
     and g_currentMission.economyManager:getPriceMultiplier()) or 1
 end
 

@@ -4,11 +4,22 @@ function ADFruitSensor:new(vehicle, sensorParameters)
     local o = ADFruitSensor:create()
     o:init(vehicle, ADSensor.TYPE_FRUIT, sensorParameters)
     o.fruitType = 0
+    o.trackFruitAmount = false
+    o.fruitAmount = 0
 
     if sensorParameters.fruitType ~= nil then
         o.fruitType = sensorParameters.fruitType
     end
     return o
+end
+
+function ADFruitSensor:setTrackFruitAmount(enabled)
+    enabled = enabled == true
+    if self.trackFruitAmount ~= enabled then
+        self.trackFruitAmount = enabled
+        self.fruitAmount = 0
+        self.executionDelay = 0
+    end
 end
 
 function ADFruitSensor:onUpdate(dt)
@@ -17,13 +28,19 @@ function ADFruitSensor:onUpdate(dt)
     self:setTriggerType(0)
 
     local foundFruit = false
-    if not foundFruit then
-        if self.fruitType == nil or self.fruitType == 0 then
-            foundFruit, _ = AutoDrive.checkForUnknownFruitInArea(corners)
-        else
-            foundFruit = AutoDrive.checkForFruitTypeInArea(corners, self.fruitType)
-        end
+    local fruitTypeIndex
+    local fruitAmount
+    if self.fruitType == nil or self.fruitType == 0 then
+        foundFruit, fruitTypeIndex, fruitAmount = AutoDrive.checkForUnknownFruitInArea(corners, self.trackFruitAmount)
+    elseif self.trackFruitAmount then
+        fruitTypeIndex = self.fruitType
+        fruitAmount = AutoDrive.getFruitValue(fruitTypeIndex, corners[1].x, corners[1].z, corners[2].x, corners[2].z, corners[3].x, corners[3].z)
+        foundFruit = fruitAmount > 10
+    else
+        foundFruit = AutoDrive.checkForFruitTypeInArea(corners, self.fruitType)
     end
+
+    self.fruitAmount = self.trackFruitAmount and (fruitAmount or 0) or 0
 
     if self.swathDetection == true then
         local fillTypeIndex = DensityMapHeightUtil.getFillTypeAtArea(corners[1].x, corners[1].z, corners[2].x, corners[2].z, corners[3].x, corners[3].z)
@@ -44,14 +61,25 @@ function ADFruitSensor:onUpdate(dt)
     self:onDrawDebug(box)
 end
 
-function AutoDrive.checkForUnknownFruitInArea(corners)
+function AutoDrive.checkForUnknownFruitInArea(corners, trackFruitAmount)
+    local highestFruitAmount = 0
+    local highestFruitTypeIndex
     for _, fruitType in pairs(g_fruitTypeManager:getFruitTypes()) do
         if not (fruitType == g_fruitTypeManager:getFruitTypeByName("MEADOW")) then
             local fruitTypeIndex = fruitType.index
-            if AutoDrive.checkForFruitTypeInArea(corners, fruitTypeIndex) then
+            if trackFruitAmount then
+                local fruitAmount = AutoDrive.getFruitValue(fruitTypeIndex, corners[1].x, corners[1].z, corners[2].x, corners[2].z, corners[3].x, corners[3].z)
+                if fruitAmount > highestFruitAmount then
+                    highestFruitAmount = fruitAmount
+                    highestFruitTypeIndex = fruitTypeIndex
+                end
+            elseif AutoDrive.checkForFruitTypeInArea(corners, fruitTypeIndex) then
                 return true, fruitTypeIndex
             end
         end
+    end
+    if trackFruitAmount then
+        return highestFruitAmount > 10, highestFruitTypeIndex, highestFruitAmount
     end
     return false
 end

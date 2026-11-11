@@ -279,11 +279,22 @@ function AutoDrive:onPostLoad(savegame)
     end
 
     -- sugarcane harvester need special consideration
-    if self.spec_pipe ~= nil and self.spec_enterable ~= nil and self.spec_combine ~= nil then
-        if self.typeName == "combineCutterFruitPreparer" then
-            local _, vehicleFillCapacity, _, _ = AutoDrive.getObjectFillLevels(self)
-            self.ad.isSugarcaneHarvester = vehicleFillCapacity == math.huge
-        end
+    local hasPipeSpec = self.spec_pipe ~= nil
+    local hasEnterableSpec = self.spec_enterable ~= nil
+    local hasCombineSpec = self.spec_combine ~= nil
+    local isSugarcaneType = self.typeName ~= nil
+        and string.find(self.typeName, "combineCutterFruitPreparer", 1, true) ~= nil
+    local vehicleFillCapacity
+
+    if hasPipeSpec and hasEnterableSpec and hasCombineSpec and isSugarcaneType then
+        local _, fillCapacity, _, _ = AutoDrive.getObjectFillLevels(self)
+        vehicleFillCapacity = fillCapacity
+        self.ad.isSugarcaneHarvester = true
+    end
+
+    if hasCombineSpec or isSugarcaneType then
+        Logging.info("[AD] Sugarcane detection for '%s': typeName=%s, spec_pipe=%s, spec_enterable=%s, spec_combine=%s, fillCapacity=%s, result=%s",
+            tostring(self:getName()), tostring(self.typeName), tostring(hasPipeSpec), tostring(hasEnterableSpec), tostring(hasCombineSpec), tostring(vehicleFillCapacity), tostring(self.ad.isSugarcaneHarvester))
     end
 
     -- harvester types
