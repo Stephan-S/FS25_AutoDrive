@@ -66,7 +66,7 @@ function CombineUnloaderMode:monitorTasks(dt)
     if self.combine ~= nil and (self.state == self.STATE_DRIVE_TO_START or self.state == self.STATE_DRIVE_TO_UNLOAD or self.state == self.STATE_EXIT_FIELD) then
         if AutoDrive.getDistanceBetween(self.vehicle, self.combine) > 25 then
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:monitorTasks -> unregisterAsUnloader")
-            ADHarvestManager:unregisterAsUnloader(self.vehicle)
+ADHarvestManager:unregisterAsUnloader(self.vehicle)
             self.followingUnloader = nil
             self.combine = nil
         end
@@ -313,7 +313,18 @@ function CombineUnloaderMode:setToWaitForCall(keepCombine)
             self.state = self.STATE_DRIVE_TO_UNLOAD
         end
     else
-	    self.state = self.STATE_WAIT_TO_BE_CALLED
+	    local firstMarker = self.vehicle.ad.stateModule:getFirstMarker()
+            if point ~= nil and firstMarker ~= nil and distanceToStart > 18
+                and not self.gsReturnStartAttempted then
+                self.gsReturnStartAttempted = true
+                local back = DriveToDestinationTask:new(self.vehicle, firstMarker.id)
+                back.gsForceDeparturePath = self:needsSafeDeparture()
+                self.state = self.STATE_DRIVE_TO_START
+                self.vehicle.ad.taskModule:addTask(back)
+                return
+            end
+            self.gsReturnStartAttempted = false
+            self.state = self.STATE_WAIT_TO_BE_CALLED
 	    self.vehicle.ad.taskModule:addTask(WaitForCallTask:new(self.vehicle))
 	    if self.combine ~= nil and self.combine.ad ~= nil and (keepCombine == nil or keepCombine ~= true) then
 	        self.combine = nil
@@ -327,6 +338,8 @@ function CombineUnloaderMode:assignToHarvester(harvester)
 
         self.vehicle.ad.taskModule:abortCurrentTask()
         self.combine = harvester
+        self.gsFarChaseReplanUsed = false
+        self.gsReturnStartAttempted = false
         self.combineRootVehicle = self.combine:getRootVehicle()
         AutoDrive.validateCachedPipeData(harvester)
 
@@ -364,6 +377,14 @@ function CombineUnloaderMode:driveToUnloader(unloader)
     end
 end
 
+function CombineUnloaderMode:needsSafeDeparture()
+    if self.combine == nil then
+        return false
+    end
+    local distance = AutoDrive.getDistanceBetween(self.vehicle, self.combine)
+    return distance < 30 or (self.combine.isTrailedHarvester == true and distance < 55)
+end
+
 function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
     local nextTask
     CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload start filledToUnload %s", tostring(filledToUnload))
@@ -383,10 +404,32 @@ function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
     end
 
     if filledToUnload then
+        -- Safe Departure V1
+        -- Preserve regular field exit; use local pathfinding when
+        -- departing close to the currently serviced harvester.
+        local harvesterDistance = -1
+
+        if self.combine ~= nil
+            and self.combine.components ~= nil
+            and self.combine.components[1] ~= nil
+            and self.combine.components[1].node ~= nil then
+            harvesterDistance =
+                AutoDrive.getDistanceBetween(self.vehicle, self.combine)
+        end
+
+        local nearHarvester =
+            harvesterDistance >= 0 and self:needsSafeDeparture()
+
+        local fieldExit =
+            AutoDrive.checkIsOnField(x, y, z)
+            and distanceToStart > 30
+
         --ADHarvestManager:unregisterAsUnloader(self.vehicle)
         --self.followingUnloader = nil
         --self.combine = nil
-        if AutoDrive.checkIsOnField(x, y, z) and distanceToStart > 30 then
+        -- Keep the normal exit only when already clear of the harvester.
+        -- Otherwise the native local pathfinder must find a clear departure.
+        if fieldExit and not nearHarvester then
             -- is activated on a field - use ExitFieldTask to leave field according to setting
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload ExitFieldTask...")
             nextTask = ExitFieldTask:new(self.vehicle)
@@ -394,6 +437,7 @@ function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
         else
             CombineUnloaderMode.debugMsg(self.vehicle, "CombineUnloaderMode:getTaskAfterUnload UnloadAtDestinationTask...")
             nextTask = UnloadAtDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getSecondMarker().id)
+            nextTask.gsForceDeparturePath = nearHarvester
             self.state = self.STATE_DRIVE_TO_UNLOAD
         end
     else
@@ -411,6 +455,7 @@ function CombineUnloaderMode:getTaskAfterUnload(filledToUnload)
         else
             ADHarvestManager:unregisterAsUnloader(self.vehicle)
             nextTask = DriveToDestinationTask:new(self.vehicle, self.vehicle.ad.stateModule:getFirstMarker().id)
+            nextTask.gsForceDeparturePath = self:needsSafeDeparture()
             self.state = self.STATE_DRIVE_TO_START
         end
     end
@@ -617,15 +662,16 @@ function CombineUnloaderMode:getDynamicSideChaseOffsetZ()
     return sideChaseTermZ
 end
 
-function CombineUnloaderMode:getDynamicSideChaseOffsetZ_fromDischargeNode(planningPhase)
+function CombineUnloaderMode:getDynamicSideChaseOffsets_fromDischargeNode(planningPhase)
     local targetX, targetY, targetZ = getWorldTranslation(self.targetFillNode)
-    
-    local _, _, vehicleZOffsetToTarget = AutoDrive.worldToLocal(self.vehicle, targetX, targetY, targetZ)
-    local offset = -vehicleZOffsetToTarget
+    local fillX, _, fillZ = AutoDrive.worldToLocal(self.vehicle, targetX, targetY, targetZ)
+
+    local offsetZ = -fillZ
     if planningPhase then
-        offset = offset + (self.vehicle.size.length/2)
+        offsetZ = offsetZ + (self.vehicle.size.length / 2)
     end
-    return offset
+
+    return -fillX, offsetZ
 end
 
 function CombineUnloaderMode:getDynamicSideChaseOffsetZ_FS19()
@@ -715,7 +761,21 @@ function CombineUnloaderMode:getRearChaseOffsetZ(planningPhase)
     return rearChaseOffset
 end
 
-function CombineUnloaderMode:getPipeChasePosition(planningPhase)
+function CombineUnloaderMode:getStableCPTurn(dt)
+    if self.combine == nil then
+        self.gsTurnReleaseMs = 0
+        return false
+    end
+    local turning = AutoDrive.combineIsTurning(self.combine)
+    if turning then
+        self.gsTurnReleaseMs = 1800
+    else
+        self.gsTurnReleaseMs = math.max(0, (self.gsTurnReleaseMs or 0) - (dt or 0))
+    end
+    return turning or self.gsTurnReleaseMs > 0
+end
+
+function CombineUnloaderMode:getPipeChasePosition(planningPhase, stableCPTurn)
     local chaseNode
     local sideIndex = AutoDrive.CHASEPOS_REAR
 
@@ -784,10 +844,11 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
         -- following order is important!
         if self.combine.ad.isFixedPipeChopper then
             -- chopper with fixed unloading
-            local sideOffsetZ = self:getDynamicSideChaseOffsetZ_fromDischargeNode(planningPhase)
-            chaseNode = self:getPipeChaseWayPoint(0, sideOffsetZ)
+            local sideOffsetX, sideOffsetZ = self:getDynamicSideChaseOffsets_fromDischargeNode(planningPhase)
+            chaseNode = self:getPipeChaseWayPoint(sideOffsetX, sideOffsetZ)
             sideIndex = self.pipeSide
-        elseif AutoDrive:getIsCPActive(self.combine) and AutoDrive.combineIsTurning(self.combine) then
+        elseif AutoDrive:getIsCPActive(self.combine)
+            and (stableCPTurn == true or (stableCPTurn == nil and AutoDrive.combineIsTurning(self.combine))) then
             chaseNode = rearChasePos
             sideIndex = AutoDrive.CHASEPOS_REAR
         elseif chaseSideSetting ~= AutoDrive.CHASEPOS_AUTO then
@@ -823,10 +884,10 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
         AutoDrive.useNewPipeOffsets = true
 
         if AutoDrive.useNewPipeOffsets and AutoDrive.isPipeOut(self.combine) then
-            local sideOffsetZ = self:getDynamicSideChaseOffsetZ_fromDischargeNode(planningPhase)
+            local sideOffsetX, sideOffsetZ = self:getDynamicSideChaseOffsets_fromDischargeNode(planningPhase)
             -- local sideOffsetX = self.pipeSide * self:getSideChaseOffsetX_new()
             -- sideChasePos = AutoDrive.createWayPointRelativeToDischargeNode(self.combine, sideOffsetX, sideOffsetZ)
-            sideChasePos = self:getPipeChaseWayPoint(0, sideOffsetZ)
+            sideChasePos = self:getPipeChaseWayPoint(sideOffsetX, sideOffsetZ)
             angleToSideChaseSide = self:getAngleToChasePos(sideChasePos)
         end
 
