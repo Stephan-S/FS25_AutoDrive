@@ -64,7 +64,8 @@ end
 
 function ADSpecialDrivingModule:stopAndHoldVehicle(dt)
     AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADSpecialDrivingModule:stopAndHoldVehicle start self.targetLX %s", tostring(self.targetLX))
-    if self.targetLX then
+    -- Use native AI holding below walking speed to prevent creeping.
+    if self.targetLX or math.abs(self.vehicle.lastSpeedReal) * 3600 <= 2 then
         self:stopAndHoldVehicle_org(dt)
     else
         local speedSign = AutoDrive.sign(self.vehicle.lastSignedSpeed)
