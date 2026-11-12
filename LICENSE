@@ -1,21 +1,12 @@
-MIT License
+Copyright (c) 2026 Stephan Schlosser / AD-Team. All Rights Reserved.
 
-Copyright (c) 2024 Stephan Schlosser
+This mod is intended for Farming Simulator 25.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. No Redistribution: 
+Uploading, mirroring or distributing this mod (in whole or in part, compiled or uncompiled) on any external websites, file hosters or mod portals outside of this official GitHub repository is strictly prohibited. Please provide links exclusively to the official download location here on GitHub.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. Modifications on GitHub Only: 
+You are permitted to view and fork this repository exclusively within GitHub for the purpose of contributing via Pull Requests or personal testing. Publishing modified versions, derivatives or extracted assets (3D models, textures, Lua scripts) outside of this GitHub repository is forbidden without explicit written permission. By submitting a pull request, you agree that your contribution may be irrevocably published under this license.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Non-Commercial Use: 
+Any commercial use or offering behind a paywall is strictly prohibited in accordance with the GIANTS Software Guidelines.
