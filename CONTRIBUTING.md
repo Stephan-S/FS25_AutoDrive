@@ -1,6 +1,7 @@
 # Mitwirken an diesem Projekt / Contributing Guidelines
 
-Vielen Dank für dein Interesse, diesen Mod für den Landwirtschafts-Simulator 25 weiterzuentwickeln! Bitte lies dir vor dem Einreichen von Änderungen (Pull Requests) die folgenden Regeln sorgfältig durch.
+Vielen Dank für dein Interesse, diesen Mod für den Landwirtschafts-Simulator 25 weiterzuentwickeln! 
+Bitte lies dir vor dem Einreichen von Änderungen (Pull Requests) die folgenden Regeln sorgfältig durch.
 
 ## 1. Rahmenbedingungen & Lizenz
 * **Nur auf GitHub:** Bearbeitungen, Forks und Tests sind ausschließlich im Rahmen dieses GitHub-Repositories gestattet. Das Veröffentlichen veränderter Versionen auf externen Mod-Portalen oder Filehostern ist gemäß unserer `LICENSE` untersagt.
@@ -9,7 +10,7 @@ Vielen Dank für dein Interesse, diesen Mod für den Landwirtschafts-Simulator 2
 ## 2. Rechteübertragung bei Pull Requests (Contributor License)
 Mit dem Einreichen eines Pull Requests (PR) in diesem Repository erklärst du dich mit folgenden Bedingungen einverstanden:
 1. **Eigene Arbeit:** Du bestätigst, dass dein Beitrag vollständig von dir selbst erstellt wurde und keine Rechte Dritter verletzt.
-2. **Nutzungsrecht für das Projekt:** Du räumst dem Projektinhaber ein zeitlich und räumlich unbegrenztes, unwiderrufliches und kostenloses Recht ein, deinen Beitrag in diesen Mod zu integrieren, anzupassen und unter der Lizenz dieses Repositories (`LICENSE`) zu veröffentlichen.
+2. **Nutzungsrecht für das Projekt:** Du räumst dem Projektinhaber ein zeitlich und räumlich unbegrenztes, unwiderrufliches und kostenloses Recht ein, deinen Beitrag in diesen Mod zu integrieren, anzupassen und unter der Lizenz dieses Repositories ([LICENSE](LICENSE)) zu veröffentlichen.
 3. **Veröffentlichung im GIANTS ModHub:** Du stimmst ausdrücklich zu, dass dein Beitrag zusammen mit dem Mod im offiziellen **GIANTS ModHub** eingereicht und gemäß den GIANTS Software Nutzungsbedingungen verbreitet werden darf.
 
 ## 3. Ablauf für Änderungen
