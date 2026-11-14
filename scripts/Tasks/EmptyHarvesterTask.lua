@@ -18,6 +18,7 @@ function EmptyHarvesterTask:new(vehicle, combine)
     o.vehicle = vehicle
     o.combine = combine
     o.state = EmptyHarvesterTask.STATE_PATHPLANNING
+    o.taskType = "EmptyHarvesterTask"
     o.wayPoints = nil
     o.reverseStartLocation = nil
     o.stuckTimer = AutoDriveTON:new()
@@ -198,8 +199,16 @@ function EmptyHarvesterTask:update(dt)
             -- Stopping CP drivers while reverse driving
             AutoDrive:holdCPCombine(self.combine)
         end
-        self.reverseTimer:timer(true, EmptyHarvesterTask.REVERSE_TIME, dt)
-        if (distanceToReversStart > overallLength) or self.reverseTimer:done() then
+        local trailed = self.combine.isTrailedHarvester == true
+        local minTrailedDistance = math.max(20,
+            ((self.tractorTrainLength or 0) + (self.combine.size and self.combine.size.length or 0)) / 2 + 6)
+        local attachmentClear = not trailed
+            or AutoDrive.getDistanceBetween(self.vehicle, self.combine) >= minTrailedDistance
+        local maxReverseTime = trailed and 60000 or EmptyHarvesterTask.REVERSE_TIME
+        self.reverseTimer:timer(true, maxReverseTime, dt)
+        if (distanceToReversStart > overallLength and attachmentClear) or self.reverseTimer:done() then
+            if trailed and not attachmentClear then
+            end
             self.state = EmptyHarvesterTask.STATE_WAITING
             return
         else

@@ -17,14 +17,20 @@ function UnloadAtDestinationTask:new(vehicle, destinationID)
     o.waitForBaleUnloadTimer = AutoDriveTON:new()
     o.isReverseTriggerReached = false
     o.trailers = nil
+    o.gsStuckRecoveryUsed = false
+    o.gsLowSpeedMs = 0
+    o.gsRoadBlockMs = 0
+    o.gsRoadReplanUsed = false
     return o
 end
 
 function UnloadAtDestinationTask:setUp()
+    if self.gsForceDeparturePath then
+    end
     if self.vehicle.spec_locomotive and self.vehicle.ad and self.vehicle.ad.trainModule then
         self.state = UnloadAtDestinationTask.STATE_DRIVING
         self.vehicle.ad.trainModule:setPathTo(self.destinationID)
-    elseif ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 then
+    elseif ADGraphManager:getDistanceFromNetwork(self.vehicle) > 30 or self.gsForceDeparturePath then
         self.state = UnloadAtDestinationTask.STATE_PATHPLANNING
         if self.vehicle.ad.stateModule:getCanRestartHelper() then
             if self.vehicle.ad.stateModule:getMode() == AutoDrive.MODE_PICKUPANDDELIVER then
@@ -84,6 +90,8 @@ function UnloadAtDestinationTask:update(dt)
                 self.vehicle:stopAutoDrive()
                 AutoDriveMessageEvent.sendMessageOrNotification(self.vehicle, ADMessagesManager.messageTypes.ERROR, "$l10n_AD_Driver_of; %s $l10n_AD_cannot_find_path;", 5000, self.vehicle.ad.stateModule:getName())
             else
+                if self.gsForceDeparturePath then
+                end
                 self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
                 --self.vehicle.ad.drivePathModule:appendPathTo(self.wayPoints[#self.wayPoints], self.destinationID)
                 self.state = UnloadAtDestinationTask.STATE_DRIVING
@@ -94,6 +102,48 @@ function UnloadAtDestinationTask:update(dt)
             self.vehicle.ad.specialDrivingModule:update(dt)
         end
     elseif self.state == UnloadAtDestinationTask.STATE_DRIVING then
+        -- A vehicle physically hung on an off-network obstacle may have no sensor
+        -- alarm, yet keep a valid waypoint forever (e.g. trees beside an AD route).
+        -- One bounded pathfinder replan; do not disable collision checks or reverse blindly.
+        local ad = self.vehicle.ad
+        local sensor = ad.collisionDetectionModule
+        local shortBlocked = sensor ~= nil and sensor.gsShortObstacle == true
+        local blocked = sensor ~= nil
+            and (sensor.trafficVehicle ~= nil or sensor.gsLongObstacle == true or shortBlocked)
+        if blocked and math.abs(self.vehicle.lastSpeedReal or 0) < 0.00012
+            and ad.drivePathModule:isOnRoadNetwork() then
+            self.gsRoadBlockMs = (self.gsRoadBlockMs or 0) + dt
+        else
+            self.gsRoadBlockMs = 0
+        end
+        local roadTimeout = shortBlocked and 15000 or 45000
+        if not self.gsRoadReplanUsed and self.gsRoadBlockMs > roadTimeout then
+            self.gsRoadReplanUsed = true
+            ad.pathFinderModule:reset()
+            ad.pathFinderModule:startPathPlanningToNetwork(self.destinationID)
+            self.state = UnloadAtDestinationTask.STATE_PATHPLANNING
+            return
+        end
+        local stalledOffNetwork =
+            self.vehicle.lastSpeedReal ~= nil
+            and self.vehicle.lastSpeedReal < 0.00012
+            and not ad.drivePathModule:isOnRoadNetwork()
+            and not (ad.collisionDetectionModule and ad.collisionDetectionModule.detectedObstable)
+            and not ad.specialDrivingModule.stopping
+            and not ad.drivePathModule:isTargetReached()
+            and not ad.trailerModule:isActiveAtTrigger()
+        if stalledOffNetwork then
+            self.gsLowSpeedMs = self.gsLowSpeedMs + dt
+        else
+            self.gsLowSpeedMs = 0
+        end
+        if not self.gsStuckRecoveryUsed and self.gsLowSpeedMs >= 15000 then
+            self.gsStuckRecoveryUsed = true
+            ad.pathFinderModule:reset()
+            ad.pathFinderModule:startPathPlanningToNetwork(self.destinationID)
+            self.state = UnloadAtDestinationTask.STATE_PATHPLANNING
+            return
+        end
         if not self.isContinued then
             self.vehicle.ad.trailerModule:update(dt)
         end

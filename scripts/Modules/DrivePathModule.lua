@@ -345,6 +345,57 @@ function ADDrivePathModule:followWaypoints(dt)
         end
     end
 
+    -- Precision unload approach / StaticDock Brake V2.
+    local activeTask = self.vehicle.ad.taskModule:getActiveTask()
+    local precisionUnload = activeTask ~= nil and (
+        activeTask.taskType == "EmptyHarvesterTask" or
+        activeTask.taskType == "CatchCombinePipeTask"
+    )
+
+    self.gsDockV2Active = false
+
+    if precisionUnload and self.wayPoints ~= nil and #self.wayPoints > 0 then
+        local finalWp = self.wayPoints[#self.wayPoints]
+        local distance = MathUtil.vector2Length(
+            x - finalWp.x, z - finalWp.z
+        )
+
+        if distance < 35 then
+            local remaining = math.max(
+                0, distance - self.min_distance - 0.75
+            )
+
+            local wpIndex = self:getCurrentWayPointIndex()
+            local isStaticDock =
+                activeTask.taskType == "EmptyHarvesterTask"
+                and wpIndex ~= nil
+                and wpIndex >= math.max(1, #self.wayPoints - 2)
+
+            if isStaticDock then
+                -- Distance-only target profile: no speed feedback.
+                -- Account for the existing waypoint acceptance radius.
+                local dockRemaining = math.max(
+                    0, distance - self.min_distance - 0.35
+                )
+                local dockSpeed = math.max(
+                    1.3,
+                    math.sqrt(2 * 0.50 * dockRemaining) * 3.6
+                )
+
+                self.speedLimit = math.min(self.speedLimit, dockSpeed)
+                self.gsDockV2Active = true
+                self.gsDockV2Distance = distance
+                self.gsDockV2Tolerance = self.min_distance
+            else
+                -- Exact Precision Approach V1 for non-static paths.
+                local safeSpeed = math.max(
+                    2.0, math.sqrt(2 * 0.8 * remaining) * 3.6
+                )
+                self.speedLimit = math.min(self.speedLimit, safeSpeed)
+                maxSpeedDiff = 0.75
+            end
+        end
+    end
     self.targetX, self.targetZ = self:getLookAheadTarget()
     local lx, lz = AutoDrive.getDriveDirection(self.vehicle, self.targetX, y, self.targetZ)
     if self.vehicle.getAISteeringNode ~= nil then
@@ -352,24 +403,60 @@ function ADDrivePathModule:followWaypoints(dt)
     end
 
     if self.vehicle.ad.collisionDetectionModule:hasDetectedObstable(dt) then
+        if self.gsDockV2Active and not self.gsDockV2Blocked then
+        end
+        self.gsDockV2Blocked = self.gsDockV2Active
+
         if AutoDrive.getDebugChannelIsSet(AutoDrive.DC_PATHINFO) then
             AutoDrive.debugPrint(self.vehicle, AutoDrive.DC_PATHINFO, "ADDrivePathModule:followWaypoints - stopVehicle")
         end
         self.vehicle.ad.specialDrivingModule:stopVehicle((not self:isOnRoadNetwork()), lx, lz)
         self.vehicle.ad.specialDrivingModule:update(dt)
     else
+        if self.gsDockV2Blocked then
+        end
+        self.gsDockV2Blocked = false
+
         self.vehicle.ad.specialDrivingModule:releaseVehicle()
         local speedDiff = (self.vehicle.lastSpeedReal * 3600) - self.speedLimit
-        -- Allow active braking if vehicle is not 'following' targetSpeed precise enough
-        if speedDiff <= 0.25 then
+
+        if self.gsDockV2Active then
+            -- Proportional throttle/brake command, bounded and continuous.
+            -- No bang-bang transition between full throttle and braking.
             self.brakeHysteresisActive = false
+
+            local actualSpeed = (self.vehicle.lastSpeedReal or 0) * 3600
+            local speedError = self.speedLimit - actualSpeed
+
+            if speedError >= 0 then
+                self.acceleration = math.min(0.55, speedError * 0.30)
+                if actualSpeed < 0.35 and speedError > 0.8 then
+                    self.acceleration = math.max(0.30, self.acceleration)
+                end
+            else
+                self.acceleration = -math.min(0.65, -speedError * 0.30)
+            end
+
+            local logInterval = self.gsDockV2Distance < 10
+                and 650 or 1500
+
+            self.gsDockV2LogMs = (self.gsDockV2LogMs or 0) + dt
+
+            if self.gsDockV2LogMs >= logInterval then
+                self.gsDockV2LogMs = 0
+            end
+        else
+            self.gsDockV2LogMs = 0
+
+            -- Preserve original AutoDrive braking everywhere else.
+            if speedDiff <= 0.25 then
+                self.brakeHysteresisActive = false
+            end
+            if (speedDiff > maxSpeedDiff) or self.brakeHysteresisActive then
+                self.brakeHysteresisActive = true
+                self.acceleration = -math.min(0.6, speedDiff * 0.05)
+            end
         end
-        if (speedDiff > maxSpeedDiff) or self.brakeHysteresisActive then
-            self.brakeHysteresisActive = true
-            
-            self.acceleration = -math.min(0.6, speedDiff * 0.05)
-        end
-        
         -- if self.vehicle.getAISteeringNode ~= nil then
         --     local aix, aiy, aiz = getWorldTranslation(self.vehicle:getAISteeringNode())            
         --     ADDrawingManager:addLineTask(aix, aiy+3, aiz, self.targetX, y+3, self.targetZ, 1, 1, 0, 0)
@@ -413,6 +500,10 @@ function ADDrivePathModule:reachedTarget()
         -- while driving reverse the lastUsedWayPoint might be far away or not feasable to continue, so do not use it
         self.lastUsedWayPoint = nil
     end
+    if self.gsDockV2Active then
+    end
+    self.gsDockV2Active = false
+    self.gsDockV2Blocked = false
     self.atTarget = true
     self.wayPoints = nil
     self.currentWayPoint = 0

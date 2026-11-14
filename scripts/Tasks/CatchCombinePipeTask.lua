@@ -78,7 +78,6 @@ function CatchCombinePipeTask:update(dt)
     if self.state == CatchCombinePipeTask.STATE_PATHPLANNING then
         if self.vehicle.ad.pathFinderModule:hasFinished() then
             CatchCombinePipeTask.debugMsg(self.vehicle, "CatchCombinePipeTask:update - STATE_PATHPLANNING finished")
-            self.newPathFindingCounter = 0
             self.wayPoints = self.vehicle.ad.pathFinderModule:getPath()
             if self.wayPoints == nil or #self.wayPoints < 1 then
                 --restart
@@ -88,6 +87,8 @@ function CatchCombinePipeTask:update(dt)
                 self.state = CatchCombinePipeTask.STATE_DELAY_PATHPLANNING
                 return
             else
+                -- Only a usable path can reset the consecutive retry counter.
+                self.newPathFindingCounter = 0
                 self.vehicle.ad.drivePathModule:setWayPoints(self.wayPoints)
                 self.state = CatchCombinePipeTask.STATE_DRIVING
                 return
@@ -101,7 +102,7 @@ function CatchCombinePipeTask:update(dt)
     elseif self.state == CatchCombinePipeTask.STATE_DELAY_PATHPLANNING then
         CatchCombinePipeTask.debugMsg(self.vehicle, "CatchCombinePipeTask:update - STATE_DELAY_PATHPLANNING")
         if self.waitForCheckTimer:timer(true, 1000, dt) then
-            if self.newPathFindingCounter > self.MAX_COUNT_NEW_PATHFINDING then
+            if self.newPathFindingCounter >= self.MAX_COUNT_NEW_PATHFINDING then
                 -- prevent deadlock
                 self.state = CatchCombinePipeTask.STATE_FINISHED
                 return
