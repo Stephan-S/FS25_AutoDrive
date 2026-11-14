@@ -1,9 +1,6 @@
 # FS25_AutoDrive
 FS25 version of the AutoDrive mod
 
-## ⚠️ Important License Notice
-Please review the full terms in the [LICENSE](LICENSE) file.
-
 ### Latest Release: 3.0.1.4
 Direct Download: https://github.com/Stephan-S/FS25_AutoDrive/releases/latest/download/FS25_AutoDrive.zip
 
