@@ -22,7 +22,8 @@ Mit dem Einreichen eines Pull Requests (PR) in diesem Repository erklärst du di
 
 # English Version
 
-Thank you for your interest in contributing to this Farming Simulator 25 mod! Please read the following rules carefully before submitting a Pull Request.
+Thank you for your interest in contributing to this Farming Simulator 25 mod! 
+Please read the following rules carefully before submitting a Pull Request.
 
 ## 1. Scope & License
 * **GitHub Only:** Modifications, forks, and testing are permitted exclusively within this GitHub repository. Publishing modified versions on external mod portals or file hosters is strictly prohibited under our `LICENSE`.
@@ -31,7 +32,7 @@ Thank you for your interest in contributing to this Farming Simulator 25 mod! Pl
 ## 2. Contributor License Agreement (Pull Requests)
 By submitting a Pull Request (PR) to this repository, you agree to the following terms:
 1. **Original Work:** You confirm that your contribution is entirely your own original work and does not infringe upon any third-party rights.
-2. **Grant of Rights:** You grant the repository maintainer a perpetual, worldwide, non-exclusive, irrevocable, and royalty-free license to integrate, modify, and distribute your contribution as part of this mod under the terms of `LICENSE`.
+2. **Grant of Rights:** You grant the repository maintainer a perpetual, worldwide, non-exclusive, irrevocable, and royalty-free license to integrate, modify, and distribute your contribution as part of this mod under the terms of [LICENSE](LICENSE).
 3. **GIANTS ModHub Release:** You explicitly consent to your contribution being submitted to and distributed via the official **GIANTS ModHub** under the GIANTS Software Terms of Service.
 
 ## 3. How to Contribute
