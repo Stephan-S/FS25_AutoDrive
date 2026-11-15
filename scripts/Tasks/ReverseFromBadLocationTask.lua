@@ -2,9 +2,10 @@ ReverseFromBadLocationTask = ADInheritsFrom(AbstractTask)
 
 ReverseFromBadLocationTask.STATE_REVERSING = 1
 
-function ReverseFromBadLocationTask:new(vehicle)
+function ReverseFromBadLocationTask:new(vehicle, dontPropagate)
     local o = ReverseFromBadLocationTask:create()
     o.vehicle = vehicle
+    o.dontPropagate = dontPropagate
     o.trailers = nil
     return o
 end
@@ -72,7 +73,12 @@ function ReverseFromBadLocationTask:abort()
 end
 
 function ReverseFromBadLocationTask:finished()
-    self.vehicle.ad.taskModule:setCurrentTaskFinished()
+    if self.dontPropagate then
+        -- used by the generic stuck recovery: the mode must not treat this as a finished mode task
+        self.vehicle.ad.taskModule:setCurrentTaskFinished(ADTaskModule.DONT_PROPAGATE)
+    else
+        self.vehicle.ad.taskModule:setCurrentTaskFinished()
+    end
 end
 
 function ReverseFromBadLocationTask:getInfoText()
