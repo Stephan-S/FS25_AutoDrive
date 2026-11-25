@@ -132,8 +132,8 @@ function ADUnloadManager:isDestinationInBunkerSilo(vehicle, bunkerSilo)
     if destination and destination > 0 then
         local wp = network[destination]
         if wp then
-            destinationInBunkerSilo = MathUtil.isPointInParallelogram(wp.x, wp.z, bunkerSilo.bunkerSiloArea.inner.sx, bunkerSilo.bunkerSiloArea.inner.sz, 
-                bunkerSilo.bunkerSiloArea.dwx, bunkerSilo.bunkerSiloArea.dwz, bunkerSilo.bunkerSiloArea.dhx, bunkerSilo.bunkerSiloArea.dhz)
+            destinationInBunkerSilo = MathUtil.isPointInParallelogram(wp.x, wp.z, bunkerSilo.bunkerSiloArea.inner.sx, bunkerSilo.bunkerSiloArea.inner.sz,
+                bunkerSilo.bunkerSiloArea.inner.dwx, bunkerSilo.bunkerSiloArea.inner.dwz, bunkerSilo.bunkerSiloArea.inner.dhx, bunkerSilo.bunkerSiloArea.inner.dhz)
         end
     end
     return destinationInBunkerSilo
