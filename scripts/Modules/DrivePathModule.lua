@@ -44,9 +44,12 @@ function ADDrivePathModule:reset(retainLastUsedWaypoint)
     self.vehicle:setTurnLightState(Lights.TURNLIGHT_OFF)
     self.distanceToTarget = math.huge
     self.speedLimit = 0
-    -- skip resetting last used waypoint to resume looping courses from prior destination
-    if not retainLastUsedWaypoint then
+    -- skip resetting last used waypoint to resume looping courses or refuel/repair tasks from prior destination
+    if retainLastUsedWaypoint then
+        self.isResumingFromLastWayPoint = true
+    else
         self.lastUsedWayPoint = nil
+        self.isResumingFromLastWayPoint = false
     end
     -- increase steering speed
     if self.vehicle.spec_aiJobVehicle ~= nil then
@@ -56,7 +59,7 @@ function ADDrivePathModule:reset(retainLastUsedWaypoint)
 end
 
 function ADDrivePathModule:setPathTo(wayPointId)
-    self:reset(self.atTarget)
+    self:reset(self.atTarget or self.isResumingFromLastWayPoint)
     self.wayPoints = ADGraphManager:getPathTo(self.vehicle, wayPointId, self.lastUsedWayPoint)
     local destination = ADGraphManager:getMapMarkerByWayPointId(self:getLastWayPointId())
     self.vehicle.ad.stateModule:setCurrentDestination(destination)
