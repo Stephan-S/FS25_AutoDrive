@@ -284,14 +284,16 @@ function AutoDrive:onPostLoad(savegame)
     local hasCombineSpec = self.spec_combine ~= nil
     local isSugarcaneType = false
 
-    if self.spec_fruitPreparer ~= nil and self.spec_fruitPreparer.fruitTypes ~= nil then
-        for _, fruitTypeIndex in ipairs(self.spec_fruitPreparer.fruitTypes) do
-            if fruitTypeIndex == FruitType.SUGARCANE then
-                isSugarcaneType = true
-                break
+    if self.typeName ~= nil and string.find(self.typeName, "combineCutterFruitPreparer", 1, true) ~= nil then 
+        if self.spec_fruitPreparer ~= nil and self.spec_fruitPreparer.fruitTypes ~= nil then
+            for _, fruitTypeIndex in ipairs(self.spec_fruitPreparer.fruitTypes) do
+                if fruitTypeIndex == FruitType.SUGARCANE then
+                    isSugarcaneType = true
+                    break
+                end
             end
         end
-    end
+    end    
 
     local vehicleFillCapacity
 
