@@ -336,7 +336,7 @@ function CombineUnloaderMode:assignToHarvester(harvester)
             local cfillLevel, cfillCapacity, _, cleftCapacity = AutoDrive.getObjectFillLevels(self.combine)
             local cFillRatio = cfillCapacity > 0 and cfillLevel / cfillCapacity or 0
 
-            if (self.combine.ad.isHarvester) 
+            if (self.combine.ad.isHarvester or self.combine.ad.isSugarcaneHarvester)
                 and (self.combine.ad.noMovementTimer.elapsedTime > 500 or cleftCapacity < 0.1 or cFillRatio > 0.945)
             then
                 -- default unloading - no movement
@@ -619,7 +619,7 @@ end
 
 function CombineUnloaderMode:getDynamicSideChaseOffsetZ_fromDischargeNode(planningPhase)
     local targetX, targetY, targetZ = getWorldTranslation(self.targetFillNode)
-    
+
     local _, _, vehicleZOffsetToTarget = AutoDrive.worldToLocal(self.vehicle, targetX, targetY, targetZ)
     local offset = -vehicleZOffsetToTarget
     if planningPhase then
@@ -715,14 +715,78 @@ function CombineUnloaderMode:getRearChaseOffsetZ(planningPhase)
     return rearChaseOffset
 end
 
+function CombineUnloaderMode:getSugarcaneChasePosition(combineSensors, swathDetection)
+    local leftFruitSensor = combineSensors.leftSensorFruit
+    local leftFrontFruitSensor = combineSensors.leftFrontSensorFruit
+    local rightFruitSensor = combineSensors.rightSensorFruit
+    local rightFrontFruitSensor = combineSensors.rightFrontSensorFruit
+
+    leftFruitSensor:setSwathDetection(swathDetection)
+    leftFruitSensor:setTrackFruitAmount(true)
+    leftFrontFruitSensor:setSwathDetection(swathDetection)
+    leftFrontFruitSensor:setTrackFruitAmount(true)
+    rightFruitSensor:setSwathDetection(swathDetection)
+    rightFruitSensor:setTrackFruitAmount(true)
+    rightFrontFruitSensor:setSwathDetection(swathDetection)
+    rightFrontFruitSensor:setTrackFruitAmount(true)
+
+    local leftFruitDetected = leftFruitSensor:pollInfo()
+    local leftFrontFruitDetected = leftFrontFruitSensor:pollInfo()
+    local rightFruitDetected = rightFruitSensor:pollInfo()
+    local rightFrontFruitDetected = rightFrontFruitSensor:pollInfo()
+
+    local leftBlocked = leftFruitDetected
+        or combineSensors.leftSensor:pollInfo()
+        or (AutoDrive.getSetting("followOnlyOnField", self.vehicle) and not combineSensors.leftSensorField:pollInfo())
+    local leftFrontBlocked = leftFrontFruitDetected or combineSensors.leftFrontSensor:pollInfo()
+    local rightBlocked = rightFruitDetected
+        or combineSensors.rightSensor:pollInfo()
+        or (AutoDrive.getSetting("followOnlyOnField", self.vehicle) and not combineSensors.rightSensorField:pollInfo())
+    local rightFrontBlocked = rightFrontFruitDetected or combineSensors.rightFrontSensor:pollInfo()
+
+    leftBlocked = leftBlocked or leftFrontBlocked
+    rightBlocked = rightBlocked or rightFrontBlocked
+
+    local leftFruitAmount = leftFruitSensor.fruitAmount + leftFrontFruitSensor.fruitAmount
+    local rightFruitAmount = rightFruitSensor.fruitAmount + rightFrontFruitSensor.fruitAmount
+    local sideIndex
+    if leftFruitAmount < rightFruitAmount then
+        sideIndex = AutoDrive.CHASEPOS_LEFT
+    elseif rightFruitAmount < leftFruitAmount then
+        sideIndex = AutoDrive.CHASEPOS_RIGHT
+    else
+        local currentSide = self:getUnloaderOnSide()
+        if currentSide == AutoDrive.CHASEPOS_LEFT or currentSide == AutoDrive.CHASEPOS_RIGHT then
+            sideIndex = currentSide
+        elseif leftBlocked ~= rightBlocked then
+            sideIndex = leftBlocked and AutoDrive.CHASEPOS_RIGHT or AutoDrive.CHASEPOS_LEFT
+        else
+            sideIndex = AutoDrive.CHASEPOS_LEFT
+        end
+    end
+
+    self.targetFillUnit, self.targetFillNode, self.targetAutoAimTargetNode = AutoDrive.getNextFreeDischargeableUnit(self.vehicle)
+    local headerExtra = math.max((AutoDrive.getFrontToolWidth(self.combine) - self.combine.size.width) / 2, 0)
+    local sideOffsetX = self.combine.size.width / 2 + self.vehicle.size.width / 2 + headerExtra
+        + AutoDrive.getSetting("pipeOffset", self.vehicle)
+    local sideOffsetZ = self:getSideChaseOffsetZ(AutoDrive.dynamicChaseDistance)
+    local chaseNode = AutoDrive.createWayPointRelativeToVehicle(self.combine, sideIndex * sideOffsetX, sideOffsetZ)
+
+    self.chasePosIndex = sideIndex
+    return chaseNode, sideIndex
+end
+
 function CombineUnloaderMode:getPipeChasePosition(planningPhase)
     local chaseNode
     local sideIndex = AutoDrive.CHASEPOS_REAR
 
     -- in case of rotated attached combine use the trailing vehicle sensors
     local combineSensors = self.combine.ad.sensors or self.combineRootVehicle.ad.sensors
-
-    local swathDetection =  AutoDrive.getSetting("detectSwath", self.vehicle) or false
+    local swathDetection = AutoDrive.getSetting("detectSwath", self.vehicle) or false
+   
+    if self.combine.ad.isSugarcaneHarvester then
+        return self:getSugarcaneChasePosition(combineSensors, swathDetection)
+    end
 
     combineSensors.leftSensorFruit:setSwathDetection(swathDetection)
     local leftBlocked = (AutoDrive.getSetting("avoidFruit", self.vehicle) and combineSensors.leftSensorFruit:pollInfo())
@@ -833,13 +897,13 @@ function CombineUnloaderMode:getPipeChasePosition(planningPhase)
         if
             (
                 (
-                    (self.pipeSide == AutoDrive.CHASEPOS_LEFT and not leftBlocked) 
+                    (self.pipeSide == AutoDrive.CHASEPOS_LEFT and not leftBlocked)
                     or (self.pipeSide == AutoDrive.CHASEPOS_RIGHT and not rightBlocked)
-                ) 
+                )
                 and
                 (
                     (
-                        self:isUnloaderOnCorrectSide(self.pipeSide) 
+                        self:isUnloaderOnCorrectSide(self.pipeSide)
                         -- and math.abs(angleToSideChaseSide) < math.abs(angleToRearChaseSide)
                     )
                     or (planningPhase == true)

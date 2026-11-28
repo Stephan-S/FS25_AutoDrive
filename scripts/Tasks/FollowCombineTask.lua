@@ -78,7 +78,7 @@ function FollowCombineTask:update(dt)
 
     self.stuckTimer:timer(checkForStuck, self.MAX_STUCK_TIME, dt)
     if self.stuckTimer:done()
-        -- or AutoDrive.getDistanceBetween(self.vehicle, self.combine) < self.MIN_COMBINE_DISTANCE 
+        -- or AutoDrive.getDistanceBetween(self.vehicle, self.combine) < self.MIN_COMBINE_DISTANCE
         then
         -- got stuck or to close to combine -> reverse
         FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update - STATE_DRIVING stuck")
@@ -107,7 +107,8 @@ function FollowCombineTask:update(dt)
                 self.state = FollowCombineTask.STATE_REVERSING -- reverse to get room from harvester
                 return
             end
-        elseif self.filled or (self.combine.ad.isHarvester and self.combineFillPercent <= 0.1 and (not self.activeUnloading)) then
+        elseif self.filled or (self.combine.ad.isHarvester and self.combineFillPercent <= 0.1 and (not self.activeUnloading)
+            and not self.combine.ad.isSugarcaneHarvester) then
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - filled harvester")
             self.state = FollowCombineTask.STATE_WAIT_BEFORE_FINISH -- unload after some time to let harvester drive away
             return
@@ -161,7 +162,7 @@ function FollowCombineTask:update(dt)
         end
         if AutoDrive.combineIsTurning(self.combine) then
             -- harvester turns
-            --print("Waiting for turn now - 1- t:" ..  tostring(AutoDrive.combineIsTurning(self.combine)) .. " anglewrongtimer: " .. tostring(self.angleWrongTimer.elapsedTime > 10000))      
+            --print("Waiting for turn now - 1- t:" ..  tostring(AutoDrive.combineIsTurning(self.combine)) .. " anglewrongtimer: " .. tostring(self.angleWrongTimer.elapsedTime > 10000))
             FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_CHASING - combineIsTurning")
             self.state = FollowCombineTask.STATE_WAIT_FOR_TURN
             return
@@ -185,15 +186,15 @@ function FollowCombineTask:update(dt)
                 -- harvester
                 -- if combine drive reverse to turn -> reverse to keep distance
                 self:reverse(dt)
-            elseif self.combine.ad.isChopper and AutoDrive:getIsCPActive(self.combine) then
+            elseif self.combine.ad.isChopper and (AutoDrive:getIsCPActive(self.combine) or self.combine.ad.isSugarcaneHarvester) then
                 -- CP chopper turn
                 if self.combine.ad.isAutoAimingChopper then
                     local movingDirection = self.combine.movingDirection
                     if self.combine.ad.isReverseAttached then
                         movingDirection = -self.combine.movingDirection
                     end
-                    local isdrivingReverse = ((self.combine.lastSpeedReal * movingDirection) <= -0.00051) 
-                    local combineIsDriving = (self.combine.lastSpeedReal > 0.001) 
+                    local isdrivingReverse = ((self.combine.lastSpeedReal * movingDirection) <= -0.00051)
+                    local combineIsDriving = (self.combine.lastSpeedReal > 0.001)
 
                     if isdrivingReverse then
                         FollowCombineTask.debugMsg(self.vehicle, "FollowCombineTask:update STATE_WAIT_FOR_TURN -> self:reverse")
@@ -247,15 +248,15 @@ function FollowCombineTask:update(dt)
 
         -- check if we could continue
         local combineSensors = self.combine.ad.sensors or self.combineRootVehicle.ad.sensors
-        if not AutoDrive.combineIsTurning(self.combine) and 
+        if not AutoDrive.combineIsTurning(self.combine) and
             (
                 (
-                    combineSensors.frontSensorFruit:pollInfo() and 
+                    combineSensors.frontSensorFruit:pollInfo() and
                     (
                         self.combine.ad.isChopper -- chopper
                         or self.combine.ad.driveForwardTimer.elapsedTime > 8000 -- Harvester moves
-                    ) 
-                ) 
+                    )
+                )
                 or self.waitForTurnTimer.elapsedTime > 15000 -- turn longer than 15 sec
             ) then
             if (self.angleToCombineHeading + self.angleToCombine) < 180 and self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD]:isUnloaderOnCorrectSide(self.chaseSide) then
@@ -449,7 +450,7 @@ function FollowCombineTask:updateStates(dt)
         local fillFreeCapacity = 0
         _, _, self.filledToUnload, fillFreeCapacity = AutoDrive.getAllFillLevels(self.trailers)
         self.filled = fillFreeCapacity <= 0.1
-        
+
         self.activeUnloading = AutoDrive.getSetting("activeUnloading", self.combineRootVehicle)
     end
     self:shouldWaitForChasePos(dt)

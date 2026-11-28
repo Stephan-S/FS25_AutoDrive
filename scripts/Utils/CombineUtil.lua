@@ -28,7 +28,14 @@ function AutoDrive.setCombineType(vehicle)
         vehicle.ad.isHarvester = true
     end
 
+    if vehicle.ad.isSugarcaneHarvester then
+        vehicle.ad.isAutoAimingChopper = true
+        vehicle.ad.isChopper = true
+        vehicle.ad.isHarvester = false
+    end
+
     rootVehicle.ad.hasCombine = vehicle.ad.isAutoAimingChopper or vehicle.ad.isFixedPipeChopper or vehicle.ad.isChopper or vehicle.ad.isHarvester
+
     return rootVehicle.ad.hasCombine
 end
 
@@ -116,7 +123,7 @@ function AutoDrive.getPipeLength(combine)
     local pipeRootX, _ , pipeRootZ = getWorldTranslation(AutoDrive.getPipeRoot(combine))
     local dischargeX, dischargeY, dischargeZ = getWorldTranslation(AutoDrive.getDischargeNode(combine))
     local length = MathUtil.vector3Length(pipeRootX - dischargeX,
-                                        0, 
+                                        0,
                                         pipeRootZ - dischargeZ)
     --AutoDrive.debugPrint(combine, AutoDrive.DC_COMBINEINFO, "AutoDrive.getPipeLength - " .. length)
     if (combine.ad.isFixedPipeChopper or combine.ad.isHarvester) and AutoDrive.isPipeOut(combine) then
@@ -156,7 +163,7 @@ function AutoDrive.isPipeOut(combine)
 
     if combine.spec_combine ~= nil then
         return isPipeOut(combine)
-    else        
+    else
         for _, implement in pairs(AutoDrive.getAllImplements(combine)) do
             if implement and isPipeOut(implement) then
                 return true

@@ -96,6 +96,16 @@ function EmptyHarvesterTask:update(dt)
         end
     elseif self.state == EmptyHarvesterTask.STATE_DRIVING then
         if self.vehicle.ad.drivePathModule:isTargetReached() then
+            if self.combine.ad.isSugarcaneHarvester then
+                EmptyHarvesterTask.debugMsg(self.vehicle, "EmptyHarvesterTask:update sugarcane reached pipe approach - switch to following")
+                self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD].state = CombineUnloaderMode.STATE_ACTIVE_UNLOAD_COMBINE
+                self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD].breadCrumbs = Queue:new()
+                self.vehicle.ad.modes[AutoDrive.MODE_UNLOAD].lastBreadCrumb = nil
+                self.vehicle.ad.taskModule:addTask(FollowCombineTask:new(self.vehicle, self.combine))
+                self.vehicle.ad.taskModule:setCurrentTaskFinished(ADTaskModule.DONT_PROPAGATE)
+                return
+            end
+
             if AutoDrive:getIsCPActive(self.combine) then
                 self.vehicle.ad.specialDrivingModule:stopVehicle()
                 self.vehicle.ad.specialDrivingModule:update(dt)
@@ -144,6 +154,9 @@ function EmptyHarvesterTask:update(dt)
         else
             --Is the current trailer filled or is the combine empty?
             local _, _, filledToUnload = AutoDrive.getAllFillLevels(self.trailers)
+            if self.combine.ad.isSugarcaneHarvester and not filledToUnload then
+                return
+            end
             local distanceToCombine = AutoDrive.getDistanceBetween(self.vehicle, self.combine)
 
             if combineFillLevel <= 0.1 or filledToUnload then
